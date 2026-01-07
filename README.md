@@ -13,8 +13,7 @@
 
 ## 🖼 Скриншот
 
-![Interface Preview](<img width="699" height="524" alt="2026-01-08_00-06" src="https://github.com/user-attachments/assets/13438d84-9a6b-4355-8e7c-6a0a694b05a4" />
-)
+![Interface Preview](https://github.com/user-attachments/assets/13438d84-9a6b-4355-8e7c-6a0a694b05a4)
 
 ---
 
