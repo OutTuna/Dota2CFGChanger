@@ -13,7 +13,7 @@
 
 ## 🖼 Скриншот
 
-![Interface Preview](screenshot.png)
+![Interface Preview](<img width="700" height="526" alt="изображение" src="https://github.com/user-attachments/assets/c3770f8c-c833-4424-908f-8c0f8d3160c0" />)
 *(Замените этот файл на реальный скриншот вашей программы)*
 
 ---
