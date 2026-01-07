@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.14)
 project(DotaManager)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(CPR_USE_SYSTEM_CURL OFF CACHE BOOL "" FORCE)
+set(CPR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
 
@@ -39,4 +46,5 @@ target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json 
 if(WIN32)
     target_link_libraries(DotaManager PRIVATE opengl32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
+    target_compile_options(DotaManager PRIVATE /utf-8)
 endif()
