@@ -59,10 +59,24 @@ void save_settings() {
     std::ofstream f(SETTINGS_FILE);
     json j = {{"src", src_path}, {"dst", dst_path}};
     f << j;
-    
     std::ofstream fc(CACHE_FILE);
     json jc(nick_cache);
     fc << jc;
+}
+
+std::string clean_xml_nick(std::string raw) {
+    std::string start_tag = "<![CDATA[";
+    size_t pos = raw.find(start_tag);
+    if (pos != std::string::npos) {
+        raw.replace(pos, start_tag.length(), "");
+    }
+    
+    std::string end_tag = "]]>";
+    pos = raw.find(end_tag);
+    if (pos != std::string::npos) {
+        raw.replace(pos, end_tag.length(), "");
+    }
+    return raw;
 }
 
 std::string fetch_nick(std::string id) {
@@ -71,11 +85,13 @@ std::string fetch_nick(std::string id) {
         long long steam64 = std::stoll(id) + 76561197960265728;
         std::string url = "https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1";
         cpr::Response r = cpr::Get(cpr::Url{url}, cpr::Timeout{2000});
+        
         if (r.status_code == 200) {
             size_t start = r.text.find("<steamID>");
             size_t end = r.text.find("</steamID>");
             if (start != std::string::npos && end != std::string::npos) {
                 std::string nick = r.text.substr(start + 9, end - start - 9);
+                nick = clean_xml_nick(nick);
                 nick_cache[id] = nick;
                 return nick;
             }
@@ -87,10 +103,8 @@ std::string fetch_nick(std::string id) {
 void scan_thread() {
     status_msg = "Scanning...";
     save_settings();
-    
     src_list.clear();
     dst_list.clear();
-    
     std::vector<std::string> all_ids;
     
     auto scan_dir = [&](std::string path, std::vector<std::string>& list) {
@@ -150,7 +164,7 @@ int main(int, char**) {
     load_settings();
     if (!glfwInit()) return 1;
     
-    GLFWwindow* window = glfwCreateWindow(600, 500, "Dota 2 Manager C++", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(700, 500, "Dota 2 Manager C++", NULL, NULL);
     if (window == NULL) return 1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
@@ -161,6 +175,9 @@ int main(int, char**) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
+    ImGuiIO& io = ImGui::GetIO();
+    ImFont* font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 16.0f, NULL, io.Fonts->GetGlyphRangesCyrillic());
+    
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         ImGui_ImplOpenGL3_NewFrame();
@@ -188,17 +205,23 @@ int main(int, char**) {
             auto& vec = *static_cast<std::vector<std::string>*>(data);
             if (idx < 0 || idx >= vec.size()) return false;
             std::string id = vec[idx];
+            
             static std::string buf; 
-            buf = nick_cache.count(id) ? nick_cache[id] + " (" + id + ")" : id;
+            // Формируем строку для отображения
+            if (nick_cache.count(id)) {
+                buf = nick_cache[id] + " (" + id + ")";
+            } else {
+                buf = id;
+            }
             *out_text = buf.c_str();
             return true;
         };
 
-        ImGui::ListBox("##src", &selected_src, getter, &src_list, (int)src_list.size(), 10);
+        ImGui::ListBox("##src", &selected_src, getter, &src_list, (int)src_list.size(), 12);
         ImGui::NextColumn();
         
         ImGui::Text("To (Account)");
-        ImGui::ListBox("##dst", &selected_dst, getter, &dst_list, (int)dst_list.size(), 10);
+        ImGui::ListBox("##dst", &selected_dst, getter, &dst_list, (int)dst_list.size(), 12);
         ImGui::Columns(1);
         
         ImGui::Separator();
@@ -226,7 +249,6 @@ int main(int, char**) {
     return 0;
 }
 
-// FIX: WINMAIN ENTRY POINT
 #ifdef _WIN32
 int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
 {
