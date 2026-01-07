@@ -10,6 +10,12 @@
 #include <string>
 #include <thread>
 #include <map>
+#include <algorithm>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -27,8 +33,6 @@ std::string status_msg = "Ready";
 int selected_src = -1;
 int selected_dst = -1;
 
-// --- LOGIC ---
-
 void load_settings() {
     if (fs::exists(SETTINGS_FILE)) {
         try {
@@ -36,8 +40,10 @@ void load_settings() {
             json j; f >> j;
             std::string s = j.value("src", "");
             std::string d = j.value("dst", "");
-            strcpy(src_path, s.c_str());
-            strcpy(dst_path, d.c_str());
+            strncpy(src_path, s.c_str(), sizeof(src_path));
+            src_path[sizeof(src_path) - 1] = 0;
+            strncpy(dst_path, d.c_str(), sizeof(dst_path));
+            dst_path[sizeof(dst_path) - 1] = 0;
         } catch(...) {}
     }
     if (fs::exists(CACHE_FILE)) {
@@ -70,7 +76,6 @@ std::string fetch_nick(std::string id) {
             size_t end = r.text.find("</steamID>");
             if (start != std::string::npos && end != std::string::npos) {
                 std::string nick = r.text.substr(start + 9, end - start - 9);
-                // Чистим ник от мусора для кодировки
                 nick_cache[id] = nick;
                 return nick;
             }
@@ -119,7 +124,7 @@ void copy_config() {
         status_msg = "Select folders first!";
         return;
     }
-    if (src_list.empty() || dst_list.empty()) return;
+    if (selected_src >= src_list.size() || selected_dst >= dst_list.size()) return;
 
     std::string s_id = src_list[selected_src];
     std::string d_id = dst_list[selected_dst];
@@ -181,6 +186,7 @@ int main(int, char**) {
         
         auto getter = [](void* data, int idx, const char** out_text) {
             auto& vec = *static_cast<std::vector<std::string>*>(data);
+            if (idx < 0 || idx >= vec.size()) return false;
             std::string id = vec[idx];
             static std::string buf; 
             buf = nick_cache.count(id) ? nick_cache[id] + " (" + id + ")" : id;
@@ -188,11 +194,11 @@ int main(int, char**) {
             return true;
         };
 
-        ImGui::ListBox("##src", &selected_src, getter, &src_list, src_list.size(), 10);
+        ImGui::ListBox("##src", &selected_src, getter, &src_list, (int)src_list.size(), 10);
         ImGui::NextColumn();
         
         ImGui::Text("To (Account)");
-        ImGui::ListBox("##dst", &selected_dst, getter, &dst_list, dst_list.size(), 10);
+        ImGui::ListBox("##dst", &selected_dst, getter, &dst_list, (int)dst_list.size(), 10);
         ImGui::Columns(1);
         
         ImGui::Separator();
@@ -219,3 +225,11 @@ int main(int, char**) {
     glfwTerminate();
     return 0;
 }
+
+// FIX: WINMAIN ENTRY POINT
+#ifdef _WIN32
+int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hInstPrev, PSTR cmdline, int cmdshow)
+{
+    return main(__argc, __argv);
+}
+#endif
