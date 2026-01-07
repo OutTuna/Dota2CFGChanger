@@ -9,15 +9,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Setup CMake
-      uses: jwlawles/cmake-build-action@v1.4
-      with:
-        cmake-version: '3.21'
+    - uses: actions/checkout@v4
 
     - name: Configure CMake
-      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S . -B build
 
     - name: Build
       run: cmake --build build --config Release
