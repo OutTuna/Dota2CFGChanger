@@ -1,0 +1,29 @@
+name: Build C++ ImGui App
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup CMake
+      uses: jwlawles/cmake-build-action@v1.4
+      with:
+        cmake-version: '3.21'
+
+    - name: Configure CMake
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DotaManagerCPP
+        path: build/Release/DotaManager.exe

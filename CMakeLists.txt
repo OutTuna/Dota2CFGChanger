@@ -1,0 +1,42 @@
+cmake_minimum_required(VERSION 3.14)
+project(DotaManager)
+
+set(CMAKE_CXX_STANDARD 17)
+
+include(FetchContent)
+
+FetchContent_Declare(cpr GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.10.1)
+FetchContent_MakeAvailable(cpr)
+
+FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.2)
+FetchContent_MakeAvailable(json)
+
+FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
+FetchContent_MakeAvailable(glfw)
+
+FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.89.9)
+FetchContent_MakeAvailable(imgui)
+
+add_executable(DotaManager main.cpp)
+
+target_include_directories(DotaManager PRIVATE 
+    ${imgui_SOURCE_DIR} 
+    ${imgui_SOURCE_DIR}/backends
+)
+
+target_sources(DotaManager PRIVATE
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
+
+if(WIN32)
+    target_link_libraries(DotaManager PRIVATE opengl32)
+    set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
+endif()
