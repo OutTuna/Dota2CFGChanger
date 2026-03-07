@@ -54,6 +54,11 @@
 
 ---
 
+![Alt](https://repobeats.axiom.co/api/embed/a71213f8cd667b684ab859eea88dce13aea336bc.svg "Repobeats analytics image")
+
+
+---
+
 ## 🏗 Сборка из исходников (Build from source)
 
 Если вы хотите собрать проект самостоятельно, вам понадобится **CMake** и компилятор C++ (MSVC).
@@ -68,3 +73,8 @@ cmake -S . -B build
 
 # 3. Скомпилируйте (в режиме Release для макс. скорости)
 cmake --build build --config Release
+
+
+
+
+
