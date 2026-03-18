@@ -1,0 +1,78 @@
+name: Build Linux
+
+on:
+  push:
+    branches: [ linux ]
+  pull_request:
+    branches: [ linux ]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            build-essential \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            file
+
+      - name: Build
+        run: |
+          mkdir build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          make -j$(nproc)
+
+      - name: Download linuxdeploy
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+
+      - name: Create AppDir structure
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          # Бинарник
+          cp build/Dota2CFGChanger AppDir/usr/bin/
+
+          # .desktop файл (обязателен для AppImage)
+          cat > AppDir/usr/share/applications/dota2cfgchanger.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Name=Dota2 CFG Changer
+          Exec=Dota2CFGChanger
+          Icon=dota2cfgchanger
+          Type=Application
+          Categories=Utility;
+          DESKTOP
+
+          # Иконка-заглушка (1x1 png)
+          printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' \
+            > AppDir/usr/share/icons/hicolor/256x256/apps/dota2cfgchanger.png
+
+      - name: Build AppImage
+        run: |
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --output appimage
+          # Переименовываем в понятное имя
+          mv Dota2*.AppImage Dota2CFGChanger-linux.AppImage
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dota2CFGChanger-linux
+          path: Dota2CFGChanger-linux.AppImage
+          retention-days: 30
