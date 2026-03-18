@@ -12,42 +12,32 @@
 | Ветка    | Платформа  | Описание                        |
 |----------|------------|---------------------------------|
 | `main`   | 🪟 Windows | `.exe`-сборка, пути Windows     |
-| `linux`  | 🐧 Linux   | бинарник Linux, пути `~/.steam` |
+| `linux`  | 🐧 Linux   | AppImage, пути `~/.steam`       |
 
 ---
 
-## Скачать готовый бинарник
+## Скачать
 
 1. Перейди во вкладку **Actions** → выбери последний успешный билд
 2. Внизу страницы найди раздел **Artifacts**
 3. Скачай `Dota2CFGChanger-linux`
+4. Распакуй `.zip` — внутри будет `Dota2CFGChanger-linux.AppImage`
 
 ---
 
 ## Запуск
 
+AppImage не требует установки и работает на любом Linux без зависимостей.
+
 ```bash
-# Даём права на выполнение
-chmod +x Dota2CFGChanger
+# Даём права на выполнение (один раз)
+chmod +x Dota2CFGChanger-linux.AppImage
 
 # Запускаем
-./Dota2CFGChanger
+./Dota2CFGChanger-linux.AppImage
 ```
 
----
-
-## Зависимости (runtime)
-
-```bash
-# Ubuntu / Debian
-sudo apt install libglfw3 libgl1-mesa-glx libcurl4
-
-# Arch
-sudo pacman -S glfw-x11 libgl curl
-
-# Fedora
-sudo dnf install glfw mesa-libGL libcurl
-```
+Или просто дважды кликни по файлу в файловом менеджере.
 
 ---
 
@@ -68,22 +58,24 @@ sudo dnf install glfw mesa-libGL libcurl
 ## Сборка из исходников
 
 ```bash
-# Установка зависимостей
-sudo apt install cmake build-essential libglfw3-dev libgl1-mesa-dev \
-                 nlohmann-json3-dev libcurl4-openssl-dev
+# Зависимости (только компилятор и OpenGL — остальное скачается само)
 
-# Клонирование с submodules (imgui)
-git clone --recurse-submodules https://github.com/OutTuna/Dota2CFGChanger.git
+# Ubuntu / Debian
+sudo apt install cmake build-essential libgl1-mesa-dev libx11-dev \
+                 libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+
+# Fedora
+sudo dnf install cmake gcc-c++ mesa-libGL-devel libX11-devel \
+                 libXrandr-devel libXinerama-devel libXcursor-devel libXi-devel
+
+# Arch
+sudo pacman -S cmake base-devel mesa libx11 libxrandr libxinerama libxcursor libxi
+
+# Сборка
+git clone https://github.com/OutTuna/Dota2CFGChanger.git
 cd Dota2CFGChanger
 git checkout linux
-
-# Сборка cpr
-git clone https://github.com/libcpr/cpr.git && cd cpr
-mkdir build && cd build && cmake .. -DCPR_USE_SYSTEM_CURL=ON && make -j$(nproc)
-sudo make install && cd ../..
-
-# Сборка проекта
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. -DCMAKE_BUILD_TYPE=Release   # ImGui, cpr, json, GLFW скачаются сами
 make -j$(nproc)
 ```
