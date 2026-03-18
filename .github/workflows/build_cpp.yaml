@@ -1,24 +1,44 @@
-name: Build C++ ImGui App
+name: Build Windows
 
 on:
   push:
     branches: [ "main" ]
-
+    tags:
+      - 'v*'
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Configure CMake
-      run: cmake -S . -B build
+      - name: Configure CMake
+        run: cmake -S . -B build
 
-    - name: Build
-      run: cmake --build build --config Release
+      - name: Build
+        run: cmake --build build --config Release
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: DotaManagerCPP
-        path: build/Release/DotaManager.exe
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DotaManagerCPP
+          path: build/Release/DotaManager.exe
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Dota2 CFG Changer ${{ github.ref_name }} — Windows"
+          body: |
+            ## 🪟 Windows релиз ${{ github.ref_name }}
+
+            ### Установка
+            1. Скачай `DotaManager.exe`
+            2. Запусти — установка не нужна
+
+            ---
+            > Для Linux-версии смотри ветку `linux`
+          files: build/Release/DotaManager.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
