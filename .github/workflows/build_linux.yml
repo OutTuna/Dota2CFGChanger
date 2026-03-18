@@ -26,6 +26,9 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxrender-dev \
             file
 
       - name: Build
@@ -45,10 +48,8 @@ jobs:
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
 
-          # Бинарник
           cp build/Dota2CFGChanger AppDir/usr/bin/
 
-          # .desktop файл (обязателен для AppImage)
           cat > AppDir/usr/share/applications/dota2cfgchanger.desktop << 'DESKTOP'
           [Desktop Entry]
           Name=Dota2 CFG Changer
@@ -58,7 +59,6 @@ jobs:
           Categories=Utility;
           DESKTOP
 
-          # Иконка-заглушка (1x1 png)
           printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' \
             > AppDir/usr/share/icons/hicolor/256x256/apps/dota2cfgchanger.png
 
@@ -67,7 +67,6 @@ jobs:
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --output appimage
-          # Переименовываем в понятное имя
           mv Dota2*.AppImage Dota2CFGChanger-linux.AppImage
 
       - name: Upload AppImage
