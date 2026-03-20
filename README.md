@@ -1,10 +1,9 @@
 # ⚡ Dota 2 Config Manager (C++ / ImGui)
 
-![Platform](https://img.shields.io/badge/platform-Windows-blue)
-![Platform](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)
-![Language](https://img.shields.io/badge/language-C%2B%2B17-00599C)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Build](https://img.shields.io/badge/build-passing-brightgreen)
+![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)
+![C++](https://img.shields.io/badge/C%2B%2B-00599C?style=flat&logo=c%2B%2B&logoColor=white)
+![Build](https://img.shields.io/badge/build-passing-brightgreen?style=flat)
 
 **Dota 2 Config Manager** — это сверхбыстрая утилита для переноса настроек Dota 2 между разными Steam-аккаунтами. 
 
