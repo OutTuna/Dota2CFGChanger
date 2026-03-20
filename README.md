@@ -1,6 +1,7 @@
 # ⚡ Dota 2 Config Manager (C++ / ImGui)
 
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
+![Platform](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)
 ![Language](https://img.shields.io/badge/language-C%2B%2B17-00599C)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
