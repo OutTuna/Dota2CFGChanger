@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(DotaManager)
 
+set(CMAKE_POLICY_DEFAULT_CMP00048 NEW)
+cmake_policy(SET CMP0077 NEW)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -14,19 +17,25 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
 
-FetchContent_Declare(cpr GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.10.1)
+FetchContent_Declare(cpr GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1)
 FetchContent_MakeAvailable(cpr)
 
-FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.2)
+FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3)
 FetchContent_MakeAvailable(json)
 
 FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
 FetchContent_MakeAvailable(glfw)
 
-FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.89.9)
+FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6)
 FetchContent_MakeAvailable(imgui)
 
-add_executable(DotaManager main.cpp)
+add_executable(DotaManager main.cpp
+        app_state.h
+        app_logic.cpp
+        ui.cpp
+        app_logic.h
+        ui.h
+        app_icon.h)
 
 target_include_directories(DotaManager PRIVATE 
     ${imgui_SOURCE_DIR} 
@@ -34,6 +43,10 @@ target_include_directories(DotaManager PRIVATE
 )
 
 target_sources(DotaManager PRIVATE
+        main.cpp
+        ui.cpp
+        app_logic.cpp
+        app.rc
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
@@ -41,12 +54,17 @@ target_sources(DotaManager PRIVATE
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+
 )
 
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
 
 if(WIN32)
-    target_link_libraries(DotaManager PRIVATE opengl32)
+    target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
-    target_compile_options(DotaManager PRIVATE /utf-8)
+    if(MSVC)
+        target_compile_options(DotaManager PRIVATE /utf-8)
+        else()
+            target_compile_options(DotaManager PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+    endif ()
 endif()
