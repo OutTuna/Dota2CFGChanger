@@ -279,7 +279,7 @@ static void load_bg_crimson() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
         BG_WIDTH, BG_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, BG_RGBA);
     glBindTexture(GL_TEXTURE_2D, 0);
-    g_bg_crimson_tex = (ImTextureID)(uintptr_t)tex;
+    g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
 }
 
 static void apply_crimson(ImGuiStyle& st) {
@@ -357,6 +357,8 @@ void ui_apply_theme(AppTheme t) {
     }
 }
 
+
+
 static void render_settings_panel(ImVec2 ds) {
     ImGui::SetNextWindowPos({ ds.x - 210.f, 34.f });
     ImGui::SetNextWindowSize({ 200.f, 0.f });
@@ -376,11 +378,11 @@ static void render_settings_panel(ImVec2 ds) {
 
     struct ThemeEntry { const char* name; AppTheme id; };
     ThemeEntry themes[] = {
-        { "Dark (default)", AppTheme::Dark         },
+        { "Dark (default)", AppTheme::Dark        },
         { "Indigo",         AppTheme::Indigo       },
         { "Vermillion",     AppTheme::Vermillion   },
         { "Classic Steam",  AppTheme::ClassicSteam },
-        { "Artem(only)",    AppTheme::Crimson      },
+        { "Artem(Only)",        AppTheme::Crimson      },
     };
 
     for (auto& e : themes) {
