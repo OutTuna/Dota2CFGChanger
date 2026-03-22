@@ -13,6 +13,15 @@
 
 ## 🖼 Скриншот
 
+* **NEW**
+
+![Interface Preview](https://github.com/user-attachments/assets/f5481271-bd9d-4093-a1b4-3382a1945173)
+
+
+
+
+* **OLD (LINUX)**
+
 ![Interface Preview](https://github.com/user-attachments/assets/13438d84-9a6b-4355-8e7c-6a0a694b05a4)
 
 ---
