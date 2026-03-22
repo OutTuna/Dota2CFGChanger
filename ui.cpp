@@ -79,29 +79,41 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::TextDisabled("  by OutTuna");
     ImGui::Separator();
 
+    static bool open_src = false;
+    static bool open_dst = false;
+
     ImGui::TextDisabled("Откуда конфиг");
     ImGui::PushItemWidth(-1);
-    ImGui::InputText("##src_path", src_path, 256);
-    if (ImGui::IsItemClicked()) {
-#ifdef _WIN32
-        auto p = browse_for_folder("Откуда конфиг");
-        if (!p.empty()) { strncpy(src_path, p.c_str(), 255); src_path[255] = 0; }
-#endif
-    }
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.28f, 0.28f, 0.32f, 1.0f});
+    ImGui::InputText("##src_path", src_path, 256,
+        ImGuiInputTextFlags_ReadOnly);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemClicked()) open_src = true;
     ImGui::PopItemWidth();
 
     ImGui::Spacing();
     ImGui::TextDisabled("Куда конфиг");
     ImGui::PushItemWidth(-1);
-    ImGui::InputText("##dst_path", dst_path, 256);
-    if (ImGui::IsItemClicked()) {
-#ifdef _WIN32
-        auto p = browse_for_folder("Куда конфиг");
-        if (!p.empty()) { strncpy(dst_path, p.c_str(), 255); dst_path[255] = 0; }
-#endif
-    }
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, {0.28f, 0.28f, 0.32f, 1.0f});
+    ImGui::InputText("##dst_path", dst_path, 256,
+        ImGuiInputTextFlags_ReadOnly);
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemClicked()) open_dst = true;
     ImGui::PopItemWidth();
     ImGui::Spacing();
+
+#ifdef _WIN32
+    if (open_src) {
+        open_src = false;
+        auto p = browse_for_folder("Откуда конфиг");
+        if (!p.empty()) { strncpy(src_path, p.c_str(), 255); src_path[255] = 0; }
+    }
+    if (open_dst) {
+        open_dst = false;
+        auto p = browse_for_folder("Куда конфиг");
+        if (!p.empty()) { strncpy(dst_path, p.c_str(), 255); dst_path[255] = 0; }
+    }
+#endif
 
     if (ImGui::Button("SCAN FOLDERS", {-1, 32}))
         std::thread(scan_thread).detach();

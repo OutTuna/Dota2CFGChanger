@@ -5,7 +5,6 @@ on:
     branches: [ "main" ]
     tags:
       - 'v*'
-
 jobs:
   build:
     runs-on: windows-latest
@@ -24,37 +23,8 @@ jobs:
         with:
           name: DotaManagerCPP
           path: build/Release/DotaManager.exe
-
-      - name: Delete old latest release
-        if: github.ref == 'refs/heads/main'
-        run: |
-          gh release delete latest --yes || true
-          git push origin :refs/tags/latest || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create rolling latest release (main push)
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "Dota2 CFG Changer — Latest Build"
-          body: |
-            ## 🪟 Автосборка с ветки `main`
-
-            Это последняя автоматическая сборка.
-
-            ### Установка
-            1. Скачай `DotaManager.exe`
-            2. Запусти — установка не нужна
-          files: build/Release/DotaManager.exe
-          draft: false
-          prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release (tag push)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           name: "Dota2 CFG Changer ${{ github.ref_name }} — Windows"
@@ -63,7 +33,12 @@ jobs:
 
             ### Установка
             1. Скачай `DotaManager.exe`
-            2. Запусти — установка не нужна
+            2. Разархивируй его в любую папку
+            3. Открой, и выбери путь
+            4. Нажми Copy
+            5. Profit
+            ---
+            > Для Linux-версии смотри ветку `linux`
           files: build/Release/DotaManager.exe
           draft: false
           prerelease: false
