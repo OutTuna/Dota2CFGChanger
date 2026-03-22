@@ -59,6 +59,9 @@ target_include_directories(DotaManager PRIVATE
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
 
 if(WIN32)
+    file(WRITE "${CMAKE_BINARY_DIR}/generated.rc"
+            "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/icon.ico\"\n")
+    target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated.rc")
     target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
     if(MSVC)
