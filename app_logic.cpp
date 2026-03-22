@@ -55,6 +55,7 @@ void load_settings() {
             json j; f >> j;
             std::string s = j.value("src", "");
             std::string d = j.value("dst", "");
+            g_theme = j.value("theme", 0);
             strncpy(src_path, s.c_str(), sizeof(src_path)); src_path[sizeof(src_path)-1] = 0;
             strncpy(dst_path, d.c_str(), sizeof(dst_path)); dst_path[sizeof(dst_path)-1] = 0;
         } catch (...) {}
@@ -69,7 +70,7 @@ void load_settings() {
 }
 
 void save_settings() {
-    { std::ofstream f(SETTINGS_FILE); json j = {{"src", src_path},{"dst", dst_path}}; f << j; }
+    { std::ofstream f(SETTINGS_FILE); json j = {{"src", src_path},{"dst", dst_path},{"theme", g_theme}}; f << j; }
     { std::ofstream fc(CACHE_FILE);   json jc(nick_cache); fc << jc; }
 }
 

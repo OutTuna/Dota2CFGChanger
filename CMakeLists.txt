@@ -29,11 +29,16 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6)
 FetchContent_MakeAvailable(imgui)
 
+FetchContent_Declare(stb GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG master)
+FetchContent_MakeAvailable(stb)
+
 add_executable(DotaManager
         main.cpp
         app_logic.cpp
         app_logic.h
         app_state.h
+        avatar.cpp
+        avatar.h
         ui.cpp
         ui.h
         app_icon.h
@@ -44,12 +49,14 @@ add_executable(DotaManager
         ${imgui_SOURCE_DIR}/imgui_demo.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+        bg_crimson.h
 )
 
 target_include_directories(DotaManager PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
+        ${stb_SOURCE_DIR}
 )
 
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
