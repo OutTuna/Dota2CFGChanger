@@ -57,6 +57,10 @@ target_sources(DotaManager PRIVATE
 
 )
 
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/app.rc")
+    target_sources(DotaManager PRIVATE app.rc)
+endif()
+
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
 
 if(WIN32)
