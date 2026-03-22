@@ -46,10 +46,6 @@ add_executable(DotaManager
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/app.rc")
-    target_sources(DotaManager PRIVATE app.rc)
-endif()
-
 target_include_directories(DotaManager PRIVATE
         ${CMAKE_SOURCE_DIR}
         ${imgui_SOURCE_DIR}
@@ -59,11 +55,15 @@ target_include_directories(DotaManager PRIVATE
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
 
 if(WIN32)
-    file(WRITE "${CMAKE_BINARY_DIR}/generated.rc"
-            "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/icon.ico\"\n")
-    target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated.rc")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.ico")
+        file(WRITE "${CMAKE_BINARY_DIR}/generated.rc"
+                "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/icon.ico\"\n")
+        target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated.rc")
+    endif()
+
     target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
+
     if(MSVC)
         target_compile_options(DotaManager PRIVATE /utf-8)
     else()
