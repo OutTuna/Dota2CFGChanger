@@ -21,6 +21,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+// ─── Internal state ───────────────────────────────────────────────────────────
+
 enum class AvatarState { Idle, Fetching, Ready, Failed };
 
 struct AvatarEntry {
@@ -33,6 +35,8 @@ struct AvatarEntry {
 
 static std::map<std::string, AvatarEntry> g_avatars;
 static std::mutex                         g_mutex;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 static std::string strip_cdata(std::string s) {
     const std::string open  = "<![CDATA[";
@@ -121,6 +125,8 @@ static GLuint upload_texture(const std::vector<unsigned char>& pixels, int w, in
     return tex;
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
 ImTextureID avatar_get(const std::string& steam3_id) {
     std::lock_guard<std::mutex> lock(g_mutex);
 
@@ -143,7 +149,7 @@ void avatar_flush_pending() {
     for (auto& [id, entry] : g_avatars) {
         if (entry.state == AvatarState::Ready && !entry.texture && !entry.pixels.empty()) {
             GLuint tex    = upload_texture(entry.pixels, entry.width, entry.height);
-            entry.texture = reinterpret_cast<ImTextureID>(static_cast<uintptr_t>(tex));
+            entry.texture = (ImTextureID)(void*)(uintptr_t)tex;
             entry.pixels.clear();
         }
     }
@@ -154,7 +160,7 @@ void avatar_shutdown() {
 
     for (auto& [id, entry] : g_avatars) {
         if (entry.texture) {
-            GLuint tex = static_cast<GLuint>(reinterpret_cast<uintptr_t>(entry.texture));
+            GLuint tex = (GLuint)(uintptr_t)(void*)entry.texture;
             glDeleteTextures(1, &tex);
             entry.texture = (ImTextureID)0;
         }
