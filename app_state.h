@@ -18,6 +18,8 @@ inline std::string status_msg = "Ready";
 inline int selected_src = -1;
 inline int selected_dst = -1;
 
+inline int  g_theme = 0;
+
 struct SuccessInfo {
     bool        show     = false;
     bool        closing  = false;

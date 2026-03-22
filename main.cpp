@@ -3,8 +3,10 @@
 #include "backends/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 #include "app_logic.h"
+#include "avatar.h"
 #include "ui.h"
 #include "app_icon.h"
+#include "app_state.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -38,7 +40,7 @@ int main(int, char**) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    ui_apply_theme();
+    ui_apply_theme(static_cast<AppTheme>(g_theme));
 
     ImGuiIO& io = ImGui::GetIO();
     ImFont* font_default = io.Fonts->AddFontFromFileTTF(
@@ -75,6 +77,7 @@ int main(int, char**) {
         glfwSwapBuffers(window);
     }
 
+    avatar_shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
