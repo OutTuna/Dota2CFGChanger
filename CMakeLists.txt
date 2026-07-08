@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
+
 project(DotaManager)
 
 set(CMAKE_POLICY_DEFAULT_CMP0048 NEW)
@@ -7,29 +8,39 @@ cmake_policy(SET CMP0077 NEW)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(CPR_USE_SYSTEM_CURL OFF CACHE BOOL "" FORCE)
-set(CPR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+set(CURL_USE_OPENSSL  OFF CACHE BOOL "" FORCE)
+set(CURL_USE_SCHANNEL ON  CACHE BOOL "" FORCE)
+
+
+set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
+set(CPR_USE_SYSTEM_CURL      OFF CACHE BOOL "" FORCE)
+set(CPR_BUILD_TESTS          OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS          OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES      OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS         OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
 
-FetchContent_Declare(cpr GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1)
+FetchContent_Declare(cpr   GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1)
 FetchContent_MakeAvailable(cpr)
 
-FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3)
+FetchContent_Declare(json  GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3)
 FetchContent_MakeAvailable(json)
 
-FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
+FetchContent_Declare(glfw  GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
 FetchContent_MakeAvailable(glfw)
 
 FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6)
 FetchContent_MakeAvailable(imgui)
 
-FetchContent_Declare(stb GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG master)
+FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG master)
 FetchContent_MakeAvailable(stb)
 
 add_executable(DotaManager
@@ -70,6 +81,14 @@ if(WIN32)
 
     target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
+
+    if(MINGW)
+        target_link_options(DotaManager PRIVATE
+                -static
+                -static-libgcc
+                -static-libstdc++
+        )
+    endif()
 
     if(MSVC)
         target_compile_options(DotaManager PRIVATE /utf-8)

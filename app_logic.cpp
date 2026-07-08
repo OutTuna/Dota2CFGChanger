@@ -12,7 +12,11 @@
 #include <shlobj.h>
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "advapi32.lib")
+
 #endif
+
+static const char* REG_KEY = "Software\\Dota2CFGChanger";
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -49,29 +53,51 @@ std::string browse_for_folder(const char* title) {
 #endif
 
 void load_settings() {
-    if (fs::exists(SETTINGS_FILE)) {
-        try {
-            std::ifstream f(SETTINGS_FILE);
-            json j; f >> j;
-            std::string s = j.value("src", "");
-            std::string d = j.value("dst", "");
-            g_theme = j.value("theme", 0);
-            strncpy(src_path, s.c_str(), sizeof(src_path)); src_path[sizeof(src_path)-1] = 0;
-            strncpy(dst_path, d.c_str(), sizeof(dst_path)); dst_path[sizeof(dst_path)-1] = 0;
-        } catch (...) {}
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_CURRENT_USER, REG_KEY, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD size;
+
+        size = sizeof(src_path);
+        RegQueryValueExA(hKey, "src", NULL, NULL, (LPBYTE)src_path, &size);
+
+        size = sizeof(dst_path);
+        RegQueryValueExA(hKey, "dst", NULL, NULL, (LPBYTE)dst_path, &size);
+
+        DWORD theme = 0; size = sizeof(theme);
+        if (RegQueryValueExA(hKey, "theme", NULL, NULL, (LPBYTE)&theme, &size) == ERROR_SUCCESS)
+            g_theme = (int)theme;
+
+        char nickBuf[65536] = {};
+        size = sizeof(nickBuf);
+        if (RegQueryValueExA(hKey, "nicknames", NULL, NULL, (LPBYTE)nickBuf, &size) == ERROR_SUCCESS) {
+            try {
+                json j = json::parse(nickBuf);
+                for (auto& el : j.items()) nick_cache[el.key()] = el.value().get<std::string>();
+            } catch (...) {}
+        }
+
+        RegCloseKey(hKey);
     }
-    if (fs::exists(CACHE_FILE)) {
-        try {
-            std::ifstream f(CACHE_FILE);
-            json j; f >> j;
-            for (auto& el : j.items()) nick_cache[el.key()] = el.value();
-        } catch (...) {}
-    }
+
+    if (dst_path[0] == '\0')
+        strncpy(dst_path, "C:\\Program Files (x86)\\Steam\\userdata", sizeof(dst_path) - 1);
 }
 
 void save_settings() {
-    { std::ofstream f(SETTINGS_FILE); json j = {{"src", src_path},{"dst", dst_path},{"theme", g_theme}}; f << j; }
-    { std::ofstream fc(CACHE_FILE);   json jc(nick_cache); fc << jc; }
+    HKEY hKey;
+    RegCreateKeyExA(HKEY_CURRENT_USER, REG_KEY, 0, NULL,
+                    REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL);
+
+    RegSetValueExA(hKey, "src",   0, REG_SZ,    (LPBYTE)src_path, (DWORD)strlen(src_path) + 1);
+    RegSetValueExA(hKey, "dst",   0, REG_SZ,    (LPBYTE)dst_path, (DWORD)strlen(dst_path) + 1);
+    DWORD theme = (DWORD)g_theme;
+    RegSetValueExA(hKey, "theme", 0, REG_DWORD, (LPBYTE)&theme, sizeof(theme));
+
+    std::string nickJson = json(nick_cache).dump();
+    RegSetValueExA(hKey, "nicknames", 0, REG_SZ,
+                   (LPBYTE)nickJson.c_str(), (DWORD)nickJson.size() + 1);
+
+    RegCloseKey(hKey);
 }
 
 static std::string clean_xml_nick(std::string raw) {
