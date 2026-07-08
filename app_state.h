@@ -3,8 +3,8 @@
 #include <vector>
 #include <map>
 
-inline const std::string SETTINGS_FILE = "settings.json";
-inline const std::string CACHE_FILE    = "nicknames.json";
+//inline const std::string SETTINGS_FILE = "settings.json";
+//inline const std::string CACHE_FILE    = "nicknames.json";
 inline const std::string DOTA_ID       = "570";
 
 inline char src_path[256] = "";
