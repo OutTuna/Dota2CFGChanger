@@ -1,4 +1,5 @@
 #include "avatar.h"
+#include "steam_api.h"
 #include <cpr/cpr.h>
 #include <backends/imgui_impl_opengl3.h>
 
@@ -17,12 +18,32 @@
 #include <map>
 #include <mutex>
 #include <thread>
+#include <condition_variable>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-// ─── Internal state ───────────────────────────────────────────────────────────
-
+namespace {
+class Semaphore {
+public:
+    explicit Semaphore(int count) : count_(count) {}
+    void acquire() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cv_.wait(lock, [&] { return count_ > 0; });
+        --count_;
+    }
+    void release() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        ++count_;
+        cv_.notify_one();
+    }
+private:
+    std::mutex              mutex_;
+    std::condition_variable cv_;
+    int                     count_;
+};
+Semaphore g_fetch_slots(4);
+}
 enum class AvatarState { Idle, Fetching, Ready, Failed };
 
 struct AvatarEntry {
@@ -36,45 +57,17 @@ struct AvatarEntry {
 static std::map<std::string, AvatarEntry> g_avatars;
 static std::mutex                         g_mutex;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-static std::string strip_cdata(std::string s) {
-    const std::string open  = "<![CDATA[";
-    const std::string close = "]]>";
-    size_t p = s.find(open);
-    if (p != std::string::npos) s.replace(p, open.size(), "");
-    p = s.find(close);
-    if (p != std::string::npos) s.replace(p, close.size(), "");
-    while (!s.empty() && (s.front() == ' ' || s.front() == '\n' || s.front() == '\r')) s.erase(s.begin());
-    while (!s.empty() && (s.back()  == ' ' || s.back()  == '\n' || s.back()  == '\r')) s.pop_back();
-    return s;
-}
-
 static std::string fetch_avatar_url(const std::string& steam3_id) {
-    try {
-        long long steam64 = std::stoll(steam3_id) + 76561197960265728LL;
-        std::string url = "https://steamcommunity.com/profiles/"
-                        + std::to_string(steam64) + "?xml=1";
-
-        auto r = cpr::Get(cpr::Url{ url }, cpr::Timeout{ 3000 });
-        if (r.status_code != 200) return {};
-
-        auto find_tag = [&](const std::string& tag) -> std::string {
-            std::string open  = "<" + tag + ">";
-            std::string close = "</" + tag + ">";
-            size_t s = r.text.find(open);
-            size_t e = r.text.find(close);
-            if (s == std::string::npos || e == std::string::npos) return {};
-            return strip_cdata(r.text.substr(s + open.size(), e - s - open.size()));
-        };
-
-        return find_tag("avatarFull");
-    } catch (...) {
-        return {};
-    }
+    long long steam64 = steam_api::steam3_to_64(steam3_id);
+    std::string xml = steam_api::fetch_profile_xml(steam64, /*timeout_ms=*/3000);
+    if (xml.empty()) return {};
+    return steam_api::extract_tag(xml, "avatarFull");
 }
 
 static void fetch_thread(const std::string steam3_id) {
+    g_fetch_slots.acquire();
+    struct SlotGuard { ~SlotGuard() { g_fetch_slots.release(); } } slot_guard;
+
     std::string avatar_url = fetch_avatar_url(steam3_id);
     if (avatar_url.empty()) {
         std::lock_guard<std::mutex> lock(g_mutex);
@@ -124,8 +117,6 @@ static GLuint upload_texture(const std::vector<unsigned char>& pixels, int w, in
     glBindTexture(GL_TEXTURE_2D, 0);
     return tex;
 }
-
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 ImTextureID avatar_get(const std::string& steam3_id) {
     std::lock_guard<std::mutex> lock(g_mutex);
