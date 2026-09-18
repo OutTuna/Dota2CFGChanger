@@ -15,8 +15,10 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-set(CURL_USE_OPENSSL  OFF CACHE BOOL "" FORCE)
-set(CURL_USE_SCHANNEL ON  CACHE BOOL "" FORCE)
+set(CURL_USE_OPENSSL  ON  CACHE BOOL "" FORCE)
+if(WIN32)
+    set(CURL_USE_SCHANNEL ON CACHE BOOL "" FORCE)
+endif()
 
 
 set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
@@ -48,6 +50,8 @@ add_executable(DotaManager
         app_logic.cpp
         app_logic.h
         app_state.h
+        steam_api.cpp
+        steam_api.h
         avatar.cpp
         avatar.h
         ui.cpp
@@ -71,11 +75,15 @@ target_include_directories(DotaManager PRIVATE
 )
 
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
+if(NOT WIN32)
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(DotaManager PRIVATE OpenGL::GL)
+endif()
 
 if(WIN32)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.ico")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico")
         file(WRITE "${CMAKE_BINARY_DIR}/generated.rc"
-                "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/icon.ico\"\n")
+                "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/Icon.ico\"\n")
         target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated.rc")
     endif()
 
