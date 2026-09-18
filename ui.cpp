@@ -5,6 +5,7 @@
 #include "bg_crimson.h"
 #include "backends/imgui_impl_glfw.h"
 #include <GLFW/glfw3.h>
+#include "stb_image.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -18,8 +19,10 @@
 static AppTheme    g_current_theme    = AppTheme::Dark;
 static bool        g_settings_open    = false;
 static bool        g_palette_open     = false;
+static bool        g_confirm_copy_open = false;
+static std::string g_confirm_src_label;
+static std::string g_confirm_dst_label;
 static ImTextureID g_bg_crimson_tex   = (ImTextureID)0;
-
 static ImVec4 g_crimson_child_bg      = { 0.12f, 0.05f, 0.05f, 1.00f };
 static ImVec4 g_crimson_selected_bg   = { 0.55f, 0.08f, 0.08f, 1.00f };
 static ImVec4 g_crimson_hovered_bg    = { 0.30f, 0.06f, 0.06f, 1.00f };
@@ -265,10 +268,13 @@ static void apply_classic_steam(ImGuiStyle& st) {
     c[ImGuiCol_NavHighlight]         = { 0.588f, 0.537f, 0.176f, 1.00f };
 }
 
-
-
 static void load_bg_crimson() {
     if (g_bg_crimson_tex != (ImTextureID)0) return;
+
+    int w = 0, h = 0, ch = 0;
+    unsigned char* pixels = stbi_load_from_memory(BG_PNG, BG_PNG_LEN, &w, &h, &ch, 4);
+    if (!pixels) return;
+
     GLuint tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -276,9 +282,10 @@ static void load_bg_crimson() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-        BG_WIDTH, BG_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, BG_RGBA);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(pixels);
     g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
 }
 
@@ -471,6 +478,52 @@ static void render_palette_panel(ImVec2 ds) {
     ImGui::PopStyleColor(2);
 }
 
+static void render_confirm_copy_popup(ImVec2 ds) {
+    const float POP_W = 380.f, POP_H = 0.f;
+    ImGui::SetNextWindowPos({ (ds.x - POP_W) * 0.5f, ds.y * 0.35f });
+    ImGui::SetNextWindowSize({ POP_W, POP_H });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 16.f, 14.f });
+
+    ImGui::Begin("##confirm_copy", &g_confirm_copy_open,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove       | ImGuiWindowFlags_AlwaysAutoResize);
+
+    ImGui::TextColored({ 0.90f, 0.75f, 0.25f, 1.f }, "Подтверждение");
+    ImGui::Spacing();
+    ImGui::TextWrapped(
+        "Текущий конфиг Dota 2 в целевом аккаунте будет заменён. "
+        "Это можно отменить только вручную из папки .bak, созданной на время копирования.");
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGui::TextDisabled("Откуда:");
+    ImGui::TextWrapped("%s", g_confirm_src_label.c_str());
+    ImGui::TextDisabled("Куда:");
+    ImGui::TextWrapped("%s", g_confirm_dst_label.c_str());
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ImGui::Button("Отмена", { 120, 0 })) {
+        g_confirm_copy_open = false;
+    }
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button,        { 0.75f, 0.20f, 0.20f, 1.00f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.85f, 0.25f, 0.25f, 1.00f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.60f, 0.14f, 0.14f, 1.00f });
+    if (ImGui::Button("Заменить конфиг", { -1, 0 })) {
+        copy_config();
+        g_confirm_copy_open = false;
+    }
+    ImGui::PopStyleColor(3);
+
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+}
+
 void ui_render_main(ImFont* font_big, ImVec2 ds) {
     avatar_flush_pending();
 
@@ -583,7 +636,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::TextDisabled("Откуда конфиг");
     ImGui::PushItemWidth(-1);
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.28f, 0.28f, 0.32f, 1.f });
-    ImGui::InputText("##src_path", src_path, 256, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputText("##src_path", src_path, PATH_BUF_SIZE, ImGuiInputTextFlags_ReadOnly);
     ImGui::PopStyleColor();
     if (ImGui::IsItemClicked()) open_src = true;
     ImGui::PopItemWidth();
@@ -613,8 +666,11 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     }
 #endif
 
-    if (ImGui::Button("SCAN FOLDERS", { -1, 32 }))
+    bool scanning = g_scanning.load();
+    if (scanning) ImGui::BeginDisabled();
+    if (ImGui::Button(scanning ? "SCANNING..." : "SCAN FOLDERS", { -1, 32 }))
         std::thread(scan_thread).detach();
+    if (scanning) ImGui::EndDisabled();
 
     const float AVATAR_SIZE  = 24.f;
     const float ROW_H        = AVATAR_SIZE + 6.f;
@@ -623,21 +679,33 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
                                + ImGui::GetStyle().WindowPadding.y;
     const float list_h       = ImGui::GetContentRegionAvail().y - bottom_h;
 
+    std::vector<std::string> local_src_list, local_dst_list;
+    std::map<std::string, std::string> local_nick_cache;
+    std::string local_status;
+    {
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        local_src_list   = src_list;
+        local_dst_list   = dst_list;
+        local_nick_cache = nick_cache;
+        local_status     = status_msg;
+    }
+
     ImGui::Columns(2, "lists", true);
     ImGui::Text("From (Config)");
 
     auto render_account_list = [&](
         const std::vector<std::string>& list,
-        int& selected,
+        std::atomic<int>& selected_atomic,
         const char* child_id)
     {
+        int selected = selected_atomic.load();
         bool crimson = (g_current_theme == AppTheme::Crimson);
 
         ImGui::BeginChild(child_id, { 0, list_h }, true);
 
         for (int i = 0; i < (int)list.size(); i++) {
             const std::string& id  = list[i];
-            std::string nick       = nick_cache.count(id) ? nick_cache[id] : id;
+            std::string nick       = local_nick_cache.count(id) ? local_nick_cache[id] : id;
             std::string label      = nick + "  (" + id + ")";
             bool        sel        = (i == selected);
 
@@ -662,6 +730,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
             if (ImGui::Selectable("##row", sel,
                     ImGuiSelectableFlags_None, { 0, ROW_H })) {
                 selected = i;
+                selected_atomic.store(i);
             }
 
             if (crimson) ImGui::PopStyleColor(3);
@@ -713,16 +782,31 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::EndChild();
     };
 
-    render_account_list(src_list, selected_src, "##src_list");
+    render_account_list(local_src_list, selected_src, "##src_list");
 
     ImGui::NextColumn();
     ImGui::Text("To (Account)");
-    render_account_list(dst_list, selected_dst, "##dst_list");
+    render_account_list(local_dst_list, selected_dst, "##dst_list");
     ImGui::Columns(1);
 
     ImGui::Separator();
-    if (ImGui::Button("COPY CONFIG NOW", { -1, 38 })) copy_config();
-    ImGui::Text("Status: %s", status_msg.c_str());
+
+    if (ImGui::Button("COPY CONFIG NOW", { -1, 38 })) {
+        int s = selected_src.load(), d = selected_dst.load();
+        if (s < 0 || d < 0) {
+            copy_config();
+        }
+        else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
+            const std::string& s_id = local_src_list[s];
+            const std::string& d_id = local_dst_list[d];
+            std::string s_nick = local_nick_cache.count(s_id) ? local_nick_cache[s_id] : s_id;
+            std::string d_nick = local_nick_cache.count(d_id) ? local_nick_cache[d_id] : d_id;
+            g_confirm_src_label = s_nick + "  (" + s_id + ")";
+            g_confirm_dst_label = d_nick + "  (" + d_id + ")";
+            g_confirm_copy_open = true;
+        }
+    }
+    ImGui::Text("Status: %s", local_status.c_str());
 
     ImGui::End();
 
@@ -731,6 +815,9 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     if (g_palette_open && g_current_theme == AppTheme::Crimson)
         render_palette_panel(ds);
+
+    if (g_confirm_copy_open)
+        render_confirm_copy_popup(ds);
 }
 
 
