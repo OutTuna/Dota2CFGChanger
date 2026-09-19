@@ -983,3 +983,4 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor(2);
 }
+
