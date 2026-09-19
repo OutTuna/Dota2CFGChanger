@@ -16,6 +16,9 @@ if(MSVC)
 endif()
 
 if(WIN32)
+    set(CURL_USE_SCHANNEL ON  CACHE BOOL "" FORCE)
+    set(CURL_USE_OPENSSL  OFF CACHE BOOL "" FORCE)
+else()
     set(CURL_USE_OPENSSL  ON  CACHE BOOL "" FORCE)
     set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
 endif()
@@ -81,7 +84,7 @@ if(NOT WIN32)
 endif()
 
 if(WIN32)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico")
+        if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico")
         file(WRITE "${CMAKE_BINARY_DIR}/generated.rc"
                 "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/Icon.ico\"\n")
         target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated.rc")
