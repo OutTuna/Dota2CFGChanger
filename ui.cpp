@@ -790,8 +790,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (ImGui::Button("COPY CONFIG NOW", { -1, 38 })) {
         int s = selected_src.load(), d = selected_dst.load();
         if (s < 0 || d < 0) {
-            copy_config(); }
-        else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
+            copy_config();
+            else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
             const std::string& s_id = local_src_list[s];
             const std::string& d_id = local_dst_list[d];
             std::string s_nick = local_nick_cache.count(s_id) ? local_nick_cache[s_id] : s_id;
