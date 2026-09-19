@@ -78,19 +78,30 @@ void load_settings() {
             for (auto& el : j.items()) nick_cache[el.key()] = el.value();
         } catch (...) {}
     }
+    if (fs::exists(AVATAR_URL_CACHE_FILE)) {
+        try {
+            std::ifstream f(AVATAR_URL_CACHE_FILE);
+            json j; f >> j;
+            std::lock_guard<std::mutex> lock(g_data_mutex);
+            for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
+        } catch (...) {}
+    }
 }
 
 void save_settings() {
-    std::map<std::string, std::string> cache_copy;
+    std::map<std::string, std::string> nick_copy;
+    std::map<std::string, std::string> avatar_copy;
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
-        cache_copy = nick_cache;
+        nick_copy = nick_cache;
+        avatar_copy = avatar_url_cache;
     }
     { std::ofstream f(SETTINGS_FILE); json j = {{"src", src_path},{"dst", dst_path},{"theme", g_theme}}; f << j; }
-    { std::ofstream fc(CACHE_FILE); json jc(cache_copy); fc << jc; }
+    { std::ofstream fc(CACHE_FILE); json jc(nick_copy); fc << jc; }
+    { std::ofstream fa(AVATAR_URL_CACHE_FILE); json ja(avatar_copy); fa << ja; }
 }
 
-static std::string clean_xml_nick(std::string raw) {
+static std::string clean_xml_value(std::string raw) {
     for (auto& tag : { std::string("<![CDATA["), std::string("]]>") }) {
         size_t p = raw.find(tag);
         if (p != std::string::npos) raw.replace(p, tag.length(), "");
@@ -98,13 +109,25 @@ static std::string clean_xml_nick(std::string raw) {
     return raw;
 }
 
-static std::string fetch_nick(const std::string& id) {
+static std::string extract_xml_tag(const std::string& xml, const std::string& tag) {
+    std::string open = "<" + tag + ">";
+    std::string close = "</" + tag + ">";
+    size_t s = xml.find(open);
+    size_t e = xml.find(close);
+    if (s == std::string::npos || e == std::string::npos || e <= s) return "";
+    return clean_xml_value(xml.substr(s + open.length(), e - s - open.length()));
+}
+
+// Fetches the Steam profile XML ONCE per account and pulls both the
+// nickname and the avatar URL out of the same response, instead of
+// hitting steamcommunity.com twice (once for the nick, once for the
+// avatar) like the previous implementation did.
+static void fetch_profile_info(const std::string& id) {
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
-        if (nick_cache.count(id)) return nick_cache[id];
+        if (nick_cache.count(id) && avatar_url_cache.count(id)) return;
     }
 
-    std::string nick;
     try {
         long long steam64 = std::stoll(id) + 76561197960265728LL;
 
@@ -119,22 +142,18 @@ static std::string fetch_nick(const std::string& id) {
         if (r.status_code != 200) {
             set_status("HTTP " + std::to_string(r.status_code) +
                        (r.error.message.empty() ? "" : (": " + r.error.message)));
-            return "";
+            return;
         }
 
-        size_t s = r.text.find("<steamID>"), e = r.text.find("</steamID>");
-        if (s != std::string::npos && e != std::string::npos && e > s) {
-            nick = clean_xml_nick(r.text.substr(s + 9, e - s - 9));
-        }
-    } catch (...) {
-        return "";
-    }
+        std::string nick = extract_xml_tag(r.text, "steamID");
+        std::string avatar_url = extract_xml_tag(r.text, "avatarMedium");
+        if (avatar_url.empty()) avatar_url = extract_xml_tag(r.text, "avatarFull");
+        if (avatar_url.empty()) avatar_url = extract_xml_tag(r.text, "avatarIcon");
 
-    if (!nick.empty()) {
         std::lock_guard<std::mutex> lock(g_data_mutex);
-        nick_cache[id] = nick;
-    }
-    return nick;
+        if (!nick.empty())       nick_cache[id] = nick;
+        if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
+    } catch (...) {}
 }
 
 void scan_thread() {
@@ -168,7 +187,7 @@ void scan_thread() {
     }
 
     for (const auto& id : all_ids)
-        fetch_nick(id);
+        fetch_profile_info(id);
 
     save_settings();
     set_status("Scan Complete!");
