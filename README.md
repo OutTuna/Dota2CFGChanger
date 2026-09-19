@@ -82,6 +82,30 @@ reg delete HKCU\Software\Dota2CFGChanger /f
 
 ---
 
+## 🛡 Антивирус ругается на .exe?
+
+Это известный false-positive, а не что-то специфичное для конкретной сборки.
+`DotaManager.exe` — непортписанный (нет платной цифровой подписи) portable-бинарник,
+который читает и копирует файлы между разными папками `Steam\userdata\<id>`.
+Это ровно тот же паттерн поведения, что и у троянов-стилеров Steam-аккаунтов,
+поэтому эвристика Windows Defender / SmartScreen и части сторонних антивирусов
+иногда цепляется за него — особенно на свежепересобранных релизах, у которых
+ещё нет истории скачиваний (SmartScreen считает репутацию по хешу конкретного файла).
+
+Что можно сделать:
+
+- **Сверить хеш.** В описании каждого релиза указан SHA-256 собранного `.exe`.
+  Посчитайте хеш у себя (`certutil -hashfile DotaManager.exe SHA256` в PowerShell)
+  и сравните — если совпадает, файл ровно тот, что собрал CI из этого репозитория,
+  можно проверить на [VirusTotal](https://www.virustotal.com/gui/home/upload).
+- **Пожаловаться в Microsoft**, если сработал именно Defender/SmartScreen:
+  [Report a file as incorrectly detected](https://www.microsoft.com/en-us/wdsi/filesubmission) —
+  обычно снимает детект за 24–72 часа, если файл действительно чист.
+- **Собрать самостоятельно** из исходников (см. ниже) — тогда вы точно знаете,
+  что находится в бинарнике.
+
+---
+
 ![Alt](https://repobeats.axiom.co/api/embed/a71213f8cd667b684ab859eea88dce13aea336bc.svg "Repobeats analytics image")
 
 ---
