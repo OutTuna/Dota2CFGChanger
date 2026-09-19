@@ -261,3 +261,4 @@ void copy_config() {
         set_status("Error: " + std::string(e.what()));
     }
 }
+
