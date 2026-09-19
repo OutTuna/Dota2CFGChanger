@@ -8,6 +8,17 @@ cmake_policy(SET CMP0077 NEW)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(APP_VERSION "0.0" CACHE STRING "App version, e.g. 1.7 or v1.7 ('v' optional)")
+string(REGEX REPLACE "^v" "" APP_VERSION_STRING "${APP_VERSION}")
+string(REPLACE "." ";" APP_VERSION_PARTS "${APP_VERSION_STRING}")
+list(GET APP_VERSION_PARTS 0 APP_VERSION_MAJOR)
+list(LENGTH APP_VERSION_PARTS APP_VERSION_PARTS_LEN)
+if(APP_VERSION_PARTS_LEN GREATER 1)
+    list(GET APP_VERSION_PARTS 1 APP_VERSION_MINOR)
+else()
+    set(APP_VERSION_MINOR "0")
+endif()
+
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
@@ -84,10 +95,13 @@ if(NOT WIN32)
 endif()
 
 if(WIN32)
-        if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico")
-        file(WRITE "${CMAKE_BINARY_DIR}/generated.rc"
-                "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/Icon.ico\"\n")
-        target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated.rc")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/app.manifest")
+        configure_file(
+                "${CMAKE_SOURCE_DIR}/app.rc.in"
+                "${CMAKE_BINARY_DIR}/generated_app.rc"
+                @ONLY
+        )
+        target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated_app.rc")
     endif()
 
     target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
