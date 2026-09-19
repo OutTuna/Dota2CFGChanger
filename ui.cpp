@@ -6,7 +6,6 @@
 #include "backends/imgui_impl_glfw.h"
 #include <GLFW/glfw3.h>
 #include "stb_image.h"
-
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -274,7 +273,6 @@ static void load_bg_crimson() {
     int w = 0, h = 0, ch = 0;
     unsigned char* pixels = stbi_load_from_memory(BG_PNG, BG_PNG_LEN, &w, &h, &ch, 4);
     if (!pixels) return;
-
     GLuint tex = 0;
     glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
@@ -665,7 +663,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         if (!p.empty()) { strncpy(dst_path, p.c_str(), 255); dst_path[255] = 0; }
     }
 #endif
-
     bool scanning = g_scanning.load();
     if (scanning) ImGui::BeginDisabled();
     if (ImGui::Button(scanning ? "SCANNING..." : "SCAN FOLDERS", { -1, 32 }))
@@ -678,7 +675,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
                                + ImGui::GetStyle().ItemSpacing.y * 3
                                + ImGui::GetStyle().WindowPadding.y;
     const float list_h       = ImGui::GetContentRegionAvail().y - bottom_h;
-
     std::vector<std::string> local_src_list, local_dst_list;
     std::map<std::string, std::string> local_nick_cache;
     std::string local_status;
@@ -794,8 +790,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (ImGui::Button("COPY CONFIG NOW", { -1, 38 })) {
         int s = selected_src.load(), d = selected_dst.load();
         if (s < 0 || d < 0) {
-            copy_config();
-        }
+            copy_config(); }
         else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
             const std::string& s_id = local_src_list[s];
             const std::string& d_id = local_dst_list[d];
