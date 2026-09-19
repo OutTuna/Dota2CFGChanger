@@ -23,7 +23,6 @@ endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
 if(MSVC)
-    target_link_options(DotaManager PRIVATE /MANIFEST:NO)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
@@ -118,6 +117,7 @@ if(WIN32)
 
     if(MSVC)
         target_compile_options(DotaManager PRIVATE /utf-8)
+        target_link_options(DotaManager PRIVATE /MANIFEST:NO)
     else()
         target_compile_options(DotaManager PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
     endif()
