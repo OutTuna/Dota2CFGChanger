@@ -23,6 +23,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+
 namespace {
 class Semaphore {
 public:
@@ -44,6 +45,7 @@ private:
 };
 Semaphore g_fetch_slots(4);
 }
+
 enum class AvatarState { Idle, Fetching, Ready, Failed };
 
 struct AvatarEntry {
