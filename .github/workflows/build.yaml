@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+          
       - name: Compute next version
         id: version
         shell: bash
@@ -130,7 +130,7 @@ jobs:
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          
       - name: Create stable release (auto version)
         uses: softprops/action-gh-release@v2
         with:
@@ -157,10 +157,10 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    manual-tag-release:
-      if: startsWith(github.ref, 'refs/tags/v')
-      runs-on: windows-latest
+          
+  manual-tag-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
