@@ -11,265 +11,263 @@
 #include <windows.h>
 #endif
 #include <GL/gl.h>
-
 #include <thread>
 #include <cmath>
 
-static AppTheme    g_current_theme    = AppTheme::Dark;
-static bool        g_settings_open    = false;
-static bool        g_palette_open     = false;
-static bool        g_confirm_copy_open = false;
+static AppTheme g_current_theme = AppTheme::Dark;
+static bool g_settings_open = false;
+static bool g_palette_open = false;
+static bool g_confirm_copy_open = false;
 static std::string g_confirm_src_label;
 static std::string g_confirm_dst_label;
-static ImTextureID g_bg_crimson_tex   = (ImTextureID)0;
-static ImVec4 g_crimson_child_bg      = { 0.12f, 0.05f, 0.05f, 1.00f };
-static ImVec4 g_crimson_selected_bg   = { 0.55f, 0.08f, 0.08f, 1.00f };
-static ImVec4 g_crimson_hovered_bg    = { 0.30f, 0.06f, 0.06f, 1.00f };
-static ImVec4 g_crimson_text          = { 0.95f, 0.88f, 0.88f, 1.00f };
 
+static ImTextureID g_bg_crimson_tex = (ImTextureID)0;
 
+static ImVec4 g_crimson_child_bg = { 0.12f, 0.05f, 0.05f, 1.00f };
+static ImVec4 g_crimson_selected_bg = { 0.55f, 0.08f, 0.08f, 1.00f };
+static ImVec4 g_crimson_hovered_bg = { 0.30f, 0.06f, 0.06f, 1.00f };
+static ImVec4 g_crimson_text = { 0.95f, 0.88f, 0.88f, 1.00f };
 
 static void apply_dark(ImGuiStyle& st) {
-    st.WindowRounding    = 8.f;
-    st.ChildRounding     = 6.f;
-    st.FrameRounding     = 5.f;
-    st.PopupRounding     = 6.f;
+    st.WindowRounding = 8.f;
+    st.ChildRounding = 6.f;
+    st.FrameRounding = 5.f;
+    st.PopupRounding = 6.f;
     st.ScrollbarRounding = 5.f;
-    st.GrabRounding      = 4.f;
-    st.TabRounding       = 5.f;
-    st.WindowBorderSize  = 1.f;
-    st.FrameBorderSize   = 0.f;
-    st.WindowPadding     = { 14.f, 14.f };
-    st.FramePadding      = { 10.f,  6.f };
-    st.ItemSpacing       = {  8.f,  5.f };
-    st.ItemInnerSpacing  = {  6.f,  3.f };
-    st.ScrollbarSize     = 10.f;
-    st.GrabMinSize       = 8.f;
-    st.IndentSpacing     = 18.f;
+    st.GrabRounding = 4.f;
+    st.TabRounding = 5.f;
+    st.WindowBorderSize = 1.f;
+    st.FrameBorderSize = 0.f;
+    st.WindowPadding = { 14.f, 14.f };
+    st.FramePadding = { 10.f, 6.f };
+    st.ItemSpacing = { 8.f, 5.f };
+    st.ItemInnerSpacing = { 6.f, 3.f };
+    st.ScrollbarSize = 10.f;
+    st.GrabMinSize = 8.f;
+    st.IndentSpacing = 18.f;
 
     ImVec4* c = st.Colors;
-    c[ImGuiCol_WindowBg]             = { 0.09f, 0.09f, 0.10f, 1.00f };
-    c[ImGuiCol_ChildBg]              = { 0.11f, 0.11f, 0.13f, 1.00f };
-    c[ImGuiCol_PopupBg]              = { 0.10f, 0.10f, 0.12f, 1.00f };
-    c[ImGuiCol_Border]               = { 0.22f, 0.22f, 0.26f, 1.00f };
-    c[ImGuiCol_BorderShadow]         = { 0.00f, 0.00f, 0.00f, 0.00f };
-    c[ImGuiCol_FrameBg]              = { 0.15f, 0.15f, 0.18f, 1.00f };
-    c[ImGuiCol_FrameBgHovered]       = { 0.28f, 0.28f, 0.32f, 1.00f };
-    c[ImGuiCol_FrameBgActive]        = { 0.24f, 0.24f, 0.28f, 1.00f };
-    c[ImGuiCol_TitleBg]              = { 0.07f, 0.07f, 0.08f, 1.00f };
-    c[ImGuiCol_TitleBgActive]        = { 0.07f, 0.07f, 0.08f, 1.00f };
-    c[ImGuiCol_TitleBgCollapsed]     = { 0.07f, 0.07f, 0.08f, 1.00f };
-    c[ImGuiCol_ScrollbarBg]          = { 0.09f, 0.09f, 0.10f, 1.00f };
-    c[ImGuiCol_ScrollbarGrab]        = { 0.28f, 0.28f, 0.32f, 1.00f };
+    c[ImGuiCol_WindowBg] = { 0.09f, 0.09f, 0.10f, 1.00f };
+    c[ImGuiCol_ChildBg] = { 0.11f, 0.11f, 0.13f, 1.00f };
+    c[ImGuiCol_PopupBg] = { 0.10f, 0.10f, 0.12f, 1.00f };
+    c[ImGuiCol_Border] = { 0.22f, 0.22f, 0.26f, 1.00f };
+    c[ImGuiCol_BorderShadow] = { 0.00f, 0.00f, 0.00f, 0.00f };
+    c[ImGuiCol_FrameBg] = { 0.15f, 0.15f, 0.18f, 1.00f };
+    c[ImGuiCol_FrameBgHovered] = { 0.28f, 0.28f, 0.32f, 1.00f };
+    c[ImGuiCol_FrameBgActive] = { 0.24f, 0.24f, 0.28f, 1.00f };
+    c[ImGuiCol_TitleBg] = { 0.07f, 0.07f, 0.08f, 1.00f };
+    c[ImGuiCol_TitleBgActive] = { 0.07f, 0.07f, 0.08f, 1.00f };
+    c[ImGuiCol_TitleBgCollapsed] = { 0.07f, 0.07f, 0.08f, 1.00f };
+    c[ImGuiCol_ScrollbarBg] = { 0.09f, 0.09f, 0.10f, 1.00f };
+    c[ImGuiCol_ScrollbarGrab] = { 0.28f, 0.28f, 0.32f, 1.00f };
     c[ImGuiCol_ScrollbarGrabHovered] = { 0.38f, 0.38f, 0.44f, 1.00f };
-    c[ImGuiCol_ScrollbarGrabActive]  = { 0.50f, 0.50f, 0.58f, 1.00f };
-    c[ImGuiCol_CheckMark]            = { 0.90f, 0.25f, 0.25f, 1.00f };
-    c[ImGuiCol_SliderGrab]           = { 0.80f, 0.22f, 0.22f, 1.00f };
-    c[ImGuiCol_SliderGrabActive]     = { 1.00f, 0.30f, 0.30f, 1.00f };
-    c[ImGuiCol_Button]               = { 0.20f, 0.20f, 0.24f, 1.00f };
-    c[ImGuiCol_ButtonHovered]        = { 0.75f, 0.20f, 0.20f, 1.00f };
-    c[ImGuiCol_ButtonActive]         = { 0.55f, 0.14f, 0.14f, 1.00f };
-    c[ImGuiCol_Header]               = { 0.75f, 0.20f, 0.20f, 0.40f };
-    c[ImGuiCol_HeaderHovered]        = { 0.75f, 0.20f, 0.20f, 0.65f };
-    c[ImGuiCol_HeaderActive]         = { 0.75f, 0.20f, 0.20f, 0.90f };
-    c[ImGuiCol_Separator]            = { 0.22f, 0.22f, 0.26f, 1.00f };
-    c[ImGuiCol_SeparatorHovered]     = { 0.75f, 0.20f, 0.20f, 0.70f };
-    c[ImGuiCol_SeparatorActive]      = { 0.75f, 0.20f, 0.20f, 1.00f };
-    c[ImGuiCol_ResizeGrip]           = { 0.75f, 0.20f, 0.20f, 0.20f };
-    c[ImGuiCol_ResizeGripHovered]    = { 0.75f, 0.20f, 0.20f, 0.60f };
-    c[ImGuiCol_ResizeGripActive]     = { 0.75f, 0.20f, 0.20f, 0.90f };
-    c[ImGuiCol_Tab]                  = { 0.15f, 0.15f, 0.18f, 1.00f };
-    c[ImGuiCol_TabHovered]           = { 0.75f, 0.20f, 0.20f, 0.80f };
-    c[ImGuiCol_TabActive]            = { 0.60f, 0.16f, 0.16f, 1.00f };
-    c[ImGuiCol_TabUnfocused]         = { 0.12f, 0.12f, 0.14f, 1.00f };
-    c[ImGuiCol_TabUnfocusedActive]   = { 0.30f, 0.14f, 0.14f, 1.00f };
-    c[ImGuiCol_TextSelectedBg]       = { 0.75f, 0.20f, 0.20f, 0.35f };
-    c[ImGuiCol_NavHighlight]         = { 0.75f, 0.20f, 0.20f, 1.00f };
-    c[ImGuiCol_Text]                 = { 0.92f, 0.92f, 0.94f, 1.00f };
-    c[ImGuiCol_TextDisabled]         = { 0.45f, 0.45f, 0.50f, 1.00f };
+    c[ImGuiCol_ScrollbarGrabActive] = { 0.50f, 0.50f, 0.58f, 1.00f };
+    c[ImGuiCol_CheckMark] = { 0.90f, 0.25f, 0.25f, 1.00f };
+    c[ImGuiCol_SliderGrab] = { 0.80f, 0.22f, 0.22f, 1.00f };
+    c[ImGuiCol_SliderGrabActive] = { 1.00f, 0.30f, 0.30f, 1.00f };
+    c[ImGuiCol_Button] = { 0.20f, 0.20f, 0.24f, 1.00f };
+    c[ImGuiCol_ButtonHovered] = { 0.75f, 0.20f, 0.20f, 1.00f };
+    c[ImGuiCol_ButtonActive] = { 0.55f, 0.14f, 0.14f, 1.00f };
+    c[ImGuiCol_Header] = { 0.75f, 0.20f, 0.20f, 0.40f };
+    c[ImGuiCol_HeaderHovered] = { 0.75f, 0.20f, 0.20f, 0.65f };
+    c[ImGuiCol_HeaderActive] = { 0.75f, 0.20f, 0.20f, 0.90f };
+    c[ImGuiCol_Separator] = { 0.22f, 0.22f, 0.26f, 1.00f };
+    c[ImGuiCol_SeparatorHovered] = { 0.75f, 0.20f, 0.20f, 0.70f };
+    c[ImGuiCol_SeparatorActive] = { 0.75f, 0.20f, 0.20f, 1.00f };
+    c[ImGuiCol_ResizeGrip] = { 0.75f, 0.20f, 0.20f, 0.20f };
+    c[ImGuiCol_ResizeGripHovered] = { 0.75f, 0.20f, 0.20f, 0.60f };
+    c[ImGuiCol_ResizeGripActive] = { 0.75f, 0.20f, 0.20f, 0.90f };
+    c[ImGuiCol_Tab] = { 0.15f, 0.15f, 0.18f, 1.00f };
+    c[ImGuiCol_TabHovered] = { 0.75f, 0.20f, 0.20f, 0.80f };
+    c[ImGuiCol_TabActive] = { 0.60f, 0.16f, 0.16f, 1.00f };
+    c[ImGuiCol_TabUnfocused] = { 0.12f, 0.12f, 0.14f, 1.00f };
+    c[ImGuiCol_TabUnfocusedActive] = { 0.30f, 0.14f, 0.14f, 1.00f };
+    c[ImGuiCol_TextSelectedBg] = { 0.75f, 0.20f, 0.20f, 0.35f };
+    c[ImGuiCol_NavHighlight] = { 0.75f, 0.20f, 0.20f, 1.00f };
+    c[ImGuiCol_Text] = { 0.92f, 0.92f, 0.94f, 1.00f };
+    c[ImGuiCol_TextDisabled] = { 0.45f, 0.45f, 0.50f, 1.00f };
 }
 
 static void apply_indigo(ImGuiStyle& st) {
     const float r = 2.f;
-    st.WindowBorderSize  = 1.f;
-    st.FrameBorderSize   = 1.f;
-    st.WindowMinSize     = { 75.f, 50.f };
-    st.FramePadding      = {  5.f,  5.f };
-    st.ItemSpacing       = {  6.f,  5.f };
-    st.ItemInnerSpacing  = {  2.f,  4.f };
-    st.WindowRounding    = 0.f;
-    st.FrameRounding     = r;
-    st.PopupRounding     = 0.f;
-    st.PopupBorderSize   = 1.f;
-    st.IndentSpacing     = 6.f;
-    st.GrabMinSize       = 14.f;
-    st.GrabRounding      = r;
-    st.ScrollbarSize     = 12.f;
+    st.WindowBorderSize = 1.f;
+    st.FrameBorderSize = 1.f;
+    st.WindowMinSize = { 75.f, 50.f };
+    st.FramePadding = { 5.f, 5.f };
+    st.ItemSpacing = { 6.f, 5.f };
+    st.ItemInnerSpacing = { 2.f, 4.f };
+    st.WindowRounding = 0.f;
+    st.FrameRounding = r;
+    st.PopupRounding = 0.f;
+    st.PopupBorderSize = 1.f;
+    st.IndentSpacing = 6.f;
+    st.GrabMinSize = 14.f;
+    st.GrabRounding = r;
+    st.ScrollbarSize = 12.f;
     st.ScrollbarRounding = r;
 
     ImVec4* c = st.Colors;
-    c[ImGuiCol_Text]                 = { 1.00f, 1.00f, 1.00f, 1.00f };
-    c[ImGuiCol_TextDisabled]         = { 0.50f, 0.50f, 0.50f, 1.00f };
-    c[ImGuiCol_WindowBg]             = { 0.20f, 0.23f, 0.31f, 1.00f };
-    c[ImGuiCol_ChildBg]              = { 0.20f, 0.23f, 0.31f, 1.00f };
-    c[ImGuiCol_PopupBg]              = { 0.20f, 0.23f, 0.31f, 1.00f };
-    c[ImGuiCol_Border]               = { 0.00f, 0.00f, 0.00f, 1.00f };
-    c[ImGuiCol_BorderShadow]         = { 0.00f, 0.00f, 0.00f, 0.00f };
-    c[ImGuiCol_FrameBg]              = { 0.25f, 0.28f, 0.38f, 1.00f };
-    c[ImGuiCol_FrameBgHovered]       = { 0.25f, 0.28f, 0.38f, 1.00f };
-    c[ImGuiCol_FrameBgActive]        = { 0.25f, 0.28f, 0.38f, 1.00f };
-    c[ImGuiCol_TitleBg]              = { 0.00f, 0.43f, 1.00f, 1.00f };
-    c[ImGuiCol_TitleBgActive]        = { 0.00f, 0.55f, 1.00f, 1.00f };
-    c[ImGuiCol_TitleBgCollapsed]     = { 0.10f, 0.69f, 1.00f, 1.00f };
-    c[ImGuiCol_MenuBarBg]            = { 0.25f, 0.28f, 0.38f, 1.00f };
-    c[ImGuiCol_ScrollbarBg]          = { 0.00f, 0.00f, 0.00f, 0.00f };
-    c[ImGuiCol_ScrollbarGrab]        = { 0.39f, 0.44f, 0.56f, 1.00f };
+    c[ImGuiCol_Text] = { 1.00f, 1.00f, 1.00f, 1.00f };
+    c[ImGuiCol_TextDisabled] = { 0.50f, 0.50f, 0.50f, 1.00f };
+    c[ImGuiCol_WindowBg] = { 0.20f, 0.23f, 0.31f, 1.00f };
+    c[ImGuiCol_ChildBg] = { 0.20f, 0.23f, 0.31f, 1.00f };
+    c[ImGuiCol_PopupBg] = { 0.20f, 0.23f, 0.31f, 1.00f };
+    c[ImGuiCol_Border] = { 0.00f, 0.00f, 0.00f, 1.00f };
+    c[ImGuiCol_BorderShadow] = { 0.00f, 0.00f, 0.00f, 0.00f };
+    c[ImGuiCol_FrameBg] = { 0.25f, 0.28f, 0.38f, 1.00f };
+    c[ImGuiCol_FrameBgHovered] = { 0.25f, 0.28f, 0.38f, 1.00f };
+    c[ImGuiCol_FrameBgActive] = { 0.25f, 0.28f, 0.38f, 1.00f };
+    c[ImGuiCol_TitleBg] = { 0.00f, 0.43f, 1.00f, 1.00f };
+    c[ImGuiCol_TitleBgActive] = { 0.00f, 0.55f, 1.00f, 1.00f };
+    c[ImGuiCol_TitleBgCollapsed] = { 0.10f, 0.69f, 1.00f, 1.00f };
+    c[ImGuiCol_MenuBarBg] = { 0.25f, 0.28f, 0.38f, 1.00f };
+    c[ImGuiCol_ScrollbarBg] = { 0.00f, 0.00f, 0.00f, 0.00f };
+    c[ImGuiCol_ScrollbarGrab] = { 0.39f, 0.44f, 0.56f, 1.00f };
     c[ImGuiCol_ScrollbarGrabHovered] = { 0.12f, 0.43f, 1.00f, 1.00f };
-    c[ImGuiCol_ScrollbarGrabActive]  = { 0.00f, 0.55f, 1.00f, 1.00f };
-    c[ImGuiCol_CheckMark]            = { 0.00f, 0.55f, 1.00f, 1.00f };
-    c[ImGuiCol_SliderGrab]           = { 0.00f, 0.55f, 1.00f, 1.00f };
-    c[ImGuiCol_SliderGrabActive]     = { 0.10f, 0.69f, 1.00f, 1.00f };
-    c[ImGuiCol_Button]               = { 0.25f, 0.28f, 0.38f, 1.00f };
-    c[ImGuiCol_ButtonHovered]        = { 0.12f, 0.43f, 1.00f, 1.00f };
-    c[ImGuiCol_ButtonActive]         = { 0.00f, 0.55f, 1.00f, 1.00f };
-    c[ImGuiCol_Header]               = { 0.00f, 0.43f, 1.00f, 1.00f };
-    c[ImGuiCol_HeaderHovered]        = { 0.00f, 0.55f, 1.00f, 1.00f };
-    c[ImGuiCol_HeaderActive]         = { 0.00f, 0.43f, 1.00f, 1.00f };
-    c[ImGuiCol_Separator]            = { 0.43f, 0.43f, 0.50f, 0.50f };
-    c[ImGuiCol_SeparatorHovered]     = { 0.10f, 0.40f, 0.75f, 0.78f };
-    c[ImGuiCol_SeparatorActive]      = { 0.10f, 0.40f, 0.75f, 1.00f };
-    c[ImGuiCol_ResizeGrip]           = { 0.26f, 0.59f, 0.98f, 0.25f };
-    c[ImGuiCol_ResizeGripHovered]    = { 0.26f, 0.59f, 0.98f, 0.67f };
-    c[ImGuiCol_ResizeGripActive]     = { 0.26f, 0.59f, 0.98f, 0.95f };
-    c[ImGuiCol_Tab]                  = { 0.00f, 0.50f, 1.00f, 1.00f };
-    c[ImGuiCol_TabHovered]           = { 0.12f, 0.69f, 1.00f, 1.00f };
-    c[ImGuiCol_TabActive]            = { 0.12f, 0.69f, 1.00f, 1.00f };
-    c[ImGuiCol_TabUnfocused]         = { 0.07f, 0.10f, 0.15f, 0.97f };
-    c[ImGuiCol_TabUnfocusedActive]   = { 0.14f, 0.26f, 0.42f, 1.00f };
-    c[ImGuiCol_TextSelectedBg]       = { 0.26f, 0.59f, 0.98f, 0.35f };
-    c[ImGuiCol_NavHighlight]         = { 0.26f, 0.59f, 0.98f, 1.00f };
+    c[ImGuiCol_ScrollbarGrabActive] = { 0.00f, 0.55f, 1.00f, 1.00f };
+    c[ImGuiCol_CheckMark] = { 0.00f, 0.55f, 1.00f, 1.00f };
+    c[ImGuiCol_SliderGrab] = { 0.00f, 0.55f, 1.00f, 1.00f };
+    c[ImGuiCol_SliderGrabActive] = { 0.10f, 0.69f, 1.00f, 1.00f };
+    c[ImGuiCol_Button] = { 0.25f, 0.28f, 0.38f, 1.00f };
+    c[ImGuiCol_ButtonHovered] = { 0.12f, 0.43f, 1.00f, 1.00f };
+    c[ImGuiCol_ButtonActive] = { 0.00f, 0.55f, 1.00f, 1.00f };
+    c[ImGuiCol_Header] = { 0.00f, 0.43f, 1.00f, 1.00f };
+    c[ImGuiCol_HeaderHovered] = { 0.00f, 0.55f, 1.00f, 1.00f };
+    c[ImGuiCol_HeaderActive] = { 0.00f, 0.43f, 1.00f, 1.00f };
+    c[ImGuiCol_Separator] = { 0.43f, 0.43f, 0.50f, 0.50f };
+    c[ImGuiCol_SeparatorHovered] = { 0.10f, 0.40f, 0.75f, 0.78f };
+    c[ImGuiCol_SeparatorActive] = { 0.10f, 0.40f, 0.75f, 1.00f };
+    c[ImGuiCol_ResizeGrip] = { 0.26f, 0.59f, 0.98f, 0.25f };
+    c[ImGuiCol_ResizeGripHovered] = { 0.26f, 0.59f, 0.98f, 0.67f };
+    c[ImGuiCol_ResizeGripActive] = { 0.26f, 0.59f, 0.98f, 0.95f };
+    c[ImGuiCol_Tab] = { 0.00f, 0.50f, 1.00f, 1.00f };
+    c[ImGuiCol_TabHovered] = { 0.12f, 0.69f, 1.00f, 1.00f };
+    c[ImGuiCol_TabActive] = { 0.12f, 0.69f, 1.00f, 1.00f };
+    c[ImGuiCol_TabUnfocused] = { 0.07f, 0.10f, 0.15f, 0.97f };
+    c[ImGuiCol_TabUnfocusedActive] = { 0.14f, 0.26f, 0.42f, 1.00f };
+    c[ImGuiCol_TextSelectedBg] = { 0.26f, 0.59f, 0.98f, 0.35f };
+    c[ImGuiCol_NavHighlight] = { 0.26f, 0.59f, 0.98f, 1.00f };
 }
 
 static void apply_vermillion(ImGuiStyle& st) {
     const float r = 2.f;
-    st.WindowBorderSize  = 1.f;
-    st.FrameBorderSize   = 1.f;
-    st.WindowMinSize     = { 75.f, 50.f };
-    st.FramePadding      = {  5.f,  5.f };
-    st.ItemSpacing       = {  6.f,  5.f };
-    st.ItemInnerSpacing  = {  2.f,  4.f };
-    st.WindowRounding    = 0.f;
-    st.FrameRounding     = r;
-    st.PopupRounding     = 0.f;
-    st.GrabMinSize       = 14.f;
-    st.GrabRounding      = r;
-    st.ScrollbarSize     = 12.f;
+    st.WindowBorderSize = 1.f;
+    st.FrameBorderSize = 1.f;
+    st.WindowMinSize = { 75.f, 50.f };
+    st.FramePadding = { 5.f, 5.f };
+    st.ItemSpacing = { 6.f, 5.f };
+    st.ItemInnerSpacing = { 2.f, 4.f };
+    st.WindowRounding = 0.f;
+    st.FrameRounding = r;
+    st.PopupRounding = 0.f;
+    st.GrabMinSize = 14.f;
+    st.GrabRounding = r;
+    st.ScrollbarSize = 12.f;
     st.ScrollbarRounding = r;
 
     ImVec4* c = st.Colors;
-    c[ImGuiCol_Text]                 = { 1.00f, 1.00f, 1.00f, 0.75f };
-    c[ImGuiCol_TextDisabled]         = { 1.00f, 0.18f, 0.29f, 0.78f };
-    c[ImGuiCol_WindowBg]             = { 0.17f, 0.20f, 0.25f, 1.00f };
-    c[ImGuiCol_ChildBg]              = { 0.20f, 0.22f, 0.27f, 0.57f };
-    c[ImGuiCol_PopupBg]              = { 0.17f, 0.20f, 0.25f, 1.00f };
-    c[ImGuiCol_Border]               = { 0.00f, 0.00f, 0.00f, 1.00f };
-    c[ImGuiCol_BorderShadow]         = { 0.00f, 0.00f, 0.00f, 0.00f };
-    c[ImGuiCol_FrameBg]              = { 0.22f, 0.25f, 0.31f, 1.00f };
-    c[ImGuiCol_FrameBgHovered]       = { 0.22f, 0.25f, 0.31f, 1.00f };
-    c[ImGuiCol_FrameBgActive]        = { 0.22f, 0.25f, 0.31f, 1.00f };
-    c[ImGuiCol_TitleBg]              = { 0.65f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_TitleBgActive]        = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_TitleBgCollapsed]     = { 0.78f, 0.18f, 0.29f, 0.60f };
-    c[ImGuiCol_ScrollbarBg]          = { 0.00f, 0.00f, 0.00f, 0.00f };
-    c[ImGuiCol_ScrollbarGrab]        = { 0.65f, 0.18f, 0.29f, 0.37f };
+    c[ImGuiCol_Text] = { 1.00f, 1.00f, 1.00f, 0.75f };
+    c[ImGuiCol_TextDisabled] = { 1.00f, 0.18f, 0.29f, 0.78f };
+    c[ImGuiCol_WindowBg] = { 0.17f, 0.20f, 0.25f, 1.00f };
+    c[ImGuiCol_ChildBg] = { 0.20f, 0.22f, 0.27f, 0.57f };
+    c[ImGuiCol_PopupBg] = { 0.17f, 0.20f, 0.25f, 1.00f };
+    c[ImGuiCol_Border] = { 0.00f, 0.00f, 0.00f, 1.00f };
+    c[ImGuiCol_BorderShadow] = { 0.00f, 0.00f, 0.00f, 0.00f };
+    c[ImGuiCol_FrameBg] = { 0.22f, 0.25f, 0.31f, 1.00f };
+    c[ImGuiCol_FrameBgHovered] = { 0.22f, 0.25f, 0.31f, 1.00f };
+    c[ImGuiCol_FrameBgActive] = { 0.22f, 0.25f, 0.31f, 1.00f };
+    c[ImGuiCol_TitleBg] = { 0.65f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_TitleBgActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_TitleBgCollapsed] = { 0.78f, 0.18f, 0.29f, 0.60f };
+    c[ImGuiCol_ScrollbarBg] = { 0.00f, 0.00f, 0.00f, 0.00f };
+    c[ImGuiCol_ScrollbarGrab] = { 0.65f, 0.18f, 0.29f, 0.37f };
     c[ImGuiCol_ScrollbarGrabHovered] = { 0.78f, 0.18f, 0.29f, 0.78f };
-    c[ImGuiCol_ScrollbarGrabActive]  = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_CheckMark]            = { 0.71f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_SliderGrab]           = { 0.78f, 0.18f, 0.29f, 0.37f };
-    c[ImGuiCol_SliderGrabActive]     = { 0.92f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_Button]               = { 0.65f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_ButtonHovered]        = { 0.78f, 0.18f, 0.29f, 0.86f };
-    c[ImGuiCol_ButtonActive]         = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_Header]               = { 0.78f, 0.18f, 0.29f, 0.76f };
-    c[ImGuiCol_HeaderHovered]        = { 0.78f, 0.18f, 0.29f, 0.86f };
-    c[ImGuiCol_HeaderActive]         = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_Separator]            = { 0.15f, 0.00f, 0.00f, 0.35f };
-    c[ImGuiCol_SeparatorHovered]     = { 0.78f, 0.18f, 0.29f, 0.59f };
-    c[ImGuiCol_SeparatorActive]      = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_ResizeGrip]           = { 0.78f, 0.18f, 0.29f, 0.63f };
-    c[ImGuiCol_ResizeGripHovered]    = { 0.78f, 0.18f, 0.29f, 0.78f };
-    c[ImGuiCol_ResizeGripActive]     = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_Tab]                  = { 0.78f, 0.18f, 0.29f, 0.76f };
-    c[ImGuiCol_TabHovered]           = { 0.78f, 0.18f, 0.29f, 0.86f };
-    c[ImGuiCol_TabActive]            = { 0.78f, 0.18f, 0.29f, 1.00f };
-    c[ImGuiCol_TabUnfocused]         = { 0.07f, 0.10f, 0.15f, 0.97f };
-    c[ImGuiCol_TabUnfocusedActive]   = { 0.14f, 0.26f, 0.42f, 1.00f };
-    c[ImGuiCol_TextSelectedBg]       = { 0.92f, 0.18f, 0.29f, 0.43f };
-    c[ImGuiCol_NavHighlight]         = { 0.45f, 0.45f, 0.90f, 0.80f };
+    c[ImGuiCol_ScrollbarGrabActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_CheckMark] = { 0.71f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_SliderGrab] = { 0.78f, 0.18f, 0.29f, 0.37f };
+    c[ImGuiCol_SliderGrabActive] = { 0.92f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_Button] = { 0.65f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_ButtonHovered] = { 0.78f, 0.18f, 0.29f, 0.86f };
+    c[ImGuiCol_ButtonActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_Header] = { 0.78f, 0.18f, 0.29f, 0.76f };
+    c[ImGuiCol_HeaderHovered] = { 0.78f, 0.18f, 0.29f, 0.86f };
+    c[ImGuiCol_HeaderActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_Separator] = { 0.15f, 0.00f, 0.00f, 0.35f };
+    c[ImGuiCol_SeparatorHovered] = { 0.78f, 0.18f, 0.29f, 0.59f };
+    c[ImGuiCol_SeparatorActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_ResizeGrip] = { 0.78f, 0.18f, 0.29f, 0.63f };
+    c[ImGuiCol_ResizeGripHovered] = { 0.78f, 0.18f, 0.29f, 0.78f };
+    c[ImGuiCol_ResizeGripActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_Tab] = { 0.78f, 0.18f, 0.29f, 0.76f };
+    c[ImGuiCol_TabHovered] = { 0.78f, 0.18f, 0.29f, 0.86f };
+    c[ImGuiCol_TabActive] = { 0.78f, 0.18f, 0.29f, 1.00f };
+    c[ImGuiCol_TabUnfocused] = { 0.07f, 0.10f, 0.15f, 0.97f };
+    c[ImGuiCol_TabUnfocusedActive] = { 0.14f, 0.26f, 0.42f, 1.00f };
+    c[ImGuiCol_TextSelectedBg] = { 0.92f, 0.18f, 0.29f, 0.43f };
+    c[ImGuiCol_NavHighlight] = { 0.45f, 0.45f, 0.90f, 0.80f };
 }
 
 static void apply_classic_steam(ImGuiStyle& st) {
-    st.WindowRounding    = 0.f;
-    st.ChildRounding     = 0.f;
-    st.FrameRounding     = 0.f;
-    st.PopupRounding     = 0.f;
+    st.WindowRounding = 0.f;
+    st.ChildRounding = 0.f;
+    st.FrameRounding = 0.f;
+    st.PopupRounding = 0.f;
     st.ScrollbarRounding = 0.f;
-    st.GrabRounding      = 0.f;
-    st.TabRounding       = 0.f;
-    st.WindowBorderSize  = 1.f;
-    st.ChildBorderSize   = 1.f;
-    st.PopupBorderSize   = 1.f;
-    st.FrameBorderSize   = 1.f;
-    st.WindowPadding     = { 8.f, 8.f };
-    st.FramePadding      = { 4.f, 3.f };
-    st.ItemSpacing       = { 8.f, 4.f };
-    st.ItemInnerSpacing  = { 4.f, 4.f };
-    st.IndentSpacing     = 21.f;
-    st.ScrollbarSize     = 14.f;
-    st.GrabMinSize       = 10.f;
+    st.GrabRounding = 0.f;
+    st.TabRounding = 0.f;
+    st.WindowBorderSize = 1.f;
+    st.ChildBorderSize = 1.f;
+    st.PopupBorderSize = 1.f;
+    st.FrameBorderSize = 1.f;
+    st.WindowPadding = { 8.f, 8.f };
+    st.FramePadding = { 4.f, 3.f };
+    st.ItemSpacing = { 8.f, 4.f };
+    st.ItemInnerSpacing = { 4.f, 4.f };
+    st.IndentSpacing = 21.f;
+    st.ScrollbarSize = 14.f;
+    st.GrabMinSize = 10.f;
 
     ImVec4* c = st.Colors;
-    c[ImGuiCol_Text]                 = { 1.000f, 1.000f, 1.000f, 1.00f };
-    c[ImGuiCol_TextDisabled]         = { 0.498f, 0.498f, 0.498f, 1.00f };
-    c[ImGuiCol_WindowBg]             = { 0.286f, 0.337f, 0.259f, 1.00f };
-    c[ImGuiCol_ChildBg]              = { 0.286f, 0.337f, 0.259f, 1.00f };
-    c[ImGuiCol_PopupBg]              = { 0.239f, 0.267f, 0.200f, 1.00f };
-    c[ImGuiCol_Border]               = { 0.537f, 0.569f, 0.510f, 0.50f };
-    c[ImGuiCol_BorderShadow]         = { 0.137f, 0.157f, 0.110f, 0.52f };
-    c[ImGuiCol_FrameBg]              = { 0.239f, 0.267f, 0.200f, 1.00f };
-    c[ImGuiCol_FrameBgHovered]       = { 0.267f, 0.298f, 0.227f, 1.00f };
-    c[ImGuiCol_FrameBgActive]        = { 0.298f, 0.337f, 0.259f, 1.00f };
-    c[ImGuiCol_TitleBg]              = { 0.239f, 0.267f, 0.200f, 1.00f };
-    c[ImGuiCol_TitleBgActive]        = { 0.286f, 0.337f, 0.259f, 1.00f };
-    c[ImGuiCol_TitleBgCollapsed]     = { 0.000f, 0.000f, 0.000f, 0.51f };
-    c[ImGuiCol_ScrollbarBg]          = { 0.349f, 0.420f, 0.310f, 1.00f };
-    c[ImGuiCol_ScrollbarGrab]        = { 0.278f, 0.318f, 0.239f, 1.00f };
+    c[ImGuiCol_Text] = { 1.000f, 1.000f, 1.000f, 1.00f };
+    c[ImGuiCol_TextDisabled] = { 0.498f, 0.498f, 0.498f, 1.00f };
+    c[ImGuiCol_WindowBg] = { 0.286f, 0.337f, 0.259f, 1.00f };
+    c[ImGuiCol_ChildBg] = { 0.286f, 0.337f, 0.259f, 1.00f };
+    c[ImGuiCol_PopupBg] = { 0.239f, 0.267f, 0.200f, 1.00f };
+    c[ImGuiCol_Border] = { 0.537f, 0.569f, 0.510f, 0.50f };
+    c[ImGuiCol_BorderShadow] = { 0.137f, 0.157f, 0.110f, 0.52f };
+    c[ImGuiCol_FrameBg] = { 0.239f, 0.267f, 0.200f, 1.00f };
+    c[ImGuiCol_FrameBgHovered] = { 0.267f, 0.298f, 0.227f, 1.00f };
+    c[ImGuiCol_FrameBgActive] = { 0.298f, 0.337f, 0.259f, 1.00f };
+    c[ImGuiCol_TitleBg] = { 0.239f, 0.267f, 0.200f, 1.00f };
+    c[ImGuiCol_TitleBgActive] = { 0.286f, 0.337f, 0.259f, 1.00f };
+    c[ImGuiCol_TitleBgCollapsed] = { 0.000f, 0.000f, 0.000f, 0.51f };
+    c[ImGuiCol_ScrollbarBg] = { 0.349f, 0.420f, 0.310f, 1.00f };
+    c[ImGuiCol_ScrollbarGrab] = { 0.278f, 0.318f, 0.239f, 1.00f };
     c[ImGuiCol_ScrollbarGrabHovered] = { 0.247f, 0.298f, 0.220f, 1.00f };
-    c[ImGuiCol_ScrollbarGrabActive]  = { 0.227f, 0.267f, 0.208f, 1.00f };
-    c[ImGuiCol_CheckMark]            = { 0.588f, 0.537f, 0.176f, 1.00f };
-    c[ImGuiCol_SliderGrab]           = { 0.349f, 0.420f, 0.310f, 1.00f };
-    c[ImGuiCol_SliderGrabActive]     = { 0.537f, 0.569f, 0.510f, 0.50f };
-    c[ImGuiCol_Button]               = { 0.286f, 0.337f, 0.259f, 0.40f };
-    c[ImGuiCol_ButtonHovered]        = { 0.349f, 0.420f, 0.310f, 1.00f };
-    c[ImGuiCol_ButtonActive]         = { 0.537f, 0.569f, 0.510f, 0.50f };
-    c[ImGuiCol_Header]               = { 0.349f, 0.420f, 0.310f, 1.00f };
-    c[ImGuiCol_HeaderHovered]        = { 0.349f, 0.420f, 0.310f, 0.60f };
-    c[ImGuiCol_HeaderActive]         = { 0.537f, 0.569f, 0.510f, 0.50f };
-    c[ImGuiCol_Separator]            = { 0.137f, 0.157f, 0.110f, 1.00f };
-    c[ImGuiCol_SeparatorHovered]     = { 0.537f, 0.569f, 0.510f, 1.00f };
-    c[ImGuiCol_SeparatorActive]      = { 0.588f, 0.537f, 0.176f, 1.00f };
-    c[ImGuiCol_Tab]                  = { 0.349f, 0.420f, 0.310f, 1.00f };
-    c[ImGuiCol_TabHovered]           = { 0.537f, 0.569f, 0.510f, 0.78f };
-    c[ImGuiCol_TabActive]            = { 0.588f, 0.537f, 0.176f, 1.00f };
-    c[ImGuiCol_TabUnfocused]         = { 0.239f, 0.267f, 0.200f, 1.00f };
-    c[ImGuiCol_TabUnfocusedActive]   = { 0.349f, 0.420f, 0.310f, 1.00f };
-    c[ImGuiCol_TextSelectedBg]       = { 0.588f, 0.537f, 0.176f, 1.00f };
-    c[ImGuiCol_NavHighlight]         = { 0.588f, 0.537f, 0.176f, 1.00f };
+    c[ImGuiCol_ScrollbarGrabActive] = { 0.227f, 0.267f, 0.208f, 1.00f };
+    c[ImGuiCol_CheckMark] = { 0.588f, 0.537f, 0.176f, 1.00f };
+    c[ImGuiCol_SliderGrab] = { 0.349f, 0.420f, 0.310f, 1.00f };
+    c[ImGuiCol_SliderGrabActive] = { 0.537f, 0.569f, 0.510f, 0.50f };
+    c[ImGuiCol_Button] = { 0.286f, 0.337f, 0.259f, 0.40f };
+    c[ImGuiCol_ButtonHovered] = { 0.349f, 0.420f, 0.310f, 1.00f };
+    c[ImGuiCol_ButtonActive] = { 0.537f, 0.569f, 0.510f, 0.50f };
+    c[ImGuiCol_Header] = { 0.349f, 0.420f, 0.310f, 1.00f };
+    c[ImGuiCol_HeaderHovered] = { 0.349f, 0.420f, 0.310f, 0.60f };
+    c[ImGuiCol_HeaderActive] = { 0.537f, 0.569f, 0.510f, 0.50f };
+    c[ImGuiCol_Separator] = { 0.137f, 0.157f, 0.110f, 1.00f };
+    c[ImGuiCol_SeparatorHovered] = { 0.537f, 0.569f, 0.510f, 1.00f };
+    c[ImGuiCol_SeparatorActive] = { 0.588f, 0.537f, 0.176f, 1.00f };
+    c[ImGuiCol_Tab] = { 0.349f, 0.420f, 0.310f, 1.00f };
+    c[ImGuiCol_TabHovered] = { 0.537f, 0.569f, 0.510f, 0.78f };
+    c[ImGuiCol_TabActive] = { 0.588f, 0.537f, 0.176f, 1.00f };
+    c[ImGuiCol_TabUnfocused] = { 0.239f, 0.267f, 0.200f, 1.00f };
+    c[ImGuiCol_TabUnfocusedActive] = { 0.349f, 0.420f, 0.310f, 1.00f };
+    c[ImGuiCol_TextSelectedBg] = { 0.588f, 0.537f, 0.176f, 1.00f };
+    c[ImGuiCol_NavHighlight] = { 0.588f, 0.537f, 0.176f, 1.00f };
 }
 
 static void load_bg_crimson() {
     if (g_bg_crimson_tex != (ImTextureID)0) return;
-
     int w = 0, h = 0, ch = 0;
     unsigned char* pixels = stbi_load_from_memory(BG_PNG, BG_PNG_LEN, &w, &h, &ch, 4);
     if (!pixels) return;
@@ -282,100 +280,97 @@ static void load_bg_crimson() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
-
     stbi_image_free(pixels);
     g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
 }
 
 static void apply_crimson(ImGuiStyle& st) {
-    st.WindowRounding    = 4.f;
-    st.ChildRounding     = 3.f;
-    st.FrameRounding     = 3.f;
-    st.PopupRounding     = 4.f;
+    st.WindowRounding = 4.f;
+    st.ChildRounding = 3.f;
+    st.FrameRounding = 3.f;
+    st.PopupRounding = 4.f;
     st.ScrollbarRounding = 3.f;
-    st.GrabRounding      = 3.f;
-    st.TabRounding       = 3.f;
-    st.WindowBorderSize  = 1.f;
-    st.FrameBorderSize   = 0.f;
-    st.WindowPadding     = { 14.f, 14.f };
-    st.FramePadding      = { 10.f,  6.f };
-    st.ItemSpacing       = {  8.f,  5.f };
-    st.ItemInnerSpacing  = {  6.f,  3.f };
-    st.ScrollbarSize     = 10.f;
-    st.GrabMinSize       = 8.f;
-    st.IndentSpacing     = 18.f;
+    st.GrabRounding = 3.f;
+    st.TabRounding = 3.f;
+    st.WindowBorderSize = 1.f;
+    st.FrameBorderSize = 0.f;
+    st.WindowPadding = { 14.f, 14.f };
+    st.FramePadding = { 10.f, 6.f };
+    st.ItemSpacing = { 8.f, 5.f };
+    st.ItemInnerSpacing = { 6.f, 3.f };
+    st.ScrollbarSize = 10.f;
+    st.GrabMinSize = 8.f;
+    st.IndentSpacing = 18.f;
 
     ImVec4* c = st.Colors;
-    c[ImGuiCol_WindowBg]             = { 0.06f, 0.04f, 0.04f, 0.00f };
-    c[ImGuiCol_ChildBg]              = { 0.08f, 0.05f, 0.05f, 1.00f };
-    c[ImGuiCol_PopupBg]              = { 0.07f, 0.04f, 0.04f, 1.00f };
-    c[ImGuiCol_Border]               = { 0.25f, 0.08f, 0.08f, 1.00f };
-    c[ImGuiCol_BorderShadow]         = { 0.00f, 0.00f, 0.00f, 0.00f };
-    c[ImGuiCol_FrameBg]              = { 0.12f, 0.07f, 0.07f, 1.00f };
-    c[ImGuiCol_FrameBgHovered]       = { 0.18f, 0.09f, 0.09f, 1.00f };
-    c[ImGuiCol_FrameBgActive]        = { 0.22f, 0.10f, 0.10f, 1.00f };
-    c[ImGuiCol_TitleBg]              = { 0.08f, 0.04f, 0.04f, 1.00f };
-    c[ImGuiCol_TitleBgActive]        = { 0.10f, 0.05f, 0.05f, 1.00f };
-    c[ImGuiCol_TitleBgCollapsed]     = { 0.06f, 0.03f, 0.03f, 1.00f };
-    c[ImGuiCol_ScrollbarBg]          = { 0.06f, 0.04f, 0.04f, 1.00f };
-    c[ImGuiCol_ScrollbarGrab]        = { 0.30f, 0.08f, 0.08f, 1.00f };
+    c[ImGuiCol_WindowBg] = { 0.06f, 0.04f, 0.04f, 0.00f };
+    c[ImGuiCol_ChildBg] = { 0.08f, 0.05f, 0.05f, 1.00f };
+    c[ImGuiCol_PopupBg] = { 0.07f, 0.04f, 0.04f, 1.00f };
+    c[ImGuiCol_Border] = { 0.25f, 0.08f, 0.08f, 1.00f };
+    c[ImGuiCol_BorderShadow] = { 0.00f, 0.00f, 0.00f, 0.00f };
+    c[ImGuiCol_FrameBg] = { 0.12f, 0.07f, 0.07f, 1.00f };
+    c[ImGuiCol_FrameBgHovered] = { 0.18f, 0.09f, 0.09f, 1.00f };
+    c[ImGuiCol_FrameBgActive] = { 0.22f, 0.10f, 0.10f, 1.00f };
+    c[ImGuiCol_TitleBg] = { 0.08f, 0.04f, 0.04f, 1.00f };
+    c[ImGuiCol_TitleBgActive] = { 0.10f, 0.05f, 0.05f, 1.00f };
+    c[ImGuiCol_TitleBgCollapsed] = { 0.06f, 0.03f, 0.03f, 1.00f };
+    c[ImGuiCol_ScrollbarBg] = { 0.06f, 0.04f, 0.04f, 1.00f };
+    c[ImGuiCol_ScrollbarGrab] = { 0.30f, 0.08f, 0.08f, 1.00f };
     c[ImGuiCol_ScrollbarGrabHovered] = { 0.45f, 0.10f, 0.10f, 1.00f };
-    c[ImGuiCol_ScrollbarGrabActive]  = { 0.60f, 0.12f, 0.12f, 1.00f };
-    c[ImGuiCol_CheckMark]            = { 0.85f, 0.15f, 0.15f, 1.00f };
-    c[ImGuiCol_SliderGrab]           = { 0.70f, 0.12f, 0.12f, 1.00f };
-    c[ImGuiCol_SliderGrabActive]     = { 0.90f, 0.18f, 0.18f, 1.00f };
-    c[ImGuiCol_Button]               = { 0.18f, 0.07f, 0.07f, 1.00f };
-    c[ImGuiCol_ButtonHovered]        = { 0.55f, 0.10f, 0.10f, 1.00f };
-    c[ImGuiCol_ButtonActive]         = { 0.72f, 0.14f, 0.14f, 1.00f };
-    c[ImGuiCol_Header]               = { 0.45f, 0.08f, 0.08f, 0.55f };
-    c[ImGuiCol_HeaderHovered]        = { 0.55f, 0.10f, 0.10f, 0.75f };
-    c[ImGuiCol_HeaderActive]         = { 0.70f, 0.14f, 0.14f, 1.00f };
-    c[ImGuiCol_Separator]            = { 0.22f, 0.07f, 0.07f, 1.00f };
-    c[ImGuiCol_SeparatorHovered]     = { 0.55f, 0.10f, 0.10f, 0.80f };
-    c[ImGuiCol_SeparatorActive]      = { 0.72f, 0.14f, 0.14f, 1.00f };
-    c[ImGuiCol_ResizeGrip]           = { 0.45f, 0.08f, 0.08f, 0.25f };
-    c[ImGuiCol_ResizeGripHovered]    = { 0.60f, 0.10f, 0.10f, 0.65f };
-    c[ImGuiCol_ResizeGripActive]     = { 0.75f, 0.14f, 0.14f, 0.95f };
-    c[ImGuiCol_Tab]                  = { 0.14f, 0.06f, 0.06f, 1.00f };
-    c[ImGuiCol_TabHovered]           = { 0.55f, 0.10f, 0.10f, 0.85f };
-    c[ImGuiCol_TabActive]            = { 0.45f, 0.08f, 0.08f, 1.00f };
-    c[ImGuiCol_TabUnfocused]         = { 0.08f, 0.04f, 0.04f, 1.00f };
-    c[ImGuiCol_TabUnfocusedActive]   = { 0.18f, 0.07f, 0.07f, 1.00f };
-    c[ImGuiCol_TextSelectedBg]       = { 0.60f, 0.10f, 0.10f, 0.40f };
-    c[ImGuiCol_NavHighlight]         = { 0.72f, 0.14f, 0.14f, 1.00f };
-    c[ImGuiCol_Text]                 = { 0.92f, 0.88f, 0.88f, 1.00f };
-    c[ImGuiCol_TextDisabled]         = { 0.40f, 0.28f, 0.28f, 1.00f };
+    c[ImGuiCol_ScrollbarGrabActive] = { 0.60f, 0.12f, 0.12f, 1.00f };
+    c[ImGuiCol_CheckMark] = { 0.85f, 0.15f, 0.15f, 1.00f };
+    c[ImGuiCol_SliderGrab] = { 0.70f, 0.12f, 0.12f, 1.00f };
+    c[ImGuiCol_SliderGrabActive] = { 0.90f, 0.18f, 0.18f, 1.00f };
+    c[ImGuiCol_Button] = { 0.18f, 0.07f, 0.07f, 1.00f };
+    c[ImGuiCol_ButtonHovered] = { 0.55f, 0.10f, 0.10f, 1.00f };
+    c[ImGuiCol_ButtonActive] = { 0.72f, 0.14f, 0.14f, 1.00f };
+    c[ImGuiCol_Header] = { 0.45f, 0.08f, 0.08f, 0.55f };
+    c[ImGuiCol_HeaderHovered] = { 0.55f, 0.10f, 0.10f, 0.75f };
+    c[ImGuiCol_HeaderActive] = { 0.70f, 0.14f, 0.14f, 1.00f };
+    c[ImGuiCol_Separator] = { 0.22f, 0.07f, 0.07f, 1.00f };
+    c[ImGuiCol_SeparatorHovered] = { 0.55f, 0.10f, 0.10f, 0.80f };
+    c[ImGuiCol_SeparatorActive] = { 0.72f, 0.14f, 0.14f, 1.00f };
+    c[ImGuiCol_ResizeGrip] = { 0.45f, 0.08f, 0.08f, 0.25f };
+    c[ImGuiCol_ResizeGripHovered] = { 0.60f, 0.10f, 0.10f, 0.65f };
+    c[ImGuiCol_ResizeGripActive] = { 0.75f, 0.14f, 0.14f, 0.95f };
+    c[ImGuiCol_Tab] = { 0.14f, 0.06f, 0.06f, 1.00f };
+    c[ImGuiCol_TabHovered] = { 0.55f, 0.10f, 0.10f, 0.85f };
+    c[ImGuiCol_TabActive] = { 0.45f, 0.08f, 0.08f, 1.00f };
+    c[ImGuiCol_TabUnfocused] = { 0.08f, 0.04f, 0.04f, 1.00f };
+    c[ImGuiCol_TabUnfocusedActive] = { 0.18f, 0.07f, 0.07f, 1.00f };
+    c[ImGuiCol_TextSelectedBg] = { 0.60f, 0.10f, 0.10f, 0.40f };
+    c[ImGuiCol_NavHighlight] = { 0.72f, 0.14f, 0.14f, 1.00f };
+    c[ImGuiCol_Text] = { 0.92f, 0.88f, 0.88f, 1.00f };
+    c[ImGuiCol_TextDisabled] = { 0.40f, 0.28f, 0.28f, 1.00f };
 }
 
 void ui_apply_theme(AppTheme t) {
     g_current_theme = t;
-    g_theme         = static_cast<int>(t);
+    g_theme = static_cast<int>(t);
     save_settings();
-    ImGuiStyle& st  = ImGui::GetStyle();
 
+    ImGuiStyle& st = ImGui::GetStyle();
     switch (t) {
-        case AppTheme::Indigo:       apply_indigo(st);        break;
-        case AppTheme::Vermillion:   apply_vermillion(st);    break;
-        case AppTheme::ClassicSteam: apply_classic_steam(st); break;
-        case AppTheme::Crimson:      apply_crimson(st); load_bg_crimson(); break;
-        default:                     apply_dark(st);          break;
+    case AppTheme::Indigo: apply_indigo(st); break;
+    case AppTheme::Vermillion: apply_vermillion(st); break;
+    case AppTheme::ClassicSteam: apply_classic_steam(st); break;
+    case AppTheme::Crimson: apply_crimson(st); load_bg_crimson(); break;
+    default: apply_dark(st); break;
     }
 }
-
-
 
 static void render_settings_panel(ImVec2 ds) {
     ImGui::SetNextWindowPos({ ds.x - 210.f, 34.f });
     ImGui::SetNextWindowSize({ 200.f, 0.f });
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   8.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    { 12.f, 10.f });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 12.f, 10.f });
 
     ImGui::Begin("##settings_panel", &g_settings_open,
-        ImGuiWindowFlags_NoDecoration  |
-        ImGuiWindowFlags_NoResize      |
-        ImGuiWindowFlags_NoMove        |
-        ImGuiWindowFlags_NoScrollbar   |
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_AlwaysAutoResize);
 
     ImGui::TextDisabled("Тема оформления");
@@ -383,11 +378,11 @@ static void render_settings_panel(ImVec2 ds) {
 
     struct ThemeEntry { const char* name; AppTheme id; };
     ThemeEntry themes[] = {
-        { "Dark (default)", AppTheme::Dark        },
-        { "Indigo",         AppTheme::Indigo       },
-        { "Vermillion",     AppTheme::Vermillion   },
-        { "Classic Steam",  AppTheme::ClassicSteam },
-        { "Artem(Only)",        AppTheme::Crimson      },
+        { "Dark (default)", AppTheme::Dark },
+        { "Indigo", AppTheme::Indigo },
+        { "Vermillion", AppTheme::Vermillion },
+        { "Classic Steam", AppTheme::ClassicSteam },
+        { "Artem(Only)", AppTheme::Crimson },
     };
 
     for (auto& e : themes) {
@@ -395,12 +390,10 @@ static void render_settings_panel(ImVec2 ds) {
         ImGui::PushStyleColor(ImGuiCol_Text,
             sel ? ImVec4{ 0.92f, 0.92f, 0.94f, 1.f }
                 : ImVec4{ 0.55f, 0.55f, 0.60f, 1.f });
-
         if (ImGui::Selectable(e.name, sel)) {
             ui_apply_theme(e.id);
             g_settings_open = false;
         }
-
         ImGui::PopStyleColor();
     }
 
@@ -417,17 +410,17 @@ static void render_palette_panel(ImVec2 ds) {
     ImGui::SetNextWindowPos({ ds.x - 250.f, 34.f });
     ImGui::SetNextWindowSize({ 238.f, 0.f });
     ImGui::SetNextWindowBgAlpha(1.0f);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg,  { 0.05f, 0.05f, 0.05f, 1.00f });
-    ImGui::PushStyleColor(ImGuiCol_Border,    { 0.30f, 0.08f, 0.08f, 1.00f });
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   8.f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0.05f, 0.05f, 0.05f, 1.00f });
+    ImGui::PushStyleColor(ImGuiCol_Border, { 0.30f, 0.08f, 0.08f, 1.00f });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    { 12.f, 10.f });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 12.f, 10.f });
 
     ImGui::Begin("##palette_panel", &g_palette_open,
-        ImGuiWindowFlags_NoDecoration  |
-        ImGuiWindowFlags_NoResize      |
-        ImGuiWindowFlags_NoMove        |
-        ImGuiWindowFlags_NoScrollbar   |
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_AlwaysAutoResize);
 
     ImGui::TextDisabled("Цвета списков (Crimson)");
@@ -436,37 +429,36 @@ static void render_palette_panel(ImVec2 ds) {
     ImGui::Spacing();
 
     ImGui::Text("Фон строки");
-    ImGui::ColorEdit4("##child_bg",    (float*)&g_crimson_child_bg,
+    ImGui::ColorEdit4("##child_bg", (float*)&g_crimson_child_bg,
         ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-
     ImGui::Spacing();
+
     ImGui::Text("Выделение");
     ImGui::ColorEdit4("##selected_bg", (float*)&g_crimson_selected_bg,
         ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-
     ImGui::Spacing();
+
     ImGui::Text("Hover");
-    ImGui::ColorEdit4("##hovered_bg",  (float*)&g_crimson_hovered_bg,
+    ImGui::ColorEdit4("##hovered_bg", (float*)&g_crimson_hovered_bg,
         ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-
     ImGui::Spacing();
-    ImGui::Text("Текст");
-    ImGui::ColorEdit4("##text_col",    (float*)&g_crimson_text,
-        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 
+    ImGui::Text("Текст");
+    ImGui::ColorEdit4("##text_col", (float*)&g_crimson_text,
+        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
     if (ImGui::Button("Сбросить", { -1, 0 })) {
-        g_crimson_child_bg    = { 0.12f, 0.05f, 0.05f, 1.00f };
+        g_crimson_child_bg = { 0.12f, 0.05f, 0.05f, 1.00f };
         g_crimson_selected_bg = { 0.55f, 0.08f, 0.08f, 1.00f };
-        g_crimson_hovered_bg  = { 0.30f, 0.06f, 0.06f, 1.00f };
-        g_crimson_text        = { 0.95f, 0.88f, 0.88f, 1.00f };
+        g_crimson_hovered_bg = { 0.30f, 0.06f, 0.06f, 1.00f };
+        g_crimson_text = { 0.95f, 0.88f, 0.88f, 1.00f };
     }
 
     if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
-                                ImGuiHoveredFlags_ChildWindows) &&
+        ImGuiHoveredFlags_ChildWindows) &&
         ImGui::IsMouseClicked(0)) {
         g_palette_open = false;
     }
@@ -485,7 +477,7 @@ static void render_confirm_copy_popup(ImVec2 ds) {
 
     ImGui::Begin("##confirm_copy", &g_confirm_copy_open,
         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove       | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize);
 
     ImGui::TextColored({ 0.90f, 0.75f, 0.25f, 1.f }, "Подтверждение");
     ImGui::Spacing();
@@ -509,9 +501,10 @@ static void render_confirm_copy_popup(ImVec2 ds) {
         g_confirm_copy_open = false;
     }
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button,        { 0.75f, 0.20f, 0.20f, 1.00f });
+
+    ImGui::PushStyleColor(ImGuiCol_Button, { 0.75f, 0.20f, 0.20f, 1.00f });
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.85f, 0.25f, 0.25f, 1.00f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.60f, 0.14f, 0.14f, 1.00f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.60f, 0.14f, 0.14f, 1.00f });
     if (ImGui::Button("Заменить конфиг", { -1, 0 })) {
         copy_config();
         g_confirm_copy_open = false;
@@ -542,9 +535,9 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (font_big) ImGui::PushFont(font_big);
     {
         const char* title = "DOTA 2 CFG";
-        ImDrawList* dl    = ImGui::GetWindowDrawList();
-        ImVec2      pos   = ImGui::GetCursorScreenPos();
-        float       th    = ImGui::CalcTextSize(title).y;
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float th = ImGui::CalcTextSize(title).y;
 
         dl->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
             pos, IM_COL32(220, 40, 40, 255), title);
@@ -565,30 +558,31 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::SameLine(0, 8.f);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6.f);
     ImGui::TextDisabled("by OutTuna");
+
     if (g_current_theme == AppTheme::Crimson) {
         ImGui::SameLine(ds.x - 70.f);
-        ImGui::PushStyleColor(ImGuiCol_Button,        { 0.00f, 0.00f, 0.00f, 0.00f });
+        ImGui::PushStyleColor(ImGuiCol_Button, { 0.00f, 0.00f, 0.00f, 0.00f });
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.40f, 0.08f, 0.08f, 1.00f });
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.25f, 0.05f, 0.05f, 1.00f });
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.25f, 0.05f, 0.05f, 1.00f });
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.f);
         if (ImGui::Button("##palette", { 26, 22 }))
             g_palette_open = !g_palette_open;
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
 
-        ImDrawList* pdl   = ImGui::GetWindowDrawList();
-        ImVec2      pmin  = ImGui::GetItemRectMin();
-        ImVec2      pmax  = ImGui::GetItemRectMax();
-        float       pcx   = (pmin.x + pmax.x) * 0.5f;
-        float       pcy   = (pmin.y + pmax.y) * 0.5f;
-        float       pr    = 4.5f;
+        ImDrawList* pdl = ImGui::GetWindowDrawList();
+        ImVec2 pmin = ImGui::GetItemRectMin();
+        ImVec2 pmax = ImGui::GetItemRectMax();
+        float pcx = (pmin.x + pmax.x) * 0.5f;
+        float pcy = (pmin.y + pmax.y) * 0.5f;
+        float pr = 4.5f;
         ImVec2 dots[4] = {
             { pcx - pr, pcy - pr }, { pcx + pr, pcy - pr },
             { pcx - pr, pcy + pr }, { pcx + pr, pcy + pr }
         };
         ImU32 dot_cols[4] = {
-            IM_COL32(220, 60, 60, 220),  IM_COL32(60, 120, 220, 220),
-            IM_COL32(60, 200, 80, 220),  IM_COL32(220, 180, 40, 220)
+            IM_COL32(220, 60, 60, 220), IM_COL32(60, 120, 220, 220),
+            IM_COL32(60, 200, 80, 220), IM_COL32(220, 180, 40, 220)
         };
         for (int i = 0; i < 4; i++)
             pdl->AddCircleFilled(dots[i], 3.f, dot_cols[i]);
@@ -596,26 +590,24 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::SameLine(ds.x - 38.f);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.f);
-
-    ImGui::PushStyleColor(ImGuiCol_Button,        { 0.00f, 0.00f, 0.00f, 0.00f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  { 0.25f, 0.25f, 0.28f, 1.00f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,   { 0.18f, 0.18f, 0.20f, 1.00f });
+    ImGui::PushStyleColor(ImGuiCol_Button, { 0.00f, 0.00f, 0.00f, 0.00f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.25f, 0.25f, 0.28f, 1.00f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.18f, 0.18f, 0.20f, 1.00f });
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.f);
-
     if (ImGui::Button("##gear", { 26, 22 }))
         g_settings_open = !g_settings_open;
-
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
 
-    ImDrawList* dl  = ImGui::GetWindowDrawList();
-    ImVec2 bmin     = ImGui::GetItemRectMin();
-    ImVec2 bmax     = ImGui::GetItemRectMax();
-    ImVec2 ctr      = { (bmin.x + bmax.x) * 0.5f, (bmin.y + bmax.y) * 0.5f };
-    float  t        = (float)glfwGetTime();
-    float  ang      = g_settings_open ? t * 1.2f : 0.f;
-    ImU32  col      = IM_COL32(160, 160, 170, 220);
-    const float PI  = 3.14159f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 bmin = ImGui::GetItemRectMin();
+    ImVec2 bmax = ImGui::GetItemRectMax();
+    ImVec2 ctr = { (bmin.x + bmax.x) * 0.5f, (bmin.y + bmax.y) * 0.5f };
+
+    float t = (float)glfwGetTime();
+    float ang = g_settings_open ? t * 1.2f : 0.f;
+    ImU32 col = IM_COL32(160, 160, 170, 220);
+    const float PI = 3.14159f;
 
     for (int i = 0; i < 8; i++) {
         float a0 = ang + i * (PI * 2.f / 8.f);
@@ -663,27 +655,30 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         if (!p.empty()) { strncpy(dst_path, p.c_str(), 255); dst_path[255] = 0; }
     }
 #endif
+
     bool scanning = g_scanning.load();
     if (scanning) ImGui::BeginDisabled();
     if (ImGui::Button(scanning ? "SCANNING..." : "SCAN FOLDERS", { -1, 32 }))
         std::thread(scan_thread).detach();
     if (scanning) ImGui::EndDisabled();
 
-    const float AVATAR_SIZE  = 24.f;
-    const float ROW_H        = AVATAR_SIZE + 6.f;
-    const float bottom_h     = 38.f + ImGui::GetTextLineHeightWithSpacing()
-                               + ImGui::GetStyle().ItemSpacing.y * 3
-                               + ImGui::GetStyle().WindowPadding.y;
-    const float list_h       = ImGui::GetContentRegionAvail().y - bottom_h;
+    const float AVATAR_SIZE = 24.f;
+    const float ROW_H = AVATAR_SIZE + 6.f;
+
+    const float bottom_h = 38.f + ImGui::GetTextLineHeightWithSpacing()
+        + ImGui::GetStyle().ItemSpacing.y * 3
+        + ImGui::GetStyle().WindowPadding.y;
+    const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
+
     std::vector<std::string> local_src_list, local_dst_list;
     std::map<std::string, std::string> local_nick_cache;
     std::string local_status;
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
-        local_src_list   = src_list;
-        local_dst_list   = dst_list;
+        local_src_list = src_list;
+        local_dst_list = dst_list;
         local_nick_cache = nick_cache;
-        local_status     = status_msg;
+        local_status = status_msg;
     }
 
     ImGui::Columns(2, "lists", true);
@@ -700,10 +695,10 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::BeginChild(child_id, { 0, list_h }, true);
 
         for (int i = 0; i < (int)list.size(); i++) {
-            const std::string& id  = list[i];
-            std::string nick       = local_nick_cache.count(id) ? local_nick_cache[id] : id;
-            std::string label      = nick + "  (" + id + ")";
-            bool        sel        = (i == selected);
+            const std::string& id = list[i];
+            std::string nick = local_nick_cache.count(id) ? local_nick_cache[id] : id;
+            std::string label = nick + " (" + id + ")";
+            bool sel = (i == selected);
 
             ImGui::PushID(i);
 
@@ -718,23 +713,23 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
             }
 
             if (crimson) {
-                ImGui::PushStyleColor(ImGuiCol_Header,        g_crimson_selected_bg);
+                ImGui::PushStyleColor(ImGuiCol_Header, g_crimson_selected_bg);
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered, g_crimson_hovered_bg);
-                ImGui::PushStyleColor(ImGuiCol_HeaderActive,  g_crimson_selected_bg);
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive, g_crimson_selected_bg);
             }
 
             if (ImGui::Selectable("##row", sel,
-                    ImGuiSelectableFlags_None, { 0, ROW_H })) {
+                ImGuiSelectableFlags_None, { 0, ROW_H })) {
                 selected = i;
                 selected_atomic.store(i);
             }
 
             if (crimson) ImGui::PopStyleColor(3);
 
-            ImDrawList* dl      = ImGui::GetWindowDrawList();
-            const float pad     = 5.f;
-            const float radius  = AVATAR_SIZE * 0.5f;
-            ImVec2      av_ctr  = {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float pad = 5.f;
+            const float radius = AVATAR_SIZE * 0.5f;
+            ImVec2 av_ctr = {
                 row_pos.x + pad + radius,
                 row_pos.y + ROW_H * 0.5f
             };
@@ -783,24 +778,25 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::NextColumn();
     ImGui::Text("To (Account)");
     render_account_list(local_dst_list, selected_dst, "##dst_list");
-    ImGui::Columns(1);
 
+    ImGui::Columns(1);
     ImGui::Separator();
 
     if (ImGui::Button("COPY CONFIG NOW", { -1, 38 })) {
         int s = selected_src.load(), d = selected_dst.load();
         if (s < 0 || d < 0) {
             copy_config();
-            else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
+        } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
             const std::string& s_id = local_src_list[s];
             const std::string& d_id = local_dst_list[d];
             std::string s_nick = local_nick_cache.count(s_id) ? local_nick_cache[s_id] : s_id;
             std::string d_nick = local_nick_cache.count(d_id) ? local_nick_cache[d_id] : d_id;
-            g_confirm_src_label = s_nick + "  (" + s_id + ")";
-            g_confirm_dst_label = d_nick + "  (" + d_id + ")";
+            g_confirm_src_label = s_nick + " (" + s_id + ")";
+            g_confirm_dst_label = d_nick + " (" + d_id + ")";
             g_confirm_copy_open = true;
         }
     }
+
     ImGui::Text("Status: %s", local_status.c_str());
 
     ImGui::End();
@@ -815,12 +811,10 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         render_confirm_copy_popup(ds);
 }
 
-
-
 void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     if (!g_success.show) return;
 
-    const float OPEN_DUR  = 0.30f;
+    const float OPEN_DUR = 0.30f;
     const float CLOSE_DUR = 0.25f;
 
     if (!g_success.closing) {
@@ -833,10 +827,10 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
         }
     }
 
-    float t_open    = (g_success.anim_t / OPEN_DUR < 1.f) ? g_success.anim_t / OPEN_DUR : 1.f;
+    float t_open = (g_success.anim_t / OPEN_DUR < 1.f) ? g_success.anim_t / OPEN_DUR : 1.f;
     float ease_open = t_open * t_open * (3.f - 2.f * t_open);
 
-    float t_close   = g_success.closing ? (g_success.close_t / CLOSE_DUR) : 0.f;
+    float t_close = g_success.closing ? (g_success.close_t / CLOSE_DUR) : 0.f;
     if (t_close > 1.f) t_close = 1.f;
     float ease_close = t_close * t_close;
 
@@ -844,20 +838,21 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     float alpha = ease_open * (1.f - ease_close);
     float fly_y = (1.f - ease_open) * 30.f + ease_close * (-20.f);
 
-    const float POP_W    = 460.f;
-    const float POP_H    = 300.f;
+    const float POP_W = 460.f;
+    const float POP_H = 300.f;
     const float ROUNDING = 14.f;
-    const float cx       = ds.x * 0.5f;
-    const float cy       = ds.y * 0.5f + fly_y;
-    const float sw       = POP_W * scale;
-    const float sh       = POP_H * scale;
-    const float pop_x    = cx - sw * 0.5f;
-    const float pop_y    = cy - sh * 0.5f;
-    const float pop_x2   = cx + sw * 0.5f;
-    const float pop_y2   = cy + sh * 0.5f;
-    const float time     = (float)glfwGetTime();
-    const float pulse    = 0.5f + 0.5f * sinf(time * 2.8f);
 
+    const float cx = ds.x * 0.5f;
+    const float cy = ds.y * 0.5f + fly_y;
+    const float sw = POP_W * scale;
+    const float sh = POP_H * scale;
+    const float pop_x = cx - sw * 0.5f;
+    const float pop_y = cy - sh * 0.5f;
+    const float pop_x2 = cx + sw * 0.5f;
+    const float pop_y2 = cy + sh * 0.5f;
+
+    const float time = (float)glfwGetTime();
+    const float pulse = 0.5f + 0.5f * sinf(time * 2.8f);
 
     ImGui::SetNextWindowPos({ 0, 0 });
     ImGui::SetNextWindowSize(ds);
@@ -865,11 +860,12 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, 0 });
     ImGui::Begin("##dim", NULL,
         ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoResize     |
-        ImGuiWindowFlags_NoInputs     |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoInputs |
         ImGuiWindowFlags_NoNav);
 
     auto* dl = ImGui::GetWindowDrawList();
+
     dl->AddRectFilled({ 0, 0 }, ds, IM_COL32(0, 0, 0, (int)(150 * alpha)));
 
     struct GlowLayer { float p; int a; };
@@ -897,20 +893,19 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::End();
     ImGui::PopStyleColor();
 
-
     ImGui::SetNextWindowPos({ pop_x, pop_y });
     ImGui::SetNextWindowSize({ sw, sh });
     ImGui::SetNextWindowBgAlpha(0.f);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, { 0, 0, 0, 0 });
-    ImGui::PushStyleColor(ImGuiCol_Border,   { 0, 0, 0, 0 });
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   ROUNDING);
+    ImGui::PushStyleColor(ImGuiCol_Border, { 0, 0, 0, 0 });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, ROUNDING);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    { 20.f * scale, 14.f * scale });
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 20.f * scale, 14.f * scale });
 
     ImGui::Begin("##success_popup", NULL,
         ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoResize     |
-        ImGuiWindowFlags_NoMove       |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoScrollbar);
 
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
@@ -937,11 +932,11 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
         ImGui::TextColored(vc, "%s", val);
     };
 
-    std::string src_d = g_success.src_nick + "  (ID: " + g_success.src_id + ")";
-    std::string dst_d = g_success.dst_nick + "  (ID: " + g_success.dst_id + ")";
+    std::string src_d = g_success.src_nick + " (ID: " + g_success.src_id + ")";
+    std::string dst_d = g_success.dst_nick + " (ID: " + g_success.dst_id + ")";
 
     row("Откуда: ", { 0.55f, 0.55f, 0.60f, 1 }, src_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
-    row("Куда:   ", { 0.55f, 0.55f, 0.60f, 1 }, dst_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+    row("Куда: ", { 0.55f, 0.55f, 0.60f, 1 }, dst_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
 
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Separator, { 0.55f, 0.55f, 0.60f, 0.20f });
@@ -952,29 +947,26 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "Source:");
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.src_folder.c_str());
-
-    ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "Dest:  ");
+    ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "Dest: ");
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.dst_folder.c_str());
 
     ImGui::Spacing();
     ImGui::Spacing();
 
-    const float btn_w  = 120.f * scale;
-    const float btn_h  = 32.f  * scale;
+    const float btn_w = 120.f * scale;
+    const float btn_h = 32.f * scale;
     const float btn_gv = 0.55f + 0.12f * pulse;
 
     ImGui::SetCursorPosX((sw - btn_w) * 0.5f);
-    ImGui::PushStyleColor(ImGuiCol_Button,        { 0.10f, btn_gv, 0.20f, 1.f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.14f, 0.78f,  0.28f, 1.f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  { 0.07f, 0.42f,  0.15f, 1.f });
+    ImGui::PushStyleColor(ImGuiCol_Button, { 0.10f, btn_gv, 0.20f, 1.f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.14f, 0.78f, 0.28f, 1.f });
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.07f, 0.42f, 0.15f, 1.f });
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
-
     if (ImGui::Button("OK", { btn_w, btn_h })) {
         g_success.closing = true;
         g_success.close_t = 0.f;
     }
-
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(3);
 
@@ -983,4 +975,3 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor(2);
 }
-
