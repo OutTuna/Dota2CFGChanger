@@ -22,7 +22,6 @@
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-
 static void set_status(const std::string& msg) {
     std::lock_guard<std::mutex> lock(g_data_mutex);
     status_msg = msg;
@@ -78,7 +77,6 @@ std::string browse_for_folder(const char* title) {
 }
 #endif
 
-
 void load_settings() {
     std::error_code ec;
     std::ifstream f(settings_file());
@@ -101,6 +99,7 @@ void load_settings() {
                     nick_cache[el.key()] = el.value().get<std::string>();
             }
         } catch (...) {
+
         }
     }
 
@@ -176,7 +175,6 @@ void scan_thread() {
             }
         }
     };
-
     scan_dir(src_path, new_src);
     scan_dir(dst_path, new_dst);
 
@@ -217,7 +215,6 @@ void copy_config() {
     fs::path dst = fs::path(dst_path) / d_id / DOTA_ID;
 
     if (!fs::exists(src)) { set_status("No Dota config in source!"); return; }
-
     fs::path dst_tmp = dst; dst_tmp += ".incoming";
     fs::path dst_bak = dst; dst_bak += ".bak";
 
