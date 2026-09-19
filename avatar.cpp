@@ -161,3 +161,4 @@ void avatar_shutdown() {
 
     g_avatars.clear();
 }
+
