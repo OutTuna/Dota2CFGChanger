@@ -3,8 +3,15 @@ name: Build Windows
 on:
   push:
     branches: [ "main" ]
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      force_major:
+        description: "Форсировать major-бамп (vX.0)"
+        type: boolean
+        required: false
+        default: false
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -12,6 +19,69 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        shell: bash
+        run: |
+          set -e
+          git fetch --tags --force
+
+          LAST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' | sort -V | tail -n1)
+
+          if [ -z "$LAST_TAG" ]; then
+            NEW_VERSION="v1.0"
+            IS_MAJOR="false"
+            echo "Тегов vX.Y ещё нет -- стартуем с $NEW_VERSION"
+          else
+            echo "Последний тег: $LAST_TAG"
+            COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=%B || true)
+
+            MAJOR_BUMP=false
+            if [ "${{ github.event.inputs.force_major }}" = "true" ]; then
+              MAJOR_BUMP=true
+              echo "Major-бамп форсирован через workflow_dispatch"
+            fi
+            if echo "$COMMITS" | grep -qi 'BREAKING CHANGE'; then
+              MAJOR_BUMP=true
+              echo "Major-бамп: найден футер 'BREAKING CHANGE'"
+            fi
+            if echo "$COMMITS" | grep -qi '\[major\]'; then
+              MAJOR_BUMP=true
+              echo "Major-бамп: найдена метка '[major]'"
+            fi
+            if echo "$COMMITS" | grep -Eq '^[a-zA-Z]+(\([a-zA-Z0-9_-]+\))?!:'; then
+              MAJOR_BUMP=true
+              echo "Major-бамп: найден conventional-commit маркер '!'"
+            fi
+
+            VER="${LAST_TAG#v}"
+            MAJOR="${VER%%.*}"
+            MINOR="${VER##*.}"
+
+            if [ "$MAJOR_BUMP" = true ]; then
+              NEW_VERSION="v$((MAJOR + 1)).0"
+              IS_MAJOR="true"
+            else
+              NEW_VERSION="v${MAJOR}.$((MINOR + 1))"
+              IS_MAJOR="false"
+            fi
+          fi
+
+          echo "Следующая версия: $NEW_VERSION (major: $IS_MAJOR)"
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_major=$IS_MAJOR"   >> "$GITHUB_OUTPUT"
+
+      - name: Create and push version tag
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
 
       - name: Setup MSVC & Resource Compiler
         uses: ilammy/msvc-dev-cmd@v1
@@ -35,7 +105,6 @@ jobs:
           path: build/Release/DotaManager.exe
 
       - name: Delete old latest release
-        if: github.ref == 'refs/heads/main'
         run: |
           gh release delete latest --yes || true
           git push origin :refs/tags/latest || true
@@ -43,13 +112,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create rolling release (main)
-        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Dota2 CFG Changer — Latest Build"
+          name: "Dota2 CFG Changer — Latest Build (${{ steps.version.outputs.version }})"
           body: |
             ## 🪟 Последняя автосборка с ветки `main`
+
+            Соответствует версии `${{ steps.version.outputs.version }}` — стабильный
+            релиз с этим тегом и полным changelog'ом смотри отдельно.
+
             ### Установка
             1. Скачай `DotaManager.exe`
             2. Запусти — установка не нужна
@@ -59,16 +131,70 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create stable release (tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Create stable release (auto version)
         uses: softprops/action-gh-release@v2
         with:
-          name: "Dota2 CFG Changer ${{ github.ref_name }} — Windows"
+          tag_name: ${{ steps.version.outputs.version }}
+          name: >-
+            ${{ steps.version.outputs.is_major == 'true'
+                && format('🚀 Dota2 CFG Changer {0} — крупное обновление', steps.version.outputs.version)
+                || format('Dota2 CFG Changer {0}', steps.version.outputs.version) }}
+          generate_release_notes: true
           body: |
-            ## 🪟 Windows релиз ${{ github.ref_name }}
+            ## 🪟 Windows релиз ${{ steps.version.outputs.version }}
+
+            ${{ steps.version.outputs.is_major == 'true' && '⚠️ Это major-версия: возможны несовместимые изменения относительно предыдущих релизов.' || '' }}
+
             ### Установка
             1. Скачай `DotaManager.exe`
-            2. Запусти — установка не нужна
+            2. Разархивируй его в любую папку
+            3. Открой, и выбери путь
+            4. Нажми Scan
+            5. После выбери аккаунты, и нажми Copy
+            6. Profit
+          files: build/Release/DotaManager.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    manual-tag-release:
+      if: startsWith(github.ref, 'refs/tags/v')
+      runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC & Resource Compiler
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Create Resource File with Icon
+        shell: powershell
+        run: |
+          Set-Content -Path app_resource.rc -Value 'IDI_ICON1 ICON "icon.ico"' -Encoding ASCII
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_RC_COMPILER=rc
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Create stable release (manual tag)
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Dota2 CFG Changer ${{ github.ref_name }} — Windows (manual)"
+          generate_release_notes: true
+          body: |
+            ## 🪟 Windows релиз ${{ github.ref_name }} (вручную запушенный тег)
+
+            ### Установка
+            1. Скачай `DotaManager.exe`
+            2. Разархивируй его в любую папку
+            3. Открой, и выбери путь
+            4. Нажми Scan
+            5. После выбери аккаунты, и нажми Copy
+            6. Profit
           files: build/Release/DotaManager.exe
           draft: false
           prerelease: false
