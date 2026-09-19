@@ -20,7 +20,6 @@ inline std::map<std::string, std::string> nick_cache;
 inline std::vector<std::string> src_list;
 inline std::vector<std::string> dst_list;
 inline std::string status_msg = "Ready";
-inline std::atomic<int> selected_src{-1};
 inline std::atomic<int> selected_dst{-1};
 inline std::atomic<bool> g_scanning{false};
 inline int g_theme = 0;
