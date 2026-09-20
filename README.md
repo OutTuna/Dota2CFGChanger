@@ -4,6 +4,7 @@ A native Windows utility for copying Dota 2 client settings from one Steam accou
 
 <p>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square">
+  <img alt="Build: Windows" src="https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?style=flat-square">
   <img alt="Language: C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square">
   <img alt="Build system: CMake" src="https://img.shields.io/badge/build-CMake%203.14%2B-064F8C?style=flat-square">
   <a href="https://github.com/OutTuna/Dota2CFGChanger/releases"><img alt="Releases" src="https://img.shields.io/badge/releases-GitHub-4c566a?style=flat-square"></a>
