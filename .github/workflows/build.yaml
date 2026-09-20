@@ -3,6 +3,11 @@ name: Build Windows
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+      - ".gitignore"
+      - ".gitattributes"
   workflow_dispatch:
     inputs:
       force_major:
@@ -10,6 +15,7 @@ on:
         type: boolean
         required: false
         default: false
+
 permissions:
   contents: write
 
@@ -141,9 +147,9 @@ jobs:
                 || format('Dota2 CFG Changer {0}', steps.version.outputs.version) }}
           generate_release_notes: true
           body: |
-            ## 🪟 Windows релиз ${{ steps.version.outputs.version }}
+            ## Windows релиз ${{ steps.version.outputs.version }}
 
-            ${{ steps.version.outputs.is_major == 'true' && '⚠️ Это major-версия: возможны несовместимые изменения относительно предыдущих релизов.' || '' }}
+            ${{ steps.version.outputs.is_major == 'true' && ' Это major-версия: возможны несовместимые изменения относительно предыдущих релизов.' || '' }}
 
             ### Установка
             1. Скачай `DotaManager.exe`
@@ -186,7 +192,7 @@ jobs:
           name: "Dota2 CFG Changer ${{ github.ref_name }} — Windows (manual)"
           generate_release_notes: true
           body: |
-            ## 🪟 Windows релиз ${{ github.ref_name }} (вручную запушенный тег)
+            ## Windows релиз ${{ github.ref_name }} (вручную запушенный тег)
 
             ### Установка
             1. Скачай `DotaManager.exe`
