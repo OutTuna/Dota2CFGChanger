@@ -18,6 +18,7 @@ static AppTheme g_current_theme = AppTheme::Dark;
 static bool g_settings_open = false;
 static bool g_palette_open = false;
 static bool g_confirm_copy_open = false;
+static std::thread g_scan_thread;
 static std::string g_confirm_src_label;
 static std::string g_confirm_dst_label;
 
@@ -656,10 +657,14 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     bool scanning = g_scanning.load();
     if (scanning) ImGui::BeginDisabled();
-    if (ImGui::Button(scanning ? "SCANNING..." : "SCAN FOLDERS", { -1, 32 }))
-        std::thread(scan_thread).detach();
-    if (scanning) ImGui::EndDisabled();
+    if (ImGui::Button(scanning ? "SCANNING..." : "SCAN FOLDERS", { -1, 32 })) {
+      if (g_scan_thread.joinable()) {
+        g_scan_thread.join();
+    }
+    g_scan_thread = std::thread(scan_thread);
+    }
 
+    if (scanning) ImGui::EndDisabled();
     const float AVATAR_SIZE = 24.f;
     const float ROW_H = AVATAR_SIZE + 6.f;
 
@@ -972,4 +977,16 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::End();
     ImGui::PopStyleVar(3);
     ImGui::PopStyleColor(2);
+}
+
+void ui_shutdown() {
+    if (g_bg_crimson_tex != (ImTextureID)0) {
+        GLuint tex = (GLuint)(uintptr_t)g_bg_crimson_tex;
+        glDeleteTextures(1, &tex);
+        g_bg_crimson_tex = (ImTextureID)0;
+    }
+
+    if (g_scan_thread.joinable()) {
+        g_scan_thread.join();
+    }
 }
