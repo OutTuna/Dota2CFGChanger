@@ -1,52 +1,141 @@
 cmake_minimum_required(VERSION 3.14)
+
 project(DotaManager)
+
+set(CMAKE_POLICY_DEFAULT_CMP0048 NEW)
+cmake_policy(SET CMP0077 NEW)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(APP_VERSION "0.0" CACHE STRING "App version, e.g. 1.7 or v1.7 ('v' optional)")
+string(REGEX REPLACE "^v" "" APP_VERSION_STRING "${APP_VERSION}")
+string(REPLACE "." ";" APP_VERSION_PARTS "${APP_VERSION_STRING}")
+list(GET APP_VERSION_PARTS 0 APP_VERSION_MAJOR)
+list(LENGTH APP_VERSION_PARTS APP_VERSION_PARTS_LEN)
+if(APP_VERSION_PARTS_LEN GREATER 1)
+    list(GET APP_VERSION_PARTS 1 APP_VERSION_MINOR)
+else()
+    set(APP_VERSION_MINOR "0")
+endif()
+
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(ZLIB_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(CPR_USE_SYSTEM_CURL OFF CACHE BOOL "" FORCE)
-set(CPR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+if(WIN32)
+    set(CURL_USE_SCHANNEL ON  CACHE BOOL "" FORCE)
+    set(CURL_USE_OPENSSL  OFF CACHE BOOL "" FORCE)
+else()
+    set(CURL_USE_OPENSSL  ON  CACHE BOOL "" FORCE)
+    set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
+endif()
+
+
+set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
+set(CPR_USE_SYSTEM_CURL      OFF CACHE BOOL "" FORCE)
+set(CPR_BUILD_TESTS          OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_DOCS          OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES      OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS         OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
 
-FetchContent_Declare(cpr GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.10.1)
+FetchContent_Declare(cpr   GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1)
 FetchContent_MakeAvailable(cpr)
 
-FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.2)
+FetchContent_Declare(json  GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3)
 FetchContent_MakeAvailable(json)
 
-FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
+FetchContent_Declare(glfw  GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
 FetchContent_MakeAvailable(glfw)
 
-FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.89.9)
+FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6)
 FetchContent_MakeAvailable(imgui)
 
-add_executable(DotaManager main.cpp)
+FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG master)
+FetchContent_MakeAvailable(stb)
 
-target_include_directories(DotaManager PRIVATE 
-    ${imgui_SOURCE_DIR} 
-    ${imgui_SOURCE_DIR}/backends
+add_executable(DotaManager
+        main.cpp
+        app_logic.cpp
+        app_logic.h
+        app_state.h
+        steam_api.cpp
+        steam_api.h
+        avatar.cpp
+        avatar.h
+        ui.cpp
+        ui.h
+        app_icon.h
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+        bg_crimson.h
 )
 
-target_sources(DotaManager PRIVATE
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+target_include_directories(DotaManager PRIVATE
+        ${CMAKE_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+        ${stb_SOURCE_DIR}
 )
 
 target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
+if(NOT WIN32)
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(DotaManager PRIVATE OpenGL::GL)
+    set(THREADS_PREFER_PTHREAD_FLAG ON)
+    find_package(Threads REQUIRED)
+    target_link_libraries(DotaManager PRIVATE Threads::Threads)
+endif()
 
 if(WIN32)
-    target_link_libraries(DotaManager PRIVATE opengl32)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/app.manifest")
+        configure_file(
+                "${CMAKE_SOURCE_DIR}/app.rc.in"
+                "${CMAKE_BINARY_DIR}/generated_app.rc"
+                @ONLY
+        )
+        target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated_app.rc")
+    endif()
+
+    target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
-    target_compile_options(DotaManager PRIVATE /utf-8)
+
+    if(MINGW)
+        target_link_options(DotaManager PRIVATE
+                -static
+                -static-libgcc
+                -static-libstdc++
+        )
+    endif()
+
+    if(MSVC)
+        target_compile_options(DotaManager PRIVATE /utf-8)
+        target_link_options(DotaManager PRIVATE /MANIFEST:NO)
+    else()
+        target_compile_options(DotaManager PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+    endif()
+endif()
+
+if(NOT WIN32)
+    include(GNUInstallDirs)
+    install(TARGETS DotaManager RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    if(EXISTS "${CMAKE_SOURCE_DIR}/packaging/linux/dotamanager.desktop")
+        install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/dotamanager.desktop"
+                DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+    endif()
+    if(EXISTS "${CMAKE_SOURCE_DIR}/packaging/linux/dotamanager.png")
+        install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/dotamanager.png"
+                DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps"
+                RENAME dotamanager.png)
+    endif()
 endif()
