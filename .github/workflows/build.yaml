@@ -1,8 +1,8 @@
-name: Build Windows
+name: Build Linux AppImage
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "linux" ]
     paths-ignore:
       - "README.md"
       - "LICENSE"
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
@@ -48,20 +48,10 @@ jobs:
             MAJOR_BUMP=false
             if [ "${{ github.event.inputs.force_major }}" = "true" ]; then
               MAJOR_BUMP=true
-              echo "Major-бамп форсирован через workflow_dispatch"
             fi
-            if echo "$COMMITS" | grep -qi 'BREAKING CHANGE'; then
-              MAJOR_BUMP=true
-              echo "Major-бамп: найден футер 'BREAKING CHANGE'"
-            fi
-            if echo "$COMMITS" | grep -qi '\[major\]'; then
-              MAJOR_BUMP=true
-              echo "Major-бамп: найдена метка '[major]'"
-            fi
-            if echo "$COMMITS" | grep -Eq '^[a-zA-Z]+(\([a-zA-Z0-9_-]+\))?!:'; then
-              MAJOR_BUMP=true
-              echo "Major-бамп: найден conventional-commit маркер '!'"
-            fi
+            if echo "$COMMITS" | grep -qi 'BREAKING CHANGE'; then MAJOR_BUMP=true; fi
+            if echo "$COMMITS" | grep -qi '\[major\]'; then MAJOR_BUMP=true; fi
+            if echo "$COMMITS" | grep -Eq '^[a-zA-Z]+(\([a-zA-Z0-9_-]+\))?!:'; then MAJOR_BUMP=true; fi
 
             VER="${LAST_TAG#v}"
             MAJOR="${VER%%.*}"
@@ -76,7 +66,7 @@ jobs:
             fi
           fi
 
-          echo "Следующая версия: $NEW_VERSION (major: $IS_MAJOR)"
+          echo "Следующая версия: $NEW_VERSION (major:$IS_MAJOR)"
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "is_major=$IS_MAJOR"   >> "$GITHUB_OUTPUT"
 
@@ -89,26 +79,57 @@ jobs:
           git tag "${{ steps.version.outputs.version }}"
           git push origin "${{ steps.version.outputs.version }}"
 
-      - name: Setup MSVC & Resource Compiler
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Create Resource File with Icon
-        shell: powershell
+      - name: Install Build Dependencies
         run: |
-          Set-Content -Path app_resource.rc -Value 'IDI_ICON1 ICON "icon.ico"' -Encoding ASCII
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential imagemagick file
 
       - name: Configure CMake
-        run: |
-          cmake -S . -B build -DCMAKE_RC_COMPILER=rc
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Prepare AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          cp build/DotaManager AppDir/usr/bin/
+
+          cat << 'EOF' > AppDir/usr/share/applications/Dota2CFGChanger.desktop
+          [Desktop Entry]
+          Type=Application
+          Name=Dota2 CFG Changer
+          Comment=Менеджер конфигов для Dota 2
+          Exec=DotaManager
+          Icon=dota2cfgchanger
+          Terminal=false
+          Categories=Game;Utility;
+          EOF
+          
+          convert icon.ico[0] AppDir/usr/share/icons/hicolor/256x256/apps/dota2cfgchanger.png
+
+      - name: Build AppImage using linuxdeploy
+        run: |
+          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
+          
+          chmod +x linuxdeploy*.AppImage
+          export OUTPUT=Dota2CFGChanger-x86_64.AppImage
+          ./linuxdeploy-x86_64.AppImage --appimage-extract-and-run \
+            --appdir AppDir \
+            --executable AppDir/usr/bin/DotaManager \
+            --desktop-file AppDir/usr/share/applications/Dota2CFGChanger.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/dota2cfgchanger.png \
+            --output appimage
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DotaManagerCPP
-          path: build/Release/DotaManager.exe
+          name: DotaManagerLinux
+          path: Dota2CFGChanger-x86_64.AppImage
 
       - name: Delete old latest release
         run: |
@@ -117,21 +138,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create rolling release (main)
+      - name: Create rolling release (linux branch)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Dota2 CFG Changer — Latest Build (${{ steps.version.outputs.version }})"
+          name: "Dota2 CFG Changer — Latest Linux Build (${{ steps.version.outputs.version }})"
           body: |
-            ## 🪟 Последняя автосборка с ветки `main`
+            ##Последняя автосборка с ветки `linux`
 
-            Соответствует версии `${{ steps.version.outputs.version }}` — стабильный
-            релиз с этим тегом и полным changelog'ом смотри отдельно.
+            Соответствует версии `${{ steps.version.outputs.version }}`.
 
-            ### Установка
-            1. Скачай `DotaManager.exe`
-            2. Запусти — установка не нужна
-          files: build/Release/DotaManager.exe
+            ### Установка (Linux)
+            1. Скачай `Dota2CFGChanger-x86_64.AppImage`
+            2. Выдай права на выполнение: `chmod +x Dota2CFGChanger-x86_64.AppImage`
+            3. Запусти двойным кликом или через терминал
+          files: Dota2CFGChanger-x86_64.AppImage
           draft: false
           prerelease: true
         env:
@@ -143,65 +164,22 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           name: >-
             ${{ steps.version.outputs.is_major == 'true'
-                && format('🚀 Dota2 CFG Changer {0} — крупное обновление', steps.version.outputs.version)
+                && format('Dota2 CFG Changer {0} — крупное обновление', steps.version.outputs.version)
                 || format('Dota2 CFG Changer {0}', steps.version.outputs.version) }}
           generate_release_notes: true
           body: |
-            ## Windows релиз ${{ steps.version.outputs.version }}
+            ## Linux релиз ${{ steps.version.outputs.version }}
 
-            ${{ steps.version.outputs.is_major == 'true' && ' Это major-версия: возможны несовместимые изменения относительно предыдущих релизов.' || '' }}
+            ${{ steps.version.outputs.is_major == 'true' && 'Это major-версия: возможны несовместимые изменения относительно предыдущих релизов.' || '' }}
 
-            ### Установка
-            1. Скачай `DotaManager.exe`
-            2. Разархивируй его в любую папку
-            3. Открой, и выбери путь
-            4. Нажми Scan
-            5. После выбери аккаунты, и нажми Copy
-            6. Profit
-          files: build/Release/DotaManager.exe
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-  manual-tag-release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup MSVC & Resource Compiler
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Create Resource File with Icon
-        shell: powershell
-        run: |
-          Set-Content -Path app_resource.rc -Value 'IDI_ICON1 ICON "icon.ico"' -Encoding ASCII
-
-      - name: Configure CMake
-        run: |
-          cmake -S . -B build -DCMAKE_RC_COMPILER=rc
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Create stable release (manual tag)
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "Dota2 CFG Changer ${{ github.ref_name }} — Windows (manual)"
-          generate_release_notes: true
-          body: |
-            ## Windows релиз ${{ github.ref_name }} (вручную запушенный тег)
-
-            ### Установка
-            1. Скачай `DotaManager.exe`
-            2. Разархивируй его в любую папку
-            3. Открой, и выбери путь
-            4. Нажми Scan
-            5. После выбери аккаунты, и нажми Copy
-            6. Profit
-          files: build/Release/DotaManager.exe
+            ### Установка (Linux)
+            1. Скачай файл `Dota2CFGChanger-x86_64.AppImage`
+            2. Сделай его исполняемым:
+               ```bash
+               chmod +x Dota2CFGChanger-x86_64.AppImage
+               ```
+            3. Запусти! AppImage содержит в себе все нужные библиотеки.
+          files: Dota2CFGChanger-x86_64.AppImage
           draft: false
           prerelease: false
         env:
