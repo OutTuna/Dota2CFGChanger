@@ -2,7 +2,7 @@ name: Build Linux AppImage
 
 on:
   push:
-    branches: [ "linux" ]
+    branches: [ "linux" ] 
     paths-ignore:
       - "README.md"
       - "LICENSE"
@@ -82,7 +82,8 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential imagemagick file
+          sudo apt-get install -y cmake build-essential imagemagick file \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev xorg-dev
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
