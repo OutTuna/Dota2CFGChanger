@@ -8,6 +8,7 @@ on:
       - "LICENSE"
       - ".gitignore"
       - ".gitattributes"
+      - "TODO.md"
   workflow_dispatch:
     inputs:
       force_major:
