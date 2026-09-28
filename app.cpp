@@ -6,11 +6,13 @@
 #include <algorithm>
 #include <mutex>
 
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shlobj.h>
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
+#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
