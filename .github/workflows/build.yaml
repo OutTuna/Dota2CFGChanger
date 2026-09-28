@@ -1,4 +1,4 @@
-name: Build & Release
+name: Build & Release (Windows + Linux)
 
 on:
   push:
@@ -41,10 +41,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
-      - run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc
-      - run: cmake --build build --config Release
-      - uses: actions/upload-artifact@v4
+      - name: Setup MSVC & Resource Compiler
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: DotaManager-Windows
           path: build/Release/DotaManager.exe
@@ -54,37 +58,74 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
       - name: Install Linux Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+          sudo apt-get install -y build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev imagemagick
+      
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
+      
+      - name: Install AppImage tools
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+      
+      - name: Create AppImage
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          cp build/DotaManager AppDir/usr/bin/
+          
+          cat > AppDir/usr/share/applications/dotamanager.desktop << 'EOF'
+          [Desktop Entry]
+          Name=Dota2 CFG Changer
+          Comment=Copy Dota 2 configs between Steam accounts
+          Exec=DotaManager
+          Icon=dotamanager
+          Type=Application
+          Categories=Utility;
+          EOF
+          
+          convert -size 256x256 xc:blue AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png 2>/dev/null || \
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png
+          
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+      
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DotaManager-Linux
-          path: build/DotaManager
+          path: DotaManager-*.AppImage
 
   release:
     needs: [compute-version, build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+      
       - name: Tag and release
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ needs.compute-version.outputs.version }}"
           git push origin "${{ needs.compute-version.outputs.version }}"
+          
           gh release delete latest --yes || true
+          
           gh release create latest \
             --title "Latest Build (${{ needs.compute-version.outputs.version }})" \
             --prerelease \
             DotaManager-Windows/DotaManager.exe \
-            DotaManager-Linux/DotaManager
+            DotaManager-Linux/*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
