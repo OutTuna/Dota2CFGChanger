@@ -56,13 +56,15 @@ jobs:
   build-linux:
     needs: compute-version
     runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Linux Dependencies
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev imagemagick
+          apt-get update
+          apt-get install -y build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev wget file desktop-file-utils
       
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -70,11 +72,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
       
-      - name: Install AppImage tools
+      - name: Download linuxdeploy
         run: |
-          mkdir -p tools
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O tools/linuxdeploy.AppImage
-          chmod +x tools/linuxdeploy.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
       
       - name: Create AppImage
         run: |
@@ -94,22 +95,18 @@ jobs:
           Categories=Utility;
           EOF
           
+          # Создаем иконку
           convert -size 256x256 xc:blue AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png 2>/dev/null || true
           
-          ./tools/linuxdeploy.AppImage --appdir AppDir --output appimage
+          # Собираем AppImage со ВСЕМИ зависимостями
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --output appimage \
+            --bundle-non-qt-libs
           
-          echo "=== All AppImage files in current dir ==="
-          ls -la *.AppImage 2>/dev/null || echo "No AppImage found"
-          
+          # Перемещаем AppImage в папку артефакта
           mkdir -p linux-artifact
-          for f in *.AppImage; do
-            if [[ "$f" != "linuxdeploy"* ]]; then
-              echo "Moving $f to linux-artifact/"
-              mv "$f" linux-artifact/
-            fi
-          done
-          
-          echo "=== linux-artifact contents ==="
+          mv *.AppImage linux-artifact/ 2>/dev/null || true
           ls -la linux-artifact/
       
       - name: Upload Artifact
@@ -129,14 +126,6 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
       
-      - name: Show downloaded files
-        run: |
-          echo "=== Windows artifact ==="
-          ls -la DotaManager-Windows/ 2>/dev/null || echo "Not found"
-          echo "=== Linux artifact ==="
-          ls -la DotaManager-Linux/ 2>/dev/null || echo "Not found"
-          find DotaManager-Linux -name "*.AppImage" -type f 2>/dev/null || echo "No AppImage found"
-      
       - name: Tag and release
         run: |
           git config user.name "github-actions[bot]"
@@ -146,7 +135,6 @@ jobs:
           
           git tag -d "$VERSION" 2>/dev/null || true
           git push origin :refs/tags/"$VERSION" 2>/dev/null || true
-          
           git tag "$VERSION"
           git push origin "$VERSION"
           
@@ -155,13 +143,10 @@ jobs:
           APPIMAGE_FILE=$(find DotaManager-Linux -name "*.AppImage" -type f | head -n1)
           
           if [ -z "$APPIMAGE_FILE" ]; then
-            echo "Error: AppImage file not found in DotaManager-Linux/"
+            echo "Error: AppImage not found"
             ls -la DotaManager-Linux/
             exit 1
           fi
-          
-          echo "Uploading AppImage: $APPIMAGE_FILE"
-          echo "Uploading Windows exe: DotaManager-Windows/DotaManager.exe"
           
           gh release create latest \
             --title "Latest Build ($VERSION)" \
