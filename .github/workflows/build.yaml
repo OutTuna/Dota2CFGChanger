@@ -56,18 +56,13 @@ jobs:
   build-linux:
     needs: compute-version
     runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Linux Dependencies
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          export TZ=Etc/UTC
-          apt-get update
-          apt-get install -y \
-            git \
+          sudo apt-get update
+          sudo apt-get install -y \
             build-essential \
             cmake \
             libgl1-mesa-dev \
@@ -80,8 +75,7 @@ jobs:
             wget \
             file \
             desktop-file-utils \
-            imagemagick \
-            libfuse2
+            imagemagick
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -89,10 +83,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
 
-      - name: Download linuxdeploy
+      - name: Download linuxdeploy (static binary - NO FUSE NEEDED)
         run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64
+          chmod +x linuxdeploy-x86_64
 
       - name: Create AppImage
         run: |
@@ -114,17 +108,13 @@ jobs:
 
           convert -size 256x256 xc:blue AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png 2>/dev/null || true
 
-          ./linuxdeploy-x86_64.AppImage \
+          # Используем статический бинарник (НЕ AppImage) - FUSE не нужен!
+          ./linuxdeploy-x86_64 \
             --appdir AppDir \
             --output appimage
 
           mkdir -p linux-artifact
-          for f in *.AppImage; do
-            if [[ "$f" != "linuxdeploy"* ]]; then
-              mv "$f" linux-artifact/
-            fi
-          done
-
+          mv *.AppImage linux-artifact/ 2>/dev/null || true
           ls -la linux-artifact/
 
       - name: Upload Artifact
