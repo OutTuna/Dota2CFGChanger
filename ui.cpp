@@ -12,6 +12,9 @@
 #include <GL/gl.h>
 #include <thread>
 #include <cmath>
+#include <fstream>
+#include <unordered_map>
+#include <nlohmann/json.hpp>
 
 static AppTheme g_current_theme = AppTheme::Dark;
 static bool g_settings_open = false;
@@ -27,7 +30,198 @@ static ImVec4 g_crimson_selected_bg = { 0.55f, 0.08f, 0.08f, 1.00f };
 static ImVec4 g_crimson_hovered_bg = { 0.30f, 0.06f, 0.06f, 1.00f };
 static ImVec4 g_crimson_text = { 0.95f, 0.88f, 0.88f, 1.00f };
 
-static void apply_dark(ImGuiStyle& st) {
+static const char* THEMES_DIR = "themes/";
+
+// Built-in metadata defaults. Overwritten by themes/theme_*.json when present.
+// Kept as fallback so the app still works with no themes/ folder at all.
+static ThemeData g_theme_data[5] = {
+    { "Dark (default)", 0, "Default dark theme", false, "" },
+    { "Indigo", 1, "Blue indigo theme with borders", false, "" },
+    { "Vermillion", 2, "Red vermillion theme", false, "" },
+    { "Classic Steam", 3, "Classic Steam green theme", false, "" },
+    { "Artem(Only)", 4, "Crimson theme with custom background and palette editor", true, "bg_crimson.png" },
+};
+
+static ImVec4 json_to_vec4(const nlohmann::json& arr, ImVec4 fallback) {
+    if (!arr.is_array() || arr.size() < 4) return fallback;
+    return ImVec4(arr[0].get<float>(), arr[1].get<float>(), arr[2].get<float>(), arr[3].get<float>());
+}
+
+static ImVec2 json_to_vec2(const nlohmann::json& arr, ImVec2 fallback) {
+    if (!arr.is_array() || arr.size() < 2) return fallback;
+    return ImVec2(arr[0].get<float>(), arr[1].get<float>());
+}
+
+static const char* theme_filename(AppTheme t) {
+    switch (t) {
+    case AppTheme::Dark: return "theme_dark.json";
+    case AppTheme::Indigo: return "theme_indigo.json";
+    case AppTheme::Vermillion: return "theme_vermillion.json";
+    case AppTheme::ClassicSteam: return "theme_classic_steam.json";
+    case AppTheme::Crimson: return "theme_crimson.json";
+    default: return "theme_dark.json";
+    }
+}
+
+static const std::unordered_map<std::string, ImGuiCol_>& color_name_map() {
+    static const std::unordered_map<std::string, ImGuiCol_> m = {
+        {"WindowBg", ImGuiCol_WindowBg}, {"ChildBg", ImGuiCol_ChildBg},
+        {"PopupBg", ImGuiCol_PopupBg}, {"Border", ImGuiCol_Border},
+        {"BorderShadow", ImGuiCol_BorderShadow}, {"FrameBg", ImGuiCol_FrameBg},
+        {"FrameBgHovered", ImGuiCol_FrameBgHovered}, {"FrameBgActive", ImGuiCol_FrameBgActive},
+        {"TitleBg", ImGuiCol_TitleBg}, {"TitleBgActive", ImGuiCol_TitleBgActive},
+        {"TitleBgCollapsed", ImGuiCol_TitleBgCollapsed}, {"MenuBarBg", ImGuiCol_MenuBarBg},
+        {"ScrollbarBg", ImGuiCol_ScrollbarBg}, {"ScrollbarGrab", ImGuiCol_ScrollbarGrab},
+        {"ScrollbarGrabHovered", ImGuiCol_ScrollbarGrabHovered}, {"ScrollbarGrabActive", ImGuiCol_ScrollbarGrabActive},
+        {"CheckMark", ImGuiCol_CheckMark}, {"SliderGrab", ImGuiCol_SliderGrab},
+        {"SliderGrabActive", ImGuiCol_SliderGrabActive}, {"Button", ImGuiCol_Button},
+        {"ButtonHovered", ImGuiCol_ButtonHovered}, {"ButtonActive", ImGuiCol_ButtonActive},
+        {"Header", ImGuiCol_Header}, {"HeaderHovered", ImGuiCol_HeaderHovered},
+        {"HeaderActive", ImGuiCol_HeaderActive}, {"Separator", ImGuiCol_Separator},
+        {"SeparatorHovered", ImGuiCol_SeparatorHovered}, {"SeparatorActive", ImGuiCol_SeparatorActive},
+        {"ResizeGrip", ImGuiCol_ResizeGrip}, {"ResizeGripHovered", ImGuiCol_ResizeGripHovered},
+        {"ResizeGripActive", ImGuiCol_ResizeGripActive}, {"Tab", ImGuiCol_Tab},
+        {"TabHovered", ImGuiCol_TabHovered}, {"TabActive", ImGuiCol_TabActive},
+        {"TabUnfocused", ImGuiCol_TabUnfocused}, {"TabUnfocusedActive", ImGuiCol_TabUnfocusedActive},
+        {"TextSelectedBg", ImGuiCol_TextSelectedBg}, {"NavHighlight", ImGuiCol_NavHighlight},
+        {"Text", ImGuiCol_Text}, {"TextDisabled", ImGuiCol_TextDisabled},
+    };
+    return m;
+}
+
+static void extract_theme_metadata(int idx, const nlohmann::json& j) {
+    if (idx < 0 || idx >= 5) return;
+    if (j.contains("name") && j["name"].is_string())
+        g_theme_data[idx].name = j["name"].get<std::string>();
+    if (j.contains("description") && j["description"].is_string())
+        g_theme_data[idx].description = j["description"].get<std::string>();
+    if (j.contains("has_palette_editor") && j["has_palette_editor"].is_boolean())
+        g_theme_data[idx].has_palette_editor = j["has_palette_editor"].get<bool>();
+    if (j.contains("background_image") && j["background_image"].is_string())
+        g_theme_data[idx].background_image = j["background_image"].get<std::string>();
+    if (j.contains("palette") && j["palette"].is_object()) {
+        auto& p = j["palette"];
+        if (p.contains("child_bg"))
+            g_theme_data[idx].palette_child_bg = json_to_vec4(p["child_bg"], g_theme_data[idx].palette_child_bg);
+        if (p.contains("selected_bg"))
+            g_theme_data[idx].palette_selected_bg = json_to_vec4(p["selected_bg"], g_theme_data[idx].palette_selected_bg);
+        if (p.contains("hovered_bg"))
+            g_theme_data[idx].palette_hovered_bg = json_to_vec4(p["hovered_bg"], g_theme_data[idx].palette_hovered_bg);
+        if (p.contains("text"))
+            g_theme_data[idx].palette_text = json_to_vec4(p["text"], g_theme_data[idx].palette_text);
+    }
+}
+
+// Reads metadata (name/description/palette/background) for ALL themes once,
+// so the settings list and palette getters work without switching theme first.
+// Does not touch the live ImGui style -- that only happens on actual apply.
+static void ensure_theme_metadata_loaded() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+
+    for (int i = 0; i < 5; ++i) {
+        std::ifstream f(std::string(THEMES_DIR) + theme_filename(static_cast<AppTheme>(i)));
+        if (!f.is_open()) continue;
+        try {
+            nlohmann::json j;
+            f >> j;
+            extract_theme_metadata(i, j);
+        } catch (...) {}
+    }
+}
+
+bool ui_load_theme_from_file(AppTheme theme, const std::string& base_path) {
+    ensure_theme_metadata_loaded();
+
+    int idx = static_cast<int>(theme);
+    if (idx < 0 || idx >= 5) return false;
+
+    std::string path = base_path + theme_filename(theme);
+    std::ifstream f(path);
+    if (!f.is_open()) return false;
+
+    nlohmann::json j;
+    try {
+        f >> j;
+    } catch (...) {
+        return false;
+    }
+
+    extract_theme_metadata(idx, j);
+
+    ImGuiStyle& st = ImGui::GetStyle();
+
+    if (j.contains("style") && j["style"].is_object()) {
+        auto& sj = j["style"];
+        auto get_float = [&](const char* key, float& target) {
+            if (sj.contains(key) && sj[key].is_number()) target = sj[key].get<float>();
+        };
+        get_float("WindowRounding", st.WindowRounding);
+        get_float("ChildRounding", st.ChildRounding);
+        get_float("FrameRounding", st.FrameRounding);
+        get_float("PopupRounding", st.PopupRounding);
+        get_float("ScrollbarRounding", st.ScrollbarRounding);
+        get_float("GrabRounding", st.GrabRounding);
+        get_float("TabRounding", st.TabRounding);
+        get_float("WindowBorderSize", st.WindowBorderSize);
+        get_float("ChildBorderSize", st.ChildBorderSize);
+        get_float("PopupBorderSize", st.PopupBorderSize);
+        get_float("FrameBorderSize", st.FrameBorderSize);
+        get_float("ScrollbarSize", st.ScrollbarSize);
+        get_float("GrabMinSize", st.GrabMinSize);
+        get_float("IndentSpacing", st.IndentSpacing);
+
+        if (sj.contains("WindowPadding")) st.WindowPadding = json_to_vec2(sj["WindowPadding"], st.WindowPadding);
+        if (sj.contains("FramePadding")) st.FramePadding = json_to_vec2(sj["FramePadding"], st.FramePadding);
+        if (sj.contains("ItemSpacing")) st.ItemSpacing = json_to_vec2(sj["ItemSpacing"], st.ItemSpacing);
+        if (sj.contains("ItemInnerSpacing")) st.ItemInnerSpacing = json_to_vec2(sj["ItemInnerSpacing"], st.ItemInnerSpacing);
+        if (sj.contains("WindowMinSize")) st.WindowMinSize = json_to_vec2(sj["WindowMinSize"], st.WindowMinSize);
+    }
+
+    if (j.contains("colors") && j["colors"].is_object()) {
+        const auto& cmap = color_name_map();
+        for (auto& [key, value] : j["colors"].items()) {
+            auto it = cmap.find(key);
+            if (it != cmap.end()) {
+                st.Colors[it->second] = json_to_vec4(value, st.Colors[it->second]);
+            }
+        }
+    }
+
+    return true;
+}
+
+void ui_get_theme_palette(AppTheme theme, ImVec4& child_bg, ImVec4& selected_bg, ImVec4& hovered_bg, ImVec4& text) {
+    ensure_theme_metadata_loaded();
+    int idx = static_cast<int>(theme);
+    if (idx < 0 || idx >= 5) {
+        child_bg = {}; selected_bg = {}; hovered_bg = {}; text = {};
+        return;
+    }
+    child_bg = g_theme_data[idx].palette_child_bg;
+    selected_bg = g_theme_data[idx].palette_selected_bg;
+    hovered_bg = g_theme_data[idx].palette_hovered_bg;
+    text = g_theme_data[idx].palette_text;
+}
+
+bool ui_theme_has_palette_editor(AppTheme theme) {
+    ensure_theme_metadata_loaded();
+    int idx = static_cast<int>(theme);
+    if (idx < 0 || idx >= 5) return false;
+    return g_theme_data[idx].has_palette_editor;
+}
+
+const char* ui_theme_background_image(AppTheme theme) {
+    ensure_theme_metadata_loaded();
+    int idx = static_cast<int>(theme);
+    if (idx < 0 || idx >= 5 || g_theme_data[idx].background_image.empty()) return nullptr;
+    return g_theme_data[idx].background_image.c_str();
+}
+
+// ---- Built-in fallbacks, used only when the matching themes/*.json is missing or invalid ----
+
+static void apply_dark_builtin(ImGuiStyle& st) {
     st.WindowRounding = 8.f;
     st.ChildRounding = 6.f;
     st.FrameRounding = 5.f;
@@ -87,7 +281,7 @@ static void apply_dark(ImGuiStyle& st) {
     c[ImGuiCol_TextDisabled] = { 0.45f, 0.45f, 0.50f, 1.00f };
 }
 
-static void apply_indigo(ImGuiStyle& st) {
+static void apply_indigo_builtin(ImGuiStyle& st) {
     const float r = 2.f;
     st.WindowBorderSize = 1.f;
     st.FrameBorderSize = 1.f;
@@ -148,7 +342,7 @@ static void apply_indigo(ImGuiStyle& st) {
     c[ImGuiCol_NavHighlight] = { 0.26f, 0.59f, 0.98f, 1.00f };
 }
 
-static void apply_vermillion(ImGuiStyle& st) {
+static void apply_vermillion_builtin(ImGuiStyle& st) {
     const float r = 2.f;
     st.WindowBorderSize = 1.f;
     st.FrameBorderSize = 1.f;
@@ -206,7 +400,7 @@ static void apply_vermillion(ImGuiStyle& st) {
     c[ImGuiCol_NavHighlight] = { 0.45f, 0.45f, 0.90f, 0.80f };
 }
 
-static void apply_classic_steam(ImGuiStyle& st) {
+static void apply_classic_steam_builtin(ImGuiStyle& st) {
     st.WindowRounding = 0.f;
     st.ChildRounding = 0.f;
     st.FrameRounding = 0.f;
@@ -265,25 +459,7 @@ static void apply_classic_steam(ImGuiStyle& st) {
     c[ImGuiCol_NavHighlight] = { 0.588f, 0.537f, 0.176f, 1.00f };
 }
 
-static void load_bg_crimson() {
-    if (g_bg_crimson_tex != (ImTextureID)0) return;
-    int w = 0, h = 0, ch = 0;
-    unsigned char* pixels = stbi_load_from_memory(BG_PNG, BG_PNG_LEN, &w, &h, &ch, 4);
-    if (!pixels) return;
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    stbi_image_free(pixels);
-    g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
-}
-
-static void apply_crimson(ImGuiStyle& st) {
+static void apply_crimson_builtin(ImGuiStyle& st) {
     st.WindowRounding = 4.f;
     st.ChildRounding = 3.f;
     st.FrameRounding = 3.f;
@@ -343,22 +519,72 @@ static void apply_crimson(ImGuiStyle& st) {
     c[ImGuiCol_TextDisabled] = { 0.40f, 0.28f, 0.28f, 1.00f };
 }
 
+// Loads the current theme's background texture: an external file next to
+// the executable (themes/<background_image>) if the theme declares one and
+// it can be found, otherwise the embedded PNG baked into bg_crimson.h.
+// Cached once -- switching between two backgrounds in the same run isn't
+// supported today, only Crimson uses this at the moment.
+static void load_theme_background(AppTheme t) {
+    if (g_bg_crimson_tex != (ImTextureID)0) return;
+
+    int idx = static_cast<int>(t);
+    std::string custom_path;
+    if (idx >= 0 && idx < 5 && !g_theme_data[idx].background_image.empty()) {
+        custom_path = std::string(THEMES_DIR) + g_theme_data[idx].background_image;
+    }
+
+    int w = 0, h = 0, ch = 0;
+    unsigned char* pixels = nullptr;
+
+    if (!custom_path.empty()) {
+        pixels = stbi_load(custom_path.c_str(), &w, &h, &ch, 4);
+    }
+    if (!pixels) {
+        pixels = stbi_load_from_memory(BG_PNG, BG_PNG_LEN, &w, &h, &ch, 4);
+    }
+    if (!pixels) return;
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(pixels);
+    g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
+}
+
 void ui_apply_theme(AppTheme t) {
     g_current_theme = t;
     g_theme = static_cast<int>(t);
     save_settings();
 
-    ImGuiStyle& st = ImGui::GetStyle();
-    switch (t) {
-    case AppTheme::Indigo: apply_indigo(st); break;
-    case AppTheme::Vermillion: apply_vermillion(st); break;
-    case AppTheme::ClassicSteam: apply_classic_steam(st); break;
-    case AppTheme::Crimson: apply_crimson(st); load_bg_crimson(); break;
-    default: apply_dark(st); break;
+    if (!ui_load_theme_from_file(t, THEMES_DIR)) {
+        ImGuiStyle& st = ImGui::GetStyle();
+        switch (t) {
+        case AppTheme::Indigo: apply_indigo_builtin(st); break;
+        case AppTheme::Vermillion: apply_vermillion_builtin(st); break;
+        case AppTheme::ClassicSteam: apply_classic_steam_builtin(st); break;
+        case AppTheme::Crimson: apply_crimson_builtin(st); break;
+        default: apply_dark_builtin(st); break;
+        }
+    }
+
+    if (ui_theme_background_image(t)) {
+        load_theme_background(t);
+    }
+
+    if (ui_theme_has_palette_editor(t)) {
+        ui_get_theme_palette(t, g_crimson_child_bg, g_crimson_selected_bg, g_crimson_hovered_bg, g_crimson_text);
     }
 }
 
 static void render_settings_panel(ImVec2 ds) {
+    ensure_theme_metadata_loaded();
+
     ImGui::SetNextWindowPos({ ds.x - 210.f, 34.f });
     ImGui::SetNextWindowSize({ 200.f, 0.f });
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
@@ -375,25 +601,26 @@ static void render_settings_panel(ImVec2 ds) {
     ImGui::TextDisabled("Тема оформления");
     ImGui::Spacing();
 
-    struct ThemeEntry { const char* name; AppTheme id; };
-    ThemeEntry themes[] = {
-        { "Dark (default)", AppTheme::Dark },
-        { "Indigo", AppTheme::Indigo },
-        { "Vermillion", AppTheme::Vermillion },
-        { "Classic Steam", AppTheme::ClassicSteam },
-        { "Artem(Only)", AppTheme::Crimson },
+    static const AppTheme themes[] = {
+        AppTheme::Dark, AppTheme::Indigo, AppTheme::Vermillion,
+        AppTheme::ClassicSteam, AppTheme::Crimson,
     };
 
-    for (auto& e : themes) {
-        bool sel = (g_current_theme == e.id);
+    for (AppTheme id : themes) {
+        int idx = static_cast<int>(id);
+        const std::string& label = g_theme_data[idx].name;
+        bool sel = (g_current_theme == id);
         ImGui::PushStyleColor(ImGuiCol_Text,
             sel ? ImVec4{ 0.92f, 0.92f, 0.94f, 1.f }
                 : ImVec4{ 0.55f, 0.55f, 0.60f, 1.f });
-        if (ImGui::Selectable(e.name, sel)) {
-            ui_apply_theme(e.id);
+        if (ImGui::Selectable(label.c_str(), sel)) {
+            ui_apply_theme(id);
             g_settings_open = false;
         }
         ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered() && !g_theme_data[idx].description.empty()) {
+            ImGui::SetTooltip("%s", g_theme_data[idx].description.c_str());
+        }
     }
 
     if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
@@ -406,6 +633,9 @@ static void render_settings_panel(ImVec2 ds) {
 }
 
 static void render_palette_panel(ImVec2 ds) {
+    int idx = static_cast<int>(g_current_theme);
+    std::string title = "Цвета списков (" + g_theme_data[idx].name + ")";
+
     ImGui::SetNextWindowPos({ ds.x - 250.f, 34.f });
     ImGui::SetNextWindowSize({ 238.f, 0.f });
     ImGui::SetNextWindowBgAlpha(1.0f);
@@ -422,7 +652,7 @@ static void render_palette_panel(ImVec2 ds) {
         ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_AlwaysAutoResize);
 
-    ImGui::TextDisabled("Цвета списков (Crimson)");
+    ImGui::TextDisabled("%s", title.c_str());
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -450,10 +680,7 @@ static void render_palette_panel(ImVec2 ds) {
     ImGui::Spacing();
 
     if (ImGui::Button("Сбросить", { -1, 0 })) {
-        g_crimson_child_bg = { 0.12f, 0.05f, 0.05f, 1.00f };
-        g_crimson_selected_bg = { 0.55f, 0.08f, 0.08f, 1.00f };
-        g_crimson_hovered_bg = { 0.30f, 0.06f, 0.06f, 1.00f };
-        g_crimson_text = { 0.95f, 0.88f, 0.88f, 1.00f };
+        ui_get_theme_palette(g_current_theme, g_crimson_child_bg, g_crimson_selected_bg, g_crimson_hovered_bg, g_crimson_text);
     }
 
     if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem |
@@ -521,7 +748,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::SetNextWindowSize(ds);
     ImGui::Begin("Main", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
-    if (g_current_theme == AppTheme::Crimson && g_bg_crimson_tex != (ImTextureID)0) {
+    if (ui_theme_background_image(g_current_theme) && g_bg_crimson_tex != (ImTextureID)0) {
         ImVec2 wpos = ImGui::GetWindowPos();
         ImGui::GetWindowDrawList()->AddImage(
             g_bg_crimson_tex,
@@ -558,7 +785,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6.f);
     ImGui::TextDisabled("by OutTuna");
 
-    if (g_current_theme == AppTheme::Crimson) {
+    if (ui_theme_has_palette_editor(g_current_theme)) {
         ImGui::SameLine(ds.x - 70.f);
         ImGui::PushStyleColor(ImGuiCol_Button, { 0.00f, 0.00f, 0.00f, 0.00f });
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.40f, 0.08f, 0.08f, 1.00f });
@@ -689,7 +916,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         const char* child_id)
     {
         int selected = selected_atomic.load();
-        bool crimson = (g_current_theme == AppTheme::Crimson);
+        bool use_custom_palette = ui_theme_has_palette_editor(g_current_theme);
 
         ImGui::BeginChild(child_id, { 0, list_h }, true);
 
@@ -703,7 +930,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
             ImVec2 row_pos = ImGui::GetCursorScreenPos();
 
-            if (crimson) {
+            if (use_custom_palette) {
                 ImVec4 row_col = sel ? g_crimson_selected_bg : g_crimson_child_bg;
                 ImGui::GetWindowDrawList()->AddRectFilled(
                     row_pos,
@@ -711,7 +938,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
                     ImGui::ColorConvertFloat4ToU32(row_col));
             }
 
-            if (crimson) {
+            if (use_custom_palette) {
                 ImGui::PushStyleColor(ImGuiCol_Header, g_crimson_selected_bg);
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered, g_crimson_hovered_bg);
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive, g_crimson_selected_bg);
@@ -723,7 +950,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
                 selected_atomic.store(i);
             }
 
-            if (crimson) ImGui::PopStyleColor(3);
+            if (use_custom_palette) ImGui::PopStyleColor(3);
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
             const float pad = 5.f;
@@ -754,7 +981,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
             float text_y = row_pos.y + (ROW_H - ImGui::GetTextLineHeight()) * 0.5f;
 
             ImU32 text_col;
-            if (crimson) {
+            if (use_custom_palette) {
                 ImVec4 tc = g_crimson_text;
                 text_col = IM_COL32(
                     (int)(tc.x*255), (int)(tc.y*255),
@@ -803,7 +1030,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (g_settings_open)
         render_settings_panel(ds);
 
-    if (g_palette_open && g_current_theme == AppTheme::Crimson)
+    if (g_palette_open && ui_theme_has_palette_editor(g_current_theme))
         render_palette_panel(ds);
 
     if (g_confirm_copy_open)
