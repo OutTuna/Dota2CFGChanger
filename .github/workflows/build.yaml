@@ -80,7 +80,8 @@ jobs:
             wget \
             file \
             desktop-file-utils \
-            imagemagick
+            imagemagick \
+            libfuse2
 
       - name: Configure CMake
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -88,13 +89,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
 
-      - name: Download and extract linuxdeploy (no FUSE needed)
+      - name: Download linuxdeploy
         run: |
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
-          # Извлекаем linuxdeploy чтобы обойти отсутствие FUSE в Docker
-          ./linuxdeploy-x86_64.AppImage --appimage-extract
-          mv squashfs-root linuxdeploy-extracted
 
       - name: Create AppImage
         run: |
@@ -116,21 +114,17 @@ jobs:
 
           convert -size 256x256 xc:blue AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png 2>/dev/null || true
 
-          # Запускаем извлечённый linuxdeploy (не требует FUSE)
-          ./linuxdeploy-extracted/AppRun \
+          ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
-            --output appimage \
-            --bundle-non-qt-libs
+            --output appimage
 
           mkdir -p linux-artifact
           for f in *.AppImage; do
             if [[ "$f" != "linuxdeploy"* ]]; then
-              echo "Moving $f to linux-artifact/"
               mv "$f" linux-artifact/
             fi
           done
 
-          echo "=== linux-artifact contents ==="
           ls -la linux-artifact/
 
       - name: Upload Artifact
