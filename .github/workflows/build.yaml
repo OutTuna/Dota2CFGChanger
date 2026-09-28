@@ -72,8 +72,9 @@ jobs:
       
       - name: Install AppImage tools
         run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
+          mkdir -p tools
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O tools/linuxdeploy.AppImage
+          chmod +x tools/linuxdeploy.AppImage
       
       - name: Create AppImage
         run: |
@@ -95,16 +96,19 @@ jobs:
           
           convert -size 256x256 xc:blue AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png 2>/dev/null || true
           
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          ./tools/linuxdeploy.AppImage --appdir AppDir --output appimage
           
-          echo "=== Files in current directory ==="
-          ls -la *.AppImage 2>/dev/null || echo "No AppImage in current dir"
-          find . -name "*.AppImage" -type f
+          echo "=== All AppImage files in current dir ==="
+          ls -la *.AppImage 2>/dev/null || echo "No AppImage found"
           
           mkdir -p linux-artifact
-          mv DotaManager*.AppImage linux-artifact/ 2>/dev/null || cp *.AppImage linux-artifact/ 2>/dev/null || echo "No AppImage found"
+          for f in *.AppImage; do
+            if [[ "$f" != "linuxdeploy"* ]]; then
+              echo "Moving $f to linux-artifact/"
+              mv "$f" linux-artifact/
+            fi
+          done
           
-          # Показываем что переместили
           echo "=== linux-artifact contents ==="
           ls -la linux-artifact/
       
@@ -119,6 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -135,10 +141,16 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ needs.compute-version.outputs.version }}"
-          git push origin "${{ needs.compute-version.outputs.version }}"
           
-          gh release delete latest --yes || true
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          
+          git tag -d "$VERSION" 2>/dev/null || true
+          git push origin :refs/tags/"$VERSION" 2>/dev/null || true
+          
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          
+          gh release delete latest --yes 2>/dev/null || true
           
           APPIMAGE_FILE=$(find DotaManager-Linux -name "*.AppImage" -type f | head -n1)
           
@@ -149,10 +161,12 @@ jobs:
           fi
           
           echo "Uploading AppImage: $APPIMAGE_FILE"
+          echo "Uploading Windows exe: DotaManager-Windows/DotaManager.exe"
           
           gh release create latest \
-            --title "Latest Build (${{ needs.compute-version.outputs.version }})" \
+            --title "Latest Build ($VERSION)" \
             --prerelease \
+            --notes "Automated build from commit ${{ github.sha }}" \
             DotaManager-Windows/DotaManager.exe \
             "$APPIMAGE_FILE"
         env:
