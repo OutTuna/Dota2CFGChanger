@@ -1,4 +1,4 @@
-1. Fix linux port(add FONT's support(JetBrains))
+1. Fix linux port(add FONT's support(JetBrains))✅
 2. Add More Localizations
 3. Add supporting NixOS
 4. Maybe upload file to AUR
