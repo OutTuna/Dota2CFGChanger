@@ -1,6 +1,5 @@
 #include "ui.h"
-#include "app_state.h"
-#include "app_logic.h"
+#include "app.h"
 #include "avatar.h"
 #include "bg_crimson.h"
 #include "backends/imgui_impl_glfw.h"

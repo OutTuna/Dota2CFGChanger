@@ -30,4 +30,15 @@
 *.exe
 *.out
 *.app
+
+# Build directories
+build/
+build-*/
+build-linux-check/
+build-syntax/
+
+# IDE
 .idea/
+.vscode/
+*.swp
+*.swo
