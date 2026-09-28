@@ -45,3 +45,22 @@ struct SuccessPopupState {
 };
 
 inline SuccessPopupState g_success;
+
+void load_settings();
+void save_settings();
+void scan_thread();
+void copy_config();
+std::string browse_for_folder(const char* title);
+
+struct FontPaths {
+    std::string regular;
+    std::string bold;
+};
+
+FontPaths find_font_paths();
+
+namespace steam_api {
+long long steam3_to_64(const std::string& steam3_id);
+std::string fetch_profile_xml(long long steam64, int timeout_ms);
+std::string extract_tag(const std::string& xml, const std::string& tag);
+}

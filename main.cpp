@@ -2,11 +2,10 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
-#include "app_logic.h"
+#include "app.h"
 #include "avatar.h"
 #include "ui.h"
 #include "app_icon.h"
-#include "app_state.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -43,57 +42,23 @@ int main(int, char**) {
 
     ui_apply_theme(static_cast<AppTheme>(g_theme));
 
-    static const char* kRegularFontCandidates[] = {
-#ifdef _WIN32
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\segoeui.ttf",
-#elif defined(__APPLE__)
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-#else
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-#endif
-    };
-    static const char* kBoldFontCandidates[] = {
-#ifdef _WIN32
-        "C:\\Windows\\Fonts\\arialbd.ttf",
-        "C:\\Windows\\Fonts\\segoeuib.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf",
-#elif defined(__APPLE__)
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/Library/Fonts/Arial Bold.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-#else
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-#endif
-    };
-
     ImGuiIO& io = ImGui::GetIO();
 
-    auto load_first_available = [&](const char* const* candidates, size_t count, float size) -> ImFont* {
-        for (size_t i = 0; i < count; ++i) {
-            ImFont* f = io.Fonts->AddFontFromFileTTF(
-                candidates[i], size, NULL, io.Fonts->GetGlyphRangesCyrillic());
-            if (f) return f;
-        }
-        return nullptr;
-    };
+    FontPaths fonts = find_font_paths();
+    ImFont* font_default = nullptr;
+    ImFont* font_big = nullptr;
 
-    ImFont* font_default = load_first_available(
-        kRegularFontCandidates,
-        sizeof(kRegularFontCandidates) / sizeof(kRegularFontCandidates[0]),
-        16.0f);
-    ImFont* font_big = load_first_available(
-        kBoldFontCandidates,
-        sizeof(kBoldFontCandidates) / sizeof(kBoldFontCandidates[0]),
-        34.0f);
+    if (!fonts.regular.empty()) {
+        font_default = io.Fonts->AddFontFromFileTTF(
+            fonts.regular.c_str(), 16.0f, NULL, io.Fonts->GetGlyphRangesCyrillic());
+    }
+    if (!fonts.bold.empty()) {
+        font_big = io.Fonts->AddFontFromFileTTF(
+            fonts.bold.c_str(), 34.0f, NULL, io.Fonts->GetGlyphRangesCyrillic());
+    }
 
     if (!font_default) font_default = io.Fonts->AddFontDefault();
-    if (!font_big)      font_big     = font_default;
+    if (!font_big)     font_big     = font_default;
     (void)font_default;
 
     while (!glfwWindowShouldClose(window)) {

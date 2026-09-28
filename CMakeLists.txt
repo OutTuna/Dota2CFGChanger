@@ -61,11 +61,8 @@ FetchContent_MakeAvailable(stb)
 
 add_executable(DotaManager
         main.cpp
-        app_logic.cpp
-        app_logic.h
-        app_state.h
-        steam_api.cpp
-        steam_api.h
+        app.cpp
+        app.h
         avatar.cpp
         avatar.h
         ui.cpp
