@@ -91,6 +91,15 @@ if(NOT WIN32)
     target_link_libraries(DotaManager PRIVATE OpenGL::GL)
 endif()
 
+if(EXISTS "${CMAKE_SOURCE_DIR}/themes")
+    add_custom_command(TARGET DotaManager POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${CMAKE_SOURCE_DIR}/themes"
+                    "$<TARGET_FILE_DIR:DotaManager>/themes"
+            COMMENT "Copying themes/ next to the built executable"
+    )
+endif()
+
 if(WIN32)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/app.manifest")
         configure_file(
