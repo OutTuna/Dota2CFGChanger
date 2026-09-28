@@ -5,6 +5,7 @@
 #include <fstream>
 #include <algorithm>
 #include <mutex>
+#include <cstdio>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -68,6 +69,7 @@ std::string extract_tag(const std::string& xml, const std::string& tag) {
 }
 
 std::string browse_for_folder(const char* title) {
+#ifdef _WIN32
     std::string result;
     IFileOpenDialog* pfd = nullptr;
     if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, NULL,
@@ -94,6 +96,34 @@ std::string browse_for_folder(const char* title) {
         pfd->Release();
     }
     return result;
+
+#elif defined(__linux__)
+    std::string cmd = "zenity --file-selection --directory --title=\"" + std::string(title) + "\" 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    
+    if (!pipe) {
+        cmd = "kdialog --getexistingdirectory --title=\"" + std::string(title) + "\" 2>/dev/null";
+        pipe = popen(cmd.c_str(), "r");
+    }
+    
+    if (!pipe) return "";
+    
+    char buffer[512];
+    std::string result;
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result += buffer;
+    }
+    pclose(pipe);
+    
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
+        result.pop_back();
+    }
+    
+    return result;
+
+#else
+    return "";
+#endif
 }
 
 static std::string find_first_existing(const std::vector<fs::path>& paths) {
