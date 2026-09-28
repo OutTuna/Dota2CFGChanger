@@ -9,6 +9,16 @@ on:
       - ".gitignore"
       - "TODO.md"
   workflow_dispatch:
+    inputs:
+      force_major:
+        description: "Force a major version bump (vX.Y -> v(X+1).0)"
+        type: boolean
+        default: false
+
+# Two overlapping runs would race on tags / the "latest" release.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -24,17 +34,9 @@ jobs:
           fetch-depth: 0
       - name: Compute version
         id: version
-        shell: bash
-        run: |
-          LAST_TAG=$(git tag --list 'v[0-9]*.[0-9]*' | sort -V | tail -n1)
-          if [ -z "$LAST_TAG" ]; then
-            echo "version=v1.0" >> "$GITHUB_OUTPUT"
-          else
-            VER="${LAST_TAG#v}"
-            MAJOR="${VER%%.*}"
-            MINOR="${VER##*.}"
-            echo "version=v${MAJOR}.$((MINOR + 1))" >> "$GITHUB_OUTPUT"
-          fi
+        env:
+          FORCE_MAJOR: ${{ inputs.force_major || 'false' }}
+        run: bash scripts/compute-next-version.sh
 
   build-windows:
     needs: compute-version
@@ -44,7 +46,7 @@ jobs:
       - name: Setup MSVC & Resource Compiler
         uses: ilammy/msvc-dev-cmd@v1
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc
+        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
       - name: Build
         run: cmake --build build --config Release
       - name: Upload Artifact
@@ -52,10 +54,16 @@ jobs:
         with:
           name: DotaManager-Windows
           path: build/Release/DotaManager.exe
+          if-no-files-found: error
 
   build-linux:
     needs: compute-version
     runs-on: ubuntu-latest
+    env:
+      # linuxdeploy and its plugin are themselves AppImages; runners have no
+      # FUSE, so run them by self-extraction instead of mounting.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+      ARCH: x86_64
     steps:
       - uses: actions/checkout@v4
 
@@ -63,40 +71,32 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            cmake \
-            libgl1-mesa-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libssl-dev \
-            wget \
-            file \
-            desktop-file-utils \
+            build-essential cmake \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libssl-dev \
             imagemagick
 
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
 
       - name: Build
-        run: cmake --build build --config Release -j$(nproc)
+        run: cmake --build build --config Release -j"$(nproc)"
 
-      - name: Download linuxdeploy (static binary - NO FUSE NEEDED)
+      - name: Download linuxdeploy + AppImage plugin
         run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64
-          chmod +x linuxdeploy-x86_64
+          mkdir -p "$HOME/ld"
+          base=https://github.com/linuxdeploy
+          wget -q -O "$HOME/ld/linuxdeploy" \
+            "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          # linuxdeploy finds the plugin by this exact name on PATH
+          wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
+            "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
+          chmod +x "$HOME/ld/"*
+          echo "$HOME/ld" >> "$GITHUB_PATH"
 
       - name: Create AppImage
         run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-
-          cp build/DotaManager AppDir/usr/bin/
-
-          cat > AppDir/usr/share/applications/dotamanager.desktop << 'EOF'
+          cat > dotamanager.desktop << 'EOF'
           [Desktop Entry]
           Name=Dota2 CFG Changer
           Comment=Copy Dota 2 configs between Steam accounts
@@ -106,26 +106,33 @@ jobs:
           Categories=Utility;
           EOF
 
-          convert -size 256x256 xc:blue AppDir/usr/share/icons/hicolor/256x256/apps/dotamanager.png 2>/dev/null || true
+          # Real app icon; solid-colour fallback so packaging never fails on this.
+          convert "Icon.ico[0]" -resize 256x256 dotamanager.png 2>/dev/null \
+            || convert -size 256x256 xc:blue dotamanager.png
 
-          # Используем статический бинарник (НЕ AppImage) - FUSE не нужен!
-          ./linuxdeploy-x86_64 \
+          linuxdeploy \
             --appdir AppDir \
+            --executable build/DotaManager \
+            --desktop-file dotamanager.desktop \
+            --icon-file dotamanager.png \
             --output appimage
 
           mkdir -p linux-artifact
-          mv *.AppImage linux-artifact/ 2>/dev/null || true
+          mv ./*.AppImage linux-artifact/
           ls -la linux-artifact/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: DotaManager-Linux
-          path: linux-artifact/
+          path: linux-artifact/*.AppImage
+          if-no-files-found: error
 
   release:
     needs: [compute-version, build-windows, build-linux]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -135,32 +142,30 @@ jobs:
         uses: actions/download-artifact@v4
 
       - name: Tag and release
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          VERSION="${{ needs.compute-version.outputs.version }}"
-
-          git tag -d "$VERSION" 2>/dev/null || true
-          git push origin :refs/tags/"$VERSION" 2>/dev/null || true
-          git tag "$VERSION"
-          git push origin "$VERSION"
-
-          gh release delete latest --yes 2>/dev/null || true
-
           APPIMAGE_FILE=$(find DotaManager-Linux -name "*.AppImage" -type f | head -n1)
-
           if [ -z "$APPIMAGE_FILE" ]; then
             echo "Error: AppImage not found"
             ls -la DotaManager-Linux/
             exit 1
           fi
 
+          git tag "$VERSION"
+          git push origin "$VERSION"
+
+          # --cleanup-tag also removes the old "latest" git tag, otherwise the
+          # new release would stay pinned to a stale commit.
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+
           gh release create latest \
+            --target "$GITHUB_SHA" \
             --title "Latest Build ($VERSION)" \
             --prerelease \
-            --notes "Automated build from commit ${{ github.sha }}" \
+            --notes "Automated build $VERSION from commit $GITHUB_SHA" \
             DotaManager-Windows/DotaManager.exe \
             "$APPIMAGE_FILE"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
