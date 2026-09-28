@@ -67,6 +67,7 @@ jobs:
           export TZ=Etc/UTC
           apt-get update
           apt-get install -y \
+            git \
             build-essential \
             cmake \
             libgl1-mesa-dev \
