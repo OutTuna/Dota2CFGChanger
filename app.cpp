@@ -1,5 +1,4 @@
-#include "app_logic.h"
-#include "app_state.h"
+#include "app.h"
 #include <cpr/cpr.h>
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -7,13 +6,11 @@
 #include <algorithm>
 #include <mutex>
 
-#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shlobj.h>
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
-#endif
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
@@ -22,7 +19,52 @@ static const char* USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-#ifdef _WIN32
+namespace steam_api {
+
+static const long long STEAM64_BASE = 76561197960265728LL;
+
+long long steam3_to_64(const std::string& steam3_id) {
+    try {
+        return std::stoll(steam3_id) + STEAM64_BASE;
+    } catch (...) {
+        return 0;
+    }
+}
+
+std::string fetch_profile_xml(long long steam64, int timeout_ms) {
+    if (steam64 <= 0) return {};
+    try {
+        auto r = cpr::Get(
+            cpr::Url{ "https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1" },
+            cpr::Timeout{ timeout_ms });
+        if (r.status_code == 200) return r.text;
+    } catch (...) {}
+    return {};
+}
+
+std::string extract_tag(const std::string& xml, const std::string& tag) {
+    const std::string open  = "<" + tag + ">";
+    const std::string close = "</" + tag + ">";
+    size_t s = xml.find(open);
+    size_t e = xml.find(close);
+    if (s == std::string::npos || e == std::string::npos || e < s) return {};
+    std::string raw = xml.substr(s + open.size(), e - s - open.size());
+    const std::string cdata_open  = "<![CDATA[";
+    const std::string cdata_close = "]]>";
+    size_t p = raw.find(cdata_open);
+    if (p != std::string::npos) raw.replace(p, cdata_open.size(), "");
+    p = raw.find(cdata_close);
+    if (p != std::string::npos) raw.replace(p, cdata_close.size(), "");
+    while (!raw.empty() && (raw.front() == ' ' || raw.front() == '\n' || raw.front() == '\r'))
+        raw.erase(raw.begin());
+    while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\n' || raw.back() == '\r'))
+        raw.pop_back();
+
+    return raw;
+}
+
+}
+
 std::string browse_for_folder(const char* title) {
     std::string result;
     IFileOpenDialog* pfd = nullptr;
@@ -51,7 +93,35 @@ std::string browse_for_folder(const char* title) {
     }
     return result;
 }
-#endif
+
+static std::string find_first_existing(const std::vector<fs::path>& paths) {
+    for (const auto& p : paths) {
+        std::error_code ec;
+        if (fs::exists(p, ec) && fs::is_regular_file(p, ec)) return p.string();
+    }
+    return {};
+}
+
+FontPaths find_font_paths() {
+    FontPaths result;
+
+    const std::vector<fs::path> regular_candidates = {
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "C:\\Windows\\Fonts\\tahoma.ttf",
+    };
+
+    const std::vector<fs::path> bold_candidates = {
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "C:\\Windows\\Fonts\\segoeuib.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+    };
+
+    result.regular = find_first_existing(regular_candidates);
+    result.bold = find_first_existing(bold_candidates);
+
+    return result;
+}
 
 static void set_status(const std::string& s) {
     std::lock_guard<std::mutex> lock(g_data_mutex);
@@ -118,10 +188,6 @@ static std::string extract_xml_tag(const std::string& xml, const std::string& ta
     return clean_xml_value(xml.substr(s + open.length(), e - s - open.length()));
 }
 
-// Fetches the Steam profile XML ONCE per account and pulls both the
-// nickname and the avatar URL out of the same response, instead of
-// hitting steamcommunity.com twice (once for the nick, once for the
-// avatar) like the previous implementation did.
 static void fetch_profile_info(const std::string& id) {
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
