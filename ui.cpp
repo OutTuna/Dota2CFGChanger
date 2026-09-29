@@ -30,7 +30,10 @@ static ImVec4 g_crimson_selected_bg = { 0.55f, 0.08f, 0.08f, 1.00f };
 static ImVec4 g_crimson_hovered_bg = { 0.30f, 0.06f, 0.06f, 1.00f };
 static ImVec4 g_crimson_text = { 0.95f, 0.88f, 0.88f, 1.00f };
 
-static const char* THEMES_DIR = "themes/";
+// Bundled, read-only asset dir: always next to the executable (works both
+// for a plain Windows folder and inside a mounted, read-only AppImage),
+// never the current working directory.
+static std::string themes_dir() { return exe_dir() + "/themes/"; }
 
 // Built-in metadata defaults. Overwritten by themes/theme_*.json when present.
 // Kept as fallback so the app still works with no themes/ folder at all.
@@ -121,7 +124,7 @@ static void ensure_theme_metadata_loaded() {
     done = true;
 
     for (int i = 0; i < 5; ++i) {
-        std::ifstream f(std::string(THEMES_DIR) + theme_filename(static_cast<AppTheme>(i)));
+        std::ifstream f(themes_dir() + theme_filename(static_cast<AppTheme>(i)));
         if (!f.is_open()) continue;
         try {
             nlohmann::json j;
@@ -530,7 +533,7 @@ static void load_theme_background(AppTheme t) {
     int idx = static_cast<int>(t);
     std::string custom_path;
     if (idx >= 0 && idx < 5 && !g_theme_data[idx].background_image.empty()) {
-        custom_path = std::string(THEMES_DIR) + g_theme_data[idx].background_image;
+        custom_path = themes_dir() + g_theme_data[idx].background_image;
     }
 
     int w = 0, h = 0, ch = 0;
@@ -562,7 +565,7 @@ void ui_apply_theme(AppTheme t) {
     g_theme = static_cast<int>(t);
     save_settings();
 
-    if (!ui_load_theme_from_file(t, THEMES_DIR)) {
+    if (!ui_load_theme_from_file(t, themes_dir())) {
         ImGuiStyle& st = ImGui::GetStyle();
         switch (t) {
         case AppTheme::Indigo: apply_indigo_builtin(st); break;
@@ -869,7 +872,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::Spacing();
 
-#ifdef _WIN32
     if (open_src) {
         open_src = false;
         auto p = browse_for_folder("Откуда конфиг");
@@ -880,7 +882,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         auto p = browse_for_folder("Куда конфиг");
         if (!p.empty()) { strncpy(dst_path, p.c_str(), 255); dst_path[255] = 0; }
     }
-#endif
 
     bool scanning = g_scanning.load();
     if (scanning) ImGui::BeginDisabled();
