@@ -22,6 +22,9 @@
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
+#include <memory>
+#include <atomic>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -73,6 +76,40 @@ struct AvatarEntry {
 static std::map<std::string, AvatarEntry> g_avatars;
 static std::mutex g_mutex;
 
+static void fetch_thread(const std::string steam3_id);
+
+// fetch_thread() runs on a background thread and touches g_avatars/g_mutex.
+// Those are static objects: if we detach()'d these threads, a fetch still
+// in flight when the app closes could touch them after static destructors
+// have already run at process exit (use-after-free). So instead we keep
+// each thread here and join all of them in avatar_shutdown(); finished
+// threads are pruned opportunistically so this list doesn't grow forever
+// over a long session.
+struct TrackedThread {
+    std::thread th;
+    std::shared_ptr<std::atomic<bool>> done;
+};
+static std::mutex g_threads_mutex;
+static std::vector<TrackedThread> g_threads;
+
+static void launch_fetch(const std::string& steam3_id) {
+    auto done = std::make_shared<std::atomic<bool>>(false);
+    std::thread th([steam3_id, done] {
+        fetch_thread(steam3_id);
+        done->store(true);
+    });
+
+    std::lock_guard<std::mutex> lock(g_threads_mutex);
+    g_threads.erase(
+        std::remove_if(g_threads.begin(), g_threads.end(),
+            [](TrackedThread& t) {
+                if (t.done->load()) { t.th.join(); return true; }
+                return false;
+            }),
+        g_threads.end());
+    g_threads.push_back({ std::move(th), std::move(done) });
+}
+
 static void mark_failed(const std::string& id) {
     std::lock_guard<std::mutex> lock(g_mutex);
     auto& e = g_avatars[id];
@@ -90,7 +127,7 @@ static void mark_ready(const std::string& id, std::vector<unsigned char>&& pixel
 }
 
 static fs::path disk_cache_path(const std::string& id) {
-    return fs::path(AVATAR_DISK_DIR) / (id + ".img");
+    return fs::path(config_dir()) / AVATAR_DISK_DIR / (id + ".img");
 }
 
 static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) {
@@ -104,7 +141,7 @@ static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) 
 
 static void save_to_disk_cache(const std::string& id, const std::string& raw_bytes) {
     try {
-        fs::create_directories(AVATAR_DISK_DIR);
+        fs::create_directories(fs::path(config_dir()) / AVATAR_DISK_DIR);
         std::ofstream f(disk_cache_path(id), std::ios::binary);
         if (f) f.write(raw_bytes.data(), (std::streamsize)raw_bytes.size());
     } catch (...) {}
@@ -144,37 +181,17 @@ static void fetch_thread(const std::string steam3_id) {
     }
 
     if (avatar_url.empty()) {
-        try {
-            long long steam64 = std::stoll(steam3_id) + 76561197960265728LL;
-            auto r = cpr::Get(
-                cpr::Url{"https://steamcommunity.com/profiles/" +
-                         std::to_string(steam64) + "?xml=1"},
-                cpr::Header{{"User-Agent", USER_AGENT}},
-                cpr::Timeout{6000},
-                cpr::Redirect{cpr::PostRedirectFlags::POST_ALL});
-
-            if (r.status_code == 200) {
-                auto extract = [&](const char* tag) -> std::string {
-                    std::string open = std::string("<") + tag + ">";
-                    std::string close = std::string("</") + tag + ">";
-                    size_t s = r.text.find(open), e = r.text.find(close);
-                    if (s == std::string::npos || e == std::string::npos || e <= s) return "";
-                    std::string v = r.text.substr(s + open.length(), e - s - open.length());
-                    size_t cs = v.find("<![CDATA[");
-                    if (cs != std::string::npos) v.erase(cs, 9);
-                    size_t ce = v.find("]]>");
-                    if (ce != std::string::npos) v.erase(ce, 3);
-                    return v;
-                };
-                avatar_url = extract("avatarMedium");
-                if (avatar_url.empty()) avatar_url = extract("avatarFull");
-                if (avatar_url.empty()) avatar_url = extract("avatarIcon");
-                if (!avatar_url.empty()) {
-                    std::lock_guard<std::mutex> lock(g_data_mutex);
-                    avatar_url_cache[steam3_id] = avatar_url;
-                }
+        long long steam64 = steam_api::steam3_to_64(steam3_id);
+        std::string xml = steam_api::fetch_profile_xml(steam64, 6000);
+        if (!xml.empty()) {
+            avatar_url = steam_api::extract_tag(xml, "avatarMedium");
+            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
+            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
+            if (!avatar_url.empty()) {
+                std::lock_guard<std::mutex> lock(g_data_mutex);
+                avatar_url_cache[steam3_id] = avatar_url;
             }
-        } catch (...) {}
+        }
     }
 
     if (avatar_url.empty()) {
@@ -216,7 +233,7 @@ ImTextureID avatar_get(const std::string& steam3_id) {
     auto it = g_avatars.find(steam3_id);
     if (it == g_avatars.end()) {
         g_avatars[steam3_id].state = AvatarState::Fetching;
-        std::thread(fetch_thread, steam3_id).detach();
+        launch_fetch(steam3_id);
         return (ImTextureID)0;
     }
 
@@ -228,7 +245,7 @@ ImTextureID avatar_get(const std::string& steam3_id) {
         if (now - it->second.failed_at >= RETRY_DELAY) {
             it->second.state = AvatarState::Fetching;
             it->second.failed_at = now;
-            std::thread(fetch_thread, steam3_id).detach();
+            launch_fetch(steam3_id);
         }
     }
 
@@ -248,6 +265,17 @@ void avatar_flush_pending() {
 }
 
 void avatar_shutdown() {
+    // Wait for any in-flight fetches to finish before tearing anything down,
+    // so a background thread can never touch g_avatars/g_mutex after this
+    // function -- and later the static destructors -- have run.
+    {
+        std::lock_guard<std::mutex> lock(g_threads_mutex);
+        for (auto& t : g_threads) {
+            if (t.th.joinable()) t.th.join();
+        }
+        g_threads.clear();
+    }
+
     std::lock_guard<std::mutex> lock(g_mutex);
     for (auto& [id, entry] : g_avatars) {
         if (entry.texture) {
