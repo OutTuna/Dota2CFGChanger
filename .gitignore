@@ -42,3 +42,5 @@ build-syntax/
 .vscode/
 *.swp
 *.swo
+
+.DS_Store
