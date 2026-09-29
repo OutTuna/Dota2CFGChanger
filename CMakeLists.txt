@@ -34,6 +34,10 @@ else()
     set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
 endif()
 
+set(BUILD_CURL_EXE           OFF CACHE BOOL "" FORCE)
+set(ENABLE_CURL_MANUAL       OFF CACHE BOOL "" FORCE)
+set(BUILD_LIBCURL_DOCS       OFF CACHE BOOL "" FORCE)
+set(BUILD_MISC_DOCS          OFF CACHE BOOL "" FORCE)
 
 set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
 set(CPR_USE_SYSTEM_CURL      OFF CACHE BOOL "" FORCE)
@@ -56,7 +60,7 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6)
 FetchContent_MakeAvailable(imgui)
 
-FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG master)
+FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20)
 FetchContent_MakeAvailable(stb)
 
 add_executable(DotaManager
@@ -72,7 +76,6 @@ add_executable(DotaManager
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp
         ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        ${imgui_SOURCE_DIR}/imgui_demo.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
         bg_crimson.h
