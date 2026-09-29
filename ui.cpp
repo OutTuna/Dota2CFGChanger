@@ -1,7 +1,6 @@
 #include "ui.h"
 #include "app.h"
 #include "avatar.h"
-#include "bg_crimson.h"
 #include "backends/imgui_impl_glfw.h"
 #include <GLFW/glfw3.h>
 #include "stb_image.h"
@@ -522,29 +521,20 @@ static void apply_crimson_builtin(ImGuiStyle& st) {
     c[ImGuiCol_TextDisabled] = { 0.40f, 0.28f, 0.28f, 1.00f };
 }
 
-// Loads the current theme's background texture: an external file next to
-// the executable (themes/<background_image>) if the theme declares one and
-// it can be found, otherwise the embedded PNG baked into bg_crimson.h.
-// Cached once -- switching between two backgrounds in the same run isn't
-// supported today, only Crimson uses this at the moment.
+// Loads the current theme's background texture from themes/<background_image>,
+// next to the executable. Cached once -- switching between two backgrounds
+// in the same run isn't supported today, only Crimson uses this at the
+// moment. If the file is missing, the theme just renders without a
+// background instead of failing.
 static void load_theme_background(AppTheme t) {
     if (g_bg_crimson_tex != (ImTextureID)0) return;
 
     int idx = static_cast<int>(t);
-    std::string custom_path;
-    if (idx >= 0 && idx < 5 && !g_theme_data[idx].background_image.empty()) {
-        custom_path = themes_dir() + g_theme_data[idx].background_image;
-    }
+    if (idx < 0 || idx >= 5 || g_theme_data[idx].background_image.empty()) return;
+    std::string path = themes_dir() + g_theme_data[idx].background_image;
 
     int w = 0, h = 0, ch = 0;
-    unsigned char* pixels = nullptr;
-
-    if (!custom_path.empty()) {
-        pixels = stbi_load(custom_path.c_str(), &w, &h, &ch, 4);
-    }
-    if (!pixels) {
-        pixels = stbi_load_from_memory(BG_PNG, BG_PNG_LEN, &w, &h, &ch, 4);
-    }
+    unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &ch, 4);
     if (!pixels) return;
 
     GLuint tex = 0;
