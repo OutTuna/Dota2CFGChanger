@@ -14,8 +14,27 @@ inline constexpr const char* AVATAR_URL_CACHE_FILE = "avatar_url_cache.json";
 inline constexpr const char* AVATAR_DISK_DIR   = "avatar_cache";
 inline constexpr const char* DOTA_ID           = "570";
 
+// Directory the running executable lives in (Windows: next to the .exe;
+// Linux/AppImage: inside the mounted, read-only AppDir). Used to find
+// bundled, read-only assets like themes/.
+std::string exe_dir();
+
+// Per-user, writable directory for settings and caches:
+// %APPDATA%\DotaManager on Windows, $XDG_CONFIG_HOME/DotaManager (or
+// ~/.config/DotaManager) on Linux. Created on first call if missing.
+// Deliberately NOT exe_dir(): an AppImage's own directory is a read-only
+// mount, so writing settings.json next to the executable would fail there.
+std::string config_dir();
+
+#ifdef _WIN32
 inline char src_path[PATH_BUF_SIZE] = "C:\\Program Files (x86)\\Steam\\userdata";
 inline char dst_path[PATH_BUF_SIZE] = "C:\\Program Files (x86)\\Steam\\userdata";
+#else
+// Common default Steam location on Linux (native or Flatpak use different
+// paths; the user can still browse to the right folder from the UI).
+inline char src_path[PATH_BUF_SIZE] = "~/.local/share/Steam/userdata";
+inline char dst_path[PATH_BUF_SIZE] = "~/.local/share/Steam/userdata";
+#endif
 
 inline int g_theme = 0;
 
