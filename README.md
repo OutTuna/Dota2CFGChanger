@@ -34,7 +34,7 @@ The folders should follow Steam's layout: `<root>/<account_id>/570/`. You can us
 - Account names and avatars come from public Steam Community profiles and are cached locally. This needs an internet connection, but no Steam login or API key. If a profile lookup fails, the account ID still appears in the list.
 - Release builds check for updates at startup. You can also check using the button at the bottom of the window. Downloading starts only when you click **Download**; the app checks the file size and SHA-256 before keeping it. If a verified download is unavailable, use **Open release**. Launch the new file yourself after closing the old version.
 
-Settings, profile caches, avatars and downloaded updates live in `%APPDATA%\DotaManager` on Windows, or `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` on Linux.
+On Windows, paths, theme and language are saved under `HKEY_CURRENT_USER\Software\OutTuna\Dota2CFGChanger`, in the `Settings` value. An existing `settings.json` is migrated and removed only after a successful registry write. Profile caches, avatars and updates still use `%APPDATA%\DotaManager`. On Linux, settings and caches use `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager`.
 
 ## Building
 

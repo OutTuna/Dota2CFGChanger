@@ -2,77 +2,10 @@
 #include "app.h"
 #include "localization.h"
 
-bool g_settings_open = false;
 bool g_palette_open = false;
 bool g_confirm_copy_open = false;
 std::string g_confirm_src_label;
 std::string g_confirm_dst_label;
-
-void render_settings_panel(ImVec2 ds) {
-    ensure_theme_metadata_loaded();
-
-    ImGui::SetNextWindowPos({ ds.x - 270.f, 34.f });
-    ImGui::SetNextWindowSize({ 260.f, 0.f });
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 12.f, 10.f });
-
-    ImGui::Begin("##settings_panel", &g_settings_open,
-        ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove |
-        ImGuiWindowFlags_NoScrollbar |
-        ImGuiWindowFlags_AlwaysAutoResize);
-
-    ImGui::TextUnformatted(tr("language"));
-    const char* languages[] = {"English", "Русский", "Українська"};
-    const char* codes[] = {"en", "ru", "uk"};
-    int selected_language = language_index();
-    if (ImGui::Combo("##language", &selected_language, languages, 3)) {
-        set_language(codes[selected_language]);
-        save_settings();
-    }
-    ImGui::Separator();
-    ImGui::TextDisabled("%s", tr("theme"));
-    ImGui::Spacing();
-
-    static const AppTheme themes[] = {
-        AppTheme::Dark, AppTheme::Indigo, AppTheme::Vermillion,
-        AppTheme::ClassicSteam, AppTheme::Crimson,
-    };
-
-    for (AppTheme id : themes) {
-        int idx = static_cast<int>(id);
-        std::string label = idx == 0 && g_theme_data[idx].name == "Dark (default)"
-            ? tr("theme_0") : g_theme_data[idx].name;
-        bool sel = (g_current_theme == id);
-        ImGui::PushStyleColor(ImGuiCol_Text,
-            sel ? ImVec4{ 0.92f, 0.92f, 0.94f, 1.f }
-                : ImVec4{ 0.55f, 0.55f, 0.60f, 1.f });
-        if (ImGui::Selectable(label.c_str(), sel)) {
-            ui_apply_theme(id);
-            g_settings_open = false;
-        }
-        ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered() && !g_theme_data[idx].description.empty()) {
-            static const char* descriptions[] = {
-                "Default dark theme", "Blue indigo theme with borders", "Red vermillion theme",
-                "Classic Steam green theme", "Crimson theme with custom background and palette editor"
-            };
-            auto key = "theme_description_" + std::to_string(idx);
-            ImGui::SetTooltip("%s", g_theme_data[idx].description == descriptions[idx]
-                ? tr(key.c_str()) : g_theme_data[idx].description.c_str());
-        }
-    }
-
-    if (!ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
-        ImGui::IsMouseClicked(0)) {
-        g_settings_open = false;
-    }
-
-    ImGui::End();
-    ImGui::PopStyleVar(3);
-}
 
 void render_palette_panel(ImVec2 ds) {
     int idx = static_cast<int>(g_current_theme);

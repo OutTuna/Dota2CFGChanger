@@ -174,3 +174,47 @@ bool open_external(const std::string& value) {
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 #endif
 }
+
+#ifdef _WIN32
+std::string read_registry_settings() {
+    HKEY key = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\OutTuna\\Dota2CFGChanger", 0,
+        KEY_QUERY_VALUE, &key) != ERROR_SUCCESS) return {};
+    DWORD type = 0, size = 0;
+    auto result = RegQueryValueExW(key, L"Settings", nullptr, &type, nullptr, &size);
+    if (result != ERROR_SUCCESS || type != REG_SZ || size < sizeof(wchar_t)
+        || size > 131072 || size % sizeof(wchar_t) != 0) {
+        RegCloseKey(key);
+        return {};
+    }
+    std::vector<wchar_t> value(size / sizeof(wchar_t) + 1, L'\0');
+    result = RegQueryValueExW(key, L"Settings", nullptr, &type,
+        reinterpret_cast<BYTE*>(value.data()), &size);
+    RegCloseKey(key);
+    if (result != ERROR_SUCCESS || type != REG_SZ) return {};
+    int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), -1,
+        nullptr, 0, nullptr, nullptr);
+    if (length <= 1) return {};
+    std::string settings(length, '\0');
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), -1,
+        settings.data(), length, nullptr, nullptr)) return {};
+    settings.pop_back();
+    return settings;
+}
+
+bool write_registry_settings(const std::string& settings) {
+    int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, settings.c_str(), -1,
+        nullptr, 0);
+    if (length <= 1 || length > 65536) return false;
+    std::vector<wchar_t> value(length);
+    if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, settings.c_str(), -1,
+        value.data(), length)) return false;
+    HKEY key = nullptr;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\OutTuna\\Dota2CFGChanger", 0,
+        nullptr, 0, KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) return false;
+    auto result = RegSetValueExW(key, L"Settings", 0, REG_SZ,
+        reinterpret_cast<const BYTE*>(value.data()), static_cast<DWORD>(value.size() * sizeof(wchar_t)));
+    RegCloseKey(key);
+    return result == ERROR_SUCCESS;
+}
+#endif

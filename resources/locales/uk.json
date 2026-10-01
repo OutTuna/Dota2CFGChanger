@@ -62,5 +62,6 @@
   "update_retry": "Перевірити знову",
   "update_close": "Закрити",
   "update_check_failed": "Не вдалося перевірити оновлення: {value}",
-  "update_download_failed": "Не вдалося завантажити: {value}. Можна завантажити вручну з GitHub."
+  "update_download_failed": "Не вдалося завантажити: {value}. Можна завантажити вручну з GitHub.",
+  "author": "Автор"
 }
