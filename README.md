@@ -117,59 +117,105 @@ The AppImage uses the checked-in PNG icon. CI does not need an image converter.
 
 ```mermaid
 flowchart TB
-    main["main.cpp<br/>Window and application loop"]
-    ui["src/ui/main_window.cpp<br/>Accounts, paths, language, theme, status and Info"]
-    panels["src/ui/panels.cpp<br/>Palette and copy confirmation"]
-    success["src/ui/success_popup.cpp<br/>Copy result"]
-    updater_ui["src/ui/update_popup.cpp<br/>Update dialog"]
-    app["src/core/app.cpp<br/>Settings, scanning and copy coordination"]
-    files["src/core/file_ops.cpp<br/>Config replacement and rollback"]
-    steam["src/network/steam_api.cpp<br/>Public profile lookup"]
-    avatars["src/core/avatar_data.cpp<br/>Downloads and image cache"]
-    textures["src/ui/avatar.cpp<br/>OpenGL textures"]
-    platform["src/platform/platform.cpp<br/>Native dialogs, paths, registry and links"]
-    settings["Windows: HKCU Software / OutTuna / Dota2CFGChanger<br/>Linux: settings.json"]
-    theme["src/ui/theme.cpp<br/>Theme and palette"]
-    resources["resources/<br/>Themes, locales, icons and Windows metadata"]
-    locales["src/core/localization.cpp<br/>English, Russian and Ukrainian"]
-    updates["src/core/updates.cpp<br/>Background checks and downloads"]
-    transport["src/network/update_transport.cpp<br/>GitHub HTTP requests"]
-    release["src/core/release_info.cpp<br/>Release metadata and version comparison"]
-    checksum["src/core/checksum.cpp<br/>SHA-256 verification"]
-    version["cmake/AppVersion.h.in<br/>Compiled release version"]
-    userdata["Steam userdata / account / 570"]
-    community["Steam Community"]
-    github["GitHub latest release<br/>Windows .exe and Linux .AppImage"]
-    main --> ui
-    main --> success
-    main --> updater_ui
-    main --> updates
-    ui --> panels
-    ui --> app
-    ui --> theme
-    ui --> locales
-    ui --> textures
-    ui --> platform
-    panels --> app
-    success --> app
-    textures --> avatars
-    avatars --> app
-    app --> files
-    app --> steam
-    app --> locales
-    app --> platform
-    platform --> settings
-    files --> userdata
-    steam --> community
-    theme --> resources
-    locales --> resources
-    updater_ui --> updates
-    updates --> version
-    updates --> transport
-    updates --> release
-    updates --> checksum
-    updates --> platform
-    transport --> github
+
+subgraph group_ui["User interface"]
+  node_entry["App startup<br/>[main.cpp]"]
+  node_window["Main window<br/>[main_window.cpp]"]
+  node_panels["Dialogs and panels<br/>[panels.cpp]"]
+  node_success["Copy result<br/>[success_popup.cpp]"]
+  node_updateui["Update dialog<br/>[update_popup.cpp]"]
+end
+
+subgraph group_core["Application core"]
+  node_app["App coordination<br/>[app.cpp]"]
+  node_files["Config replacement<br/>[file_ops.cpp]"]
+  node_settings[("Settings and caches<br/>[app.cpp]")]
+  node_localization["Translations<br/>[localization.cpp]"]
+  node_avatar_data[("Avatar cache<br/>[avatar_data.cpp]")]
+  node_updates["Update service<br/>[updates.cpp]"]
+  node_release["Release metadata<br/>[release_info.cpp]"]
+  node_checksum["Download verification<br/>[checksum.cpp]"]
+end
+
+subgraph group_net["Network services"]
+  node_steam["Steam profiles<br/>[steam_api.cpp]"]
+  node_transport["Release transport"]
+end
+
+subgraph group_platform["Platform and presentation resources"]
+  node_platform_api["Platform services<br/>[platform.cpp]"]
+  node_avatars["Avatar textures<br/>[avatar.cpp]"]
+  node_themes["Themes<br/>[theme.cpp]"]
+  node_resources["Theme and locale data"]
+end
+
+node_user(("User"))
+node_steamcommunity(("Steam Community"))
+node_release_service(("GitHub releases"))
+node_configdirs[("Steam userdata folders")]
+node_local_settings[("Local settings store")]
+
+node_user -->|"operates"| node_window
+node_entry -->|"loads settings"| node_app
+node_entry -->|"renders"| node_window
+node_entry -->|"checks updates"| node_updates
+node_window -->|"scans and copies"| node_app
+node_window -->|"opens dialogs"| node_panels
+node_window -->|"requests avatars"| node_avatars
+node_window -->|"uses themes"| node_themes
+node_window -->|"translates labels"| node_localization
+node_window -->|"requests checks"| node_updates
+node_app -->|"replaces config"| node_files
+node_app -->|"fetches profiles"| node_steam
+node_app -->|"reads and writes"| node_settings
+node_app -->|"scans and copies"| node_configdirs
+node_settings -->|"persists"| node_local_settings
+node_app -->|"uses path services"| node_platform_api
+node_steam -->|"looks up profiles"| node_steamcommunity
+node_avatar_data -->|"downloads images"| node_steamcommunity
+node_avatars -->|"uploads cached images"| node_avatar_data
+node_updates -->|"fetches and downloads"| node_transport
+node_updates -->|"verifies download"| node_checksum
+node_updates -->|"opens release"| node_platform_api
+node_updates -->|"uses release metadata"| node_release
+node_transport -->|"requests releases"| node_release_service
+node_updateui -->|"controls updates"| node_updates
+node_themes -->|"loads theme data"| node_resources
+node_localization -->|"uses translations"| node_resources
+node_window -->|"shows result"| node_success
+
+click node_entry "https://github.com/outtuna/dota2cfgchanger/blob/main/main.cpp"
+click node_window "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/main_window.cpp"
+click node_panels "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/panels.cpp"
+click node_success "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/success_popup.cpp"
+click node_updateui "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/update_popup.cpp"
+click node_app "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
+click node_files "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/file_ops.cpp"
+click node_settings "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
+click node_localization "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/localization.cpp"
+click node_avatar_data "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/avatar_data.cpp"
+click node_updates "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/updates.cpp"
+click node_release "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/release_info.cpp"
+click node_checksum "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/checksum.cpp"
+click node_steam "https://github.com/outtuna/dota2cfgchanger/blob/main/src/network/steam_api.cpp"
+click node_transport "https://github.com/outtuna/dota2cfgchanger/blob/main/src/network/update_transport.cpp"
+click node_platform_api "https://github.com/outtuna/dota2cfgchanger/blob/main/src/platform/platform.cpp"
+click node_avatars "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/avatar.cpp"
+click node_themes "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/theme.cpp"
+click node_resources "https://github.com/outtuna/dota2cfgchanger/tree/main/resources"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_entry,node_window,node_panels,node_success,node_updateui,node_user toneBlue
+class node_app,node_files,node_settings,node_localization,node_avatar_data,node_updates,node_release,node_checksum,node_configdirs,node_local_settings toneAmber
+class node_steam,node_transport toneMint
+class node_platform_api,node_avatars,node_themes,node_resources toneRose
+class node_steamcommunity,node_release_service toneIndigo
 ```
 
 </details>
