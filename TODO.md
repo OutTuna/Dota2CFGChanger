@@ -1,17 +1,26 @@
-1. Fix linux port(add FONT's support(JetBrains))✅
-2. Add English (default), Russian and Ukrainian localization ✅
-3. Add supporting NixOS
-4. Maybe upload file to AUR
-5. Make it more compact✅
-6. Again refractor✅
-7. Separate core data/network/file operations from GUI ✅
-8. Make an TUI (external app)
-9. Mix some files in one(but not complicated), and delete unnecessary✅
-10. Cache dependency builds and Linux compiler output ✅
-11. Fix Paths: home expansion, Steam detection and UTF-8 ✅
-12. Embed theme JSON files and Crimson background into executable ✅
-13. Verify Windows/Linux CI builds with embedded resources ✅
-14. Make config replacement recoverable on failure ✅
-15. Cache CI dependencies to reduce build time ✅
-16. Author button linking to repository ✅
-17. Startup/manual update checks, download button and manual GitHub fallback ✅
+# TODO
+
+## Готово
+
+- [x] 1. Linux-порт и шрифты с кириллицей: DejaVu, Liberation, Noto.
+- [x] 2. Английский по умолчанию, русский и украинский; сохранение языка.
+- [x] 5. Сделать приложение компактнее.
+- [x] 6. Рефакторинг интерфейса.
+- [x] 7. Отделить core от GUI; сохранить Steam, аватары и файловые операции.
+- [x] 9. Убрать лишние файлы и организовать исходники.
+- [x] 10. Кэш зависимостей Windows/Linux и ccache на Linux.
+- [x] 11. Пути: раскрытие ~/, обнаружение Steam/Flatpak, UTF-8, без обрезания.
+- [x] 12. Встроенные JSON-темы и фон Crimson; релизы .exe + .AppImage.
+- [x] 13. Сборки и проверки Windows/Linux в CI после добавления core и обновлений; исправлен заголовок ShellExecuteW.
+- [x] 14. Замена конфига с восстановлением при ошибке и сохранением копий при невозможности восстановления.
+- [x] 16. Кнопка OutTuna со ссылкой на репозиторий.
+- [x] 17. Проверка обновлений при запуске и вручную; скачивание по нажатию, проверка размера/SHA-256, ручная загрузка через GitHub.
+
+## Осталось
+
+- [ ] 15. Измерить ускорение повторных CI-сборок: cache hit, статистика ccache и время Windows/Linux. Реализация кэша закрыта пунктом 10.
+- [ ] 19. Проверить обновления в готовых Windows/Linux-билдах: окно на старой версии, скачивание, открытие папки и запуск нового файла.
+- [ ] 4. Подготовить и проверить PKGBUILD для AUR; публикация отдельно.
+- [ ] 8. Отдельное TUI-приложение на общем core.
+- [ ] 3. Поддержка NixOS: зависимости вне сетевого FetchContent при сборке, пакет/flake.
+- [ ] 18. JetBrains Mono как необязательный фирменный шрифт с текущими системными шрифтами в качестве fallback.
