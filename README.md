@@ -44,7 +44,7 @@ The program is a single executable with no installer: a portable `.exe` on Windo
 - Scans a source root and a destination root and lists every account folder found in each.
 - Shows persona names and avatars, resolved from public Steam Community profiles. Names and avatars are cached locally, on disk.
 - Asks for confirmation before replacing the target's settings.
-- Five interface themes, remembered between runs. Themes are defined by JSON files in a `themes/` folder next to the executable; if that folder is missing, built-in fallbacks are used. The Crimson theme adds a live palette editor and a custom background.
+- Five interface themes, remembered between runs. All theme JSON files and the Crimson background are embedded in the executable. An optional `themes/` folder next to it can override the embedded resources; missing or invalid files fall back to the embedded versions. The Crimson theme adds a live palette editor and a custom background.
 
 ### Requirements
 
@@ -98,7 +98,7 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-- Windows (Visual Studio generator): the executable is written to `build/Release/DotaManager.exe`, and a `themes/` folder is copied next to it.
+- Windows (Visual Studio generator): the executable is written to `build/Release/DotaManager.exe`.
 - Linux: install the dev packages first (`build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev`), configure with `-DCMAKE_BUILD_TYPE=Release`; the executable is `build/DotaManager`.
 
 The first configuration also builds cURL and its dependencies through cpr, so it takes noticeably longer than later ones. An `-DAPP_VERSION=<x.y>` option stamps the Windows version resource; CI computes it automatically.
@@ -125,7 +125,7 @@ All dependencies are fetched and built by CMake as static libraries.
 | `avatar.cpp`, `avatar.h` | Asynchronous avatar download, disk cache and OpenGL texture upload |
 | `app_icon.h`, `bg_crimson.h` | Embedded icon and fallback background image |
 | `app.rc.in`, `app.manifest`, `Icon.ico` | Windows version info, manifest and icon (assembled by CMake) |
-| `themes/` | Theme JSON files, copied next to the executable at build time |
+| `themes/` | Theme JSON files and background, embedded at build time |
 | `scripts/` | Local development checks (`run-all-checks.sh`, versioning, CMake smoke tests) |
 | `.github/workflows/build.yaml` | CI: builds Windows `.exe` and Linux AppImage, publishes a release |
 | `CMakeLists.txt` | Build definition and dependency pinning |
@@ -158,7 +158,7 @@ Dota 2 хранит раскладку клавиш, опции и другие 
 - Сканирует исходный и целевой каталоги и показывает найденные в каждом папки аккаунтов.
 - Показывает имена и аватары, полученные из публичных профилей Steam Community. Имена и аватары кэшируются локально, на диске.
 - Перед заменой настроек запрашивает подтверждение.
-- Пять тем оформления, выбор сохраняется между запусками. Темы описываются JSON-файлами в папке `themes/` рядом с исполняемым файлом; если папки нет, используются встроенные резервные варианты. Тема Crimson добавляет редактор палитры и собственный фон.
+- Пять тем оформления, выбор сохраняется между запусками. Все JSON-темы и фон Crimson встроены в исполняемый файл. Необязательная папка `themes/` рядом с ним позволяет переопределить ресурсы; при отсутствии или повреждении файлов используются встроенные версии. Тема Crimson добавляет редактор палитры и собственный фон.
 
 ### Требования
 
@@ -212,7 +212,7 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-- Windows (генератор Visual Studio): исполняемый файл создаётся по пути `build/Release/DotaManager.exe`, рядом копируется папка `themes/`.
+- Windows (генератор Visual Studio): исполняемый файл создаётся по пути `build/Release/DotaManager.exe`.
 - Linux: сначала установите dev-пакеты (`build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev`), конфигурируйте с `-DCMAKE_BUILD_TYPE=Release`; исполняемый файл — `build/DotaManager`.
 
 Первая конфигурация дополнительно собирает cURL и его зависимости через cpr, поэтому занимает заметно больше времени, чем последующие. Опция `-DAPP_VERSION=<x.y>` записывает версию в ресурс Windows-файла; в CI версия вычисляется автоматически.
@@ -239,7 +239,7 @@ cmake --build build --config Release
 | `avatar.cpp`, `avatar.h` | Асинхронная загрузка аватаров, дисковый кэш и создание текстур OpenGL |
 | `app_icon.h`, `bg_crimson.h` | Встроенная иконка и резервное фоновое изображение |
 | `app.rc.in`, `app.manifest`, `Icon.ico` | Информация о версии, манифест и иконка Windows (собираются CMake) |
-| `themes/` | JSON-файлы тем, копируются при сборке рядом с исполняемым файлом |
+| `themes/` | JSON-файлы тем и фон, встраиваются при сборке |
 | `scripts/` | Локальные проверки для разработки (`run-all-checks.sh`, версии, smoke-тесты CMake) |
 | `.github/workflows/build.yaml` | CI: собирает `.exe` для Windows и AppImage для Linux, публикует релиз |
 | `CMakeLists.txt` | Описание сборки и версии зависимостей |

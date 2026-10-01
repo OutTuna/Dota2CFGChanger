@@ -1,5 +1,6 @@
 #include "ui_internal.h"
 #include "app.h"
+#include "embedded_themes.h"
 #include "stb_image.h"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -99,19 +100,51 @@ static void extract_theme_metadata(int idx, const nlohmann::json& j) {
     }
 }
 
+static bool valid_theme_value(const nlohmann::json& value) {
+    if (value.is_number()) return true;
+    if (!value.is_array() || value.size() < 2) return false;
+    for (const auto& component : value)
+        if (!component.is_number()) return false;
+    return true;
+}
+
+static nlohmann::json load_theme_json(int idx, const std::string& base_path) {
+    auto result = nlohmann::json::parse(embedded_themes::json[idx]);
+    try {
+        std::ifstream f(base_path + theme_filename(static_cast<AppTheme>(idx)));
+        if (!f.is_open()) return result;
+        nlohmann::json custom;
+        f >> custom;
+        if (!custom.is_object()) return result;
+        for (const char* key : {"name", "description", "background_image"})
+            if (custom.contains(key) && !custom[key].is_string()) return result;
+        if (custom.contains("has_palette_editor") && !custom["has_palette_editor"].is_boolean()) return result;
+        for (const char* section : {"style", "colors", "palette"}) {
+            if (!custom.contains(section)) continue;
+            if (!custom[section].is_object()) return result;
+            for (const auto& item : custom[section].items()) {
+                if (!valid_theme_value(item.value())) return result;
+                if (result.contains(section) && result[section].contains(item.key())) {
+                    const auto& original = result[section][item.key()];
+                    if (original.is_array()) {
+                        if (!item.value().is_array() || item.value().size() != original.size()) return result;
+                    } else if (!item.value().is_number()) return result;
+                }
+                if (std::string(section) != "style" && (!item.value().is_array() || item.value().size() != 4)) return result;
+            }
+        }
+        result.merge_patch(custom);
+    } catch (...) {}
+    return result;
+}
+
 void ensure_theme_metadata_loaded() {
     static bool done = false;
     if (done) return;
     done = true;
 
     for (int i = 0; i < 5; ++i) {
-        std::ifstream f(themes_dir() + theme_filename(static_cast<AppTheme>(i)));
-        if (!f.is_open()) continue;
-        try {
-            nlohmann::json j;
-            f >> j;
-            extract_theme_metadata(i, j);
-        } catch (...) {}
+        extract_theme_metadata(i, load_theme_json(i, themes_dir()));
     }
 }
 
@@ -121,16 +154,7 @@ bool ui_load_theme_from_file(AppTheme theme, const std::string& base_path) {
     int idx = static_cast<int>(theme);
     if (idx < 0 || idx >= 5) return false;
 
-    std::string path = base_path + theme_filename(theme);
-    std::ifstream f(path);
-    if (!f.is_open()) return false;
-
-    nlohmann::json j;
-    try {
-        f >> j;
-    } catch (...) {
-        return false;
-    }
+    auto j = load_theme_json(idx, base_path);
 
     extract_theme_metadata(idx, j);
 
@@ -510,6 +534,9 @@ static void load_theme_background(AppTheme t) {
 
     int w = 0, h = 0, ch = 0;
     unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &ch, 4);
+    if (!pixels)
+        pixels = stbi_load_from_memory(embedded_themes::background,
+            static_cast<int>(embedded_themes::background_size), &w, &h, &ch, 4);
     if (!pixels) return;
 
     GLuint tex = 0;
