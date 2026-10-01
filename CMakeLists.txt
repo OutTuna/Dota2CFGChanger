@@ -69,8 +69,12 @@ add_executable(DotaManager
         app.h
         avatar.cpp
         avatar.h
-        ui.cpp
-        ui.h
+        ui/ui.h
+        ui/ui_internal.h
+        ui/theme.cpp
+        ui/panels.cpp
+        ui/main_window.cpp
+        ui/success_popup.cpp
         app_icon.h
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -82,6 +86,7 @@ add_executable(DotaManager
 
 target_include_directories(DotaManager PRIVATE
         ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/ui
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
         ${stb_SOURCE_DIR}
