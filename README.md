@@ -255,3 +255,4 @@ cmake --build build --config Release
 ### Обратная связь
 
 Сообщения об ошибках и предложения принимаются в [трекере задач](https://github.com/OutTuna/Dota2CFGChanger/issues). Укажите версию ОС и используемый релиз.
+
