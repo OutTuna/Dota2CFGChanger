@@ -40,7 +40,7 @@ int main(int, char**) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    ui_apply_theme(static_cast<AppTheme>(g_theme));
+    ui_apply_theme(static_cast<AppTheme>(g_theme.load()));
 
     ImGuiIO& io = ImGui::GetIO();
 

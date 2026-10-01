@@ -1,5 +1,5 @@
 1. Fix linux port(add FONT's support(JetBrains))✅
-2. Add More Localizations
+2. Add English (default), Russian and Ukrainian localization ✅
 3. Add supporting NixOS
 4. Maybe upload file to AUR
 5. Make it more compact✅
@@ -8,4 +8,8 @@
 8. Make an TUI (external app)
 9. Mix some files in one(but not complicated), and delete unnecessary✅
 10. Maybe find another one way to speed up build
-11. Fix Paths
+11. Fix Paths: home expansion, Steam detection and UTF-8 ✅
+12. Embed theme JSON files and Crimson background into executable ✅
+13. Verify Windows/Linux CI builds with embedded resources ✅
+14. Make config replacement recoverable on failure ✅
+15. Cache CI dependencies to reduce build time

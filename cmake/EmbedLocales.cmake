@@ -1,0 +1,8 @@
+file(MAKE_DIRECTORY "${OUTPUT_DIR}")
+set(content "#pragma once\nnamespace embedded_locales {\ninline constexpr const char* json[3] = {\n")
+foreach(language en ru uk)
+    file(READ "${LOCALES_DIR}/${language}.json" data)
+    string(APPEND content "R\"locale_json(${data})locale_json\",\n")
+endforeach()
+string(APPEND content "};\n}\n")
+file(WRITE "${OUTPUT_DIR}/embedded_locales.h" "${content}")

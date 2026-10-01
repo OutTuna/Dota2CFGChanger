@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "app.h"
+#include "localization.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
 
@@ -104,7 +105,7 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
 
     if (font_big) ImGui::PushFont(font_big);
     {
-        const char* title = "SUCCESS";
+        const char* title = tr("success");
         float tw = ImGui::CalcTextSize(title).x;
         ImGui::SetCursorPosX((sw - tw) * 0.5f);
         float gv = 0.72f + 0.28f * sinf(time * 2.2f);
@@ -127,8 +128,8 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     std::string src_d = g_success.src_nick + " (ID: " + g_success.src_id + ")";
     std::string dst_d = g_success.dst_nick + " (ID: " + g_success.dst_id + ")";
 
-    row("Откуда: ", { 0.55f, 0.55f, 0.60f, 1 }, src_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
-    row("Куда: ", { 0.55f, 0.55f, 0.60f, 1 }, dst_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+    row(tr("from"), { 0.55f, 0.55f, 0.60f, 1 }, src_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+    row(tr("to"), { 0.55f, 0.55f, 0.60f, 1 }, dst_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
 
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Separator, { 0.55f, 0.55f, 0.60f, 0.20f });
@@ -136,10 +137,10 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::PopStyleColor();
     ImGui::Spacing();
 
-    ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "Source:");
+    ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("source_path"));
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.src_folder.c_str());
-    ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "Dest: ");
+    ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("destination_path"));
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.dst_folder.c_str());
 
@@ -155,7 +156,7 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.14f, 0.78f, 0.28f, 1.f });
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.07f, 0.42f, 0.15f, 1.f });
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.f);
-    if (ImGui::Button("OK", { btn_w, btn_h })) {
+    if (ImGui::Button(tr("ok"), { btn_w, btn_h })) {
         g_success.closing = true;
         g_success.close_t = 0.f;
     }

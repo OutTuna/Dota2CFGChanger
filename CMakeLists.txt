@@ -82,11 +82,27 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${EMBEDDED_THEMES_DIR}/embedded_locales.h"
+    COMMAND ${CMAKE_COMMAND}
+        "-DLOCALES_DIR=${CMAKE_SOURCE_DIR}/locales"
+        "-DOUTPUT_DIR=${EMBEDDED_THEMES_DIR}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/EmbedLocales.cmake"
+    DEPENDS "${CMAKE_SOURCE_DIR}/locales/en.json"
+        "${CMAKE_SOURCE_DIR}/locales/ru.json"
+        "${CMAKE_SOURCE_DIR}/locales/uk.json"
+        "${CMAKE_SOURCE_DIR}/cmake/EmbedLocales.cmake"
+    VERBATIM
+)
+
 add_executable(DotaManager
+        ${EMBEDDED_THEMES_DIR}/embedded_locales.h
         ${EMBEDDED_THEMES_DIR}/embedded_themes.cpp
         ${EMBEDDED_THEMES_DIR}/embedded_themes.h
         main.cpp
         app.cpp
+        file_ops.cpp
+        localization.cpp
         app.h
         avatar.cpp
         avatar.h
@@ -131,7 +147,7 @@ if(WIN32)
         target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated_app.rc")
     endif()
 
-    target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32)
+    target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32 advapi32)
     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
 
     if(MINGW)
