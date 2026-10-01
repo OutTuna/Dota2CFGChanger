@@ -44,3 +44,18 @@ build-syntax/
 *.swo
 
 .DS_Store
+
+*.AppImage
+/DotaManager
+/AppDir/
+/linux-artifact/
+/DotaManager-Windows/
+/DotaManager-Linux/
+/dotamanager.desktop
+/dotamanager.png
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/_deps/
+/generated/
+/cmake-build-*/
