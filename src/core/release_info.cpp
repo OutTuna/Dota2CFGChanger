@@ -7,7 +7,7 @@
 
 namespace {
 std::array<unsigned long, 4> version_parts(const std::string& value) {
-    static const std::regex pattern(R"(^v?([0-9]+)\.([0-9]+)(?:\.([0-9]+))?(?:\.([0-9]+))?$)");
+    static const std::regex pattern(R"(^v?([0-9]+)(?:\.([0-9]+))?(?:\.([0-9]+))?(?:\.([0-9]+))?$)");
     std::smatch match;
     if (!std::regex_match(value, match, pattern)) throw std::runtime_error("Invalid version");
     std::array<unsigned long, 4> result{};
@@ -28,7 +28,7 @@ ReleaseInfo parse_release_info(const std::string& body, bool windows) {
     if (tag != "latest") throw std::runtime_error("Unexpected release tag");
     std::smatch match;
     auto name = release.value("name", "");
-    static const std::regex pattern(R"(^Latest Build \((v[0-9]+\.[0-9]+(?:\.[0-9]+){0,2})\)$)");
+    static const std::regex pattern(R"(^Latest Build \((v[0-9]+(?:\.[0-9]+){0,3})\)$)");
     if (!std::regex_match(name, match, pattern)) throw std::runtime_error("Release version is missing");
     result.version = match[1];
     version_parts(result.version);

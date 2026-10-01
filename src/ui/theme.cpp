@@ -553,6 +553,7 @@ static void load_theme_background(AppTheme t) {
 }
 
 void ui_apply_theme(AppTheme t) {
+    ImGui::StyleColorsDark();
     g_current_theme = t;
     g_theme = static_cast<int>(t);
     save_settings();
