@@ -48,19 +48,19 @@ set(GLFW_BUILD_TESTS         OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
 
-FetchContent_Declare(cpr   GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1)
+FetchContent_Declare(cpr   GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(cpr)
 
-FetchContent_Declare(json  GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3)
+FetchContent_Declare(json  GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(json)
 
-FetchContent_Declare(glfw  GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8)
+FetchContent_Declare(glfw  GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(glfw)
 
-FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6)
+FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(imgui)
 
-FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20)
+FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(stb)
 
 add_executable(DotaManager
