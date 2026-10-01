@@ -214,7 +214,7 @@ jobs:
           gh release create latest \
             --target "$GITHUB_SHA" \
             --title "Latest Build ($VERSION)" \
-            --prerelease \
+            --latest=true \
             --notes "Automated build $VERSION from commit $GITHUB_SHA" \
             DotaManager-Windows/DotaManager.exe \
             "$APPIMAGE_FILE"
