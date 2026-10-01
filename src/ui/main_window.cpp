@@ -9,6 +9,9 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::SetNextWindowPos({ 0, 0 });
     ImGui::SetNextWindowSize(ds);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {16.f, 14.f});
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8.f, 6.f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 6.f});
     ImGui::Begin("Main", NULL, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize);
 
     if (ui_theme_background_image(g_current_theme) && g_bg_crimson_tex != (ImTextureID)0) {
@@ -19,6 +22,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
             { wpos.x + ds.x, wpos.y + ds.y },
             { 0, 0 }, { 1, 1 },
             IM_COL32(255, 255, 255, 255));
+        ImGui::GetWindowDrawList()->AddRectFilled(wpos,
+            { wpos.x + ds.x, wpos.y + ds.y }, IM_COL32(12, 14, 18, 205));
     }
 
     if (font_big) ImGui::PushFont(font_big);
@@ -46,15 +51,19 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ensure_theme_metadata_loaded();
     const float header_y = ImGui::GetStyle().WindowPadding.y + 6.f;
-    const float theme_width = 156.f;
-    const float language_width = 62.f;
+    const float theme_width = 174.f;
+    const float language_width = ImGui::CalcTextSize("RU").x
+        + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2.f + 8.f;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
-    const float palette_width = ui_theme_has_palette_editor(g_current_theme) ? 30.f + spacing : 0.f;
+    const float palette_width = ui_theme_has_palette_editor(g_current_theme) ? 38.f + spacing : 0.f;
     ImGui::SameLine();
     ImGui::SetCursorPos({ ds.x - ImGui::GetStyle().WindowPadding.x
         - theme_width - language_width - spacing - palette_width, header_y });
+    ImGui::BeginChild("##header_controls",
+        {theme_width + language_width + spacing + palette_width, 36.f}, false,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if (palette_width > 0.f) {
-        if (ImGui::Button("...##palette", { 30.f, ImGui::GetFrameHeight() }))
+        if (ImGui::Button("...##palette", { 38.f, ImGui::GetFrameHeight() }))
             g_palette_open = !g_palette_open;
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("palette"));
         ImGui::SameLine();
@@ -85,7 +94,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::EndCombo();
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("theme"));
-    ImGui::SetCursorPosY(header_y + ImGui::GetFrameHeight() + 16.f);
+    ImGui::EndChild();
+    ImGui::SetCursorPosY(ImGui::GetStyle().WindowPadding.y + 44.f);
 
     ImGui::Separator();
 
@@ -134,7 +144,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     const float AVATAR_SIZE = 24.f;
     const float ROW_H = AVATAR_SIZE + 6.f;
 
-    const float bottom_h = 38.f + 40.f + ImGui::GetFrameHeightWithSpacing()
+    const float bottom_h = 38.f + 40.f + 32.f + ImGui::GetStyle().ItemSpacing.y
         + ImGui::GetStyle().ItemSpacing.y * 3
         + ImGui::GetStyle().WindowPadding.y;
     const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
@@ -271,21 +281,34 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::BeginChild("##status", {0, 40.f});
     ImGui::TextWrapped("%s", tr_value("status", local_status).c_str());
     ImGui::EndChild();
-    ImGui::SetCursorPosY(ds.y - ImGui::GetStyle().WindowPadding.y - ImGui::GetFrameHeight());
-    if (ImGui::Button("Info")) ImGui::OpenPopup("##info");
-    if (ImGui::BeginPopup("##info")) {
-        ImGui::Text("%s : OutTuna", tr("author"));
+    ImGui::SetCursorPosY(ds.y - ImGui::GetStyle().WindowPadding.y - 32.f);
+    if (ImGui::Button("Info", {64.f, 32.f})) ImGui::OpenPopup("Info###info");
+    ImGui::SetNextWindowPos({ds.x * 0.5f, ds.y * 0.5f}, ImGuiCond_Appearing, {0.5f, 0.5f});
+    ImGui::SetNextWindowSize({360.f, 0.f}, ImGuiCond_Appearing);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
+    bool info_open = true;
+    if (ImGui::BeginPopupModal("Info###info", &info_open,
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
+        ImGui::TextUnformatted("Dota 2 Config Manager");
+        ImGui::TextDisabled("v%s", app_version());
+        ImGui::Spacing();
         ImGui::Separator();
-        if (ImGui::Selectable("GitHub")) open_external(REPOSITORY_URL);
-        ImGui::TextDisabled("%s", REPOSITORY_URL);
+        ImGui::Spacing();
+        ImGui::Text("%s: OutTuna", tr("author"));
+        ImGui::Spacing();
+        if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
+        ImGui::Spacing();
+        if (ImGui::Button(tr("update_close"), {-1.f, 32.f})) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar();
     ImGui::SameLine();
-    if (ImGui::Button(tr("update_check"))) updates_check(true);
+    if (ImGui::Button(tr("update_check"), {0.f, 32.f})) updates_check(true);
     ImGui::SameLine();
     ImGui::TextDisabled("v%s", app_version());
 
     ImGui::End();
+    ImGui::PopStyleVar(3);
 
     if (g_palette_open && ui_theme_has_palette_editor(g_current_theme))
         render_palette_panel(ds);
