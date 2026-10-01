@@ -10,6 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(APP_VERSION "0.0" CACHE STRING "App version, e.g. 1.7 or v1.7 ('v' optional)")
 string(REGEX REPLACE "^v" "" APP_VERSION_STRING "${APP_VERSION}")
+if(NOT APP_VERSION_STRING MATCHES "^[0-9]+[.][0-9]+([.][0-9]+)?([.][0-9]+)?$")
+    message(FATAL_ERROR "APP_VERSION must include major and minor components, e.g. v1.13")
+endif()
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+configure_file("${CMAKE_SOURCE_DIR}/cmake/AppVersion.h.in"
+    "${CMAKE_BINARY_DIR}/generated/app_version.h" @ONLY)
 string(REPLACE "." ";" APP_VERSION_PARTS "${APP_VERSION_STRING}")
 list(GET APP_VERSION_PARTS 0 APP_VERSION_MAJOR)
 list(LENGTH APP_VERSION_PARTS APP_VERSION_PARTS_LEN)
@@ -117,7 +123,7 @@ target_include_directories(dotamanager_core PUBLIC
     ${EMBEDDED_THEMES_DIR}
     PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(dotamanager_core PUBLIC cpr::cpr nlohmann_json::nlohmann_json Threads::Threads)
-target_compile_definitions(dotamanager_core PRIVATE DOTA_APP_VERSION="${APP_VERSION_STRING}")
+
 if(WIN32)
     target_link_libraries(dotamanager_core PUBLIC shell32 ole32 advapi32 bcrypt)
     if(MSVC)
@@ -201,6 +207,9 @@ endif()
 option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
 if(DOTAMANAGER_BUILD_TESTS)
     enable_testing()
+    add_executable(version_build_checks tests/version_build_checks.cpp)
+    target_link_libraries(version_build_checks PRIVATE dotamanager_core)
+    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}")
     add_executable(update_checks tests/update_checks.cpp src/core/release_info.cpp src/core/checksum.cpp)
     add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp)
     add_executable(avatar_checks tests/avatar_checks.cpp)
@@ -212,6 +221,7 @@ if(DOTAMANAGER_BUILD_TESTS)
     target_link_libraries(update_ui_checks PRIVATE dotamanager_core)
     foreach(test_target update_checks update_service_checks avatar_checks update_ui_checks)
         target_include_directories(${test_target} PRIVATE
+            ${EMBEDDED_THEMES_DIR}
             ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
             ${CMAKE_SOURCE_DIR}/src/network ${CMAKE_SOURCE_DIR}/src/platform)
         target_link_libraries(${test_target} PRIVATE nlohmann_json::nlohmann_json Threads::Threads)

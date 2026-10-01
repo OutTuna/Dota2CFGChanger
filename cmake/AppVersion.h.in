@@ -1,0 +1,4 @@
+#pragma once
+#ifndef DOTA_APP_VERSION
+#define DOTA_APP_VERSION "@APP_VERSION_STRING@"
+#endif
