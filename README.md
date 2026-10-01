@@ -27,7 +27,7 @@ A native Windows and Linux utility for copying Dota 2 client settings from one S
 
 ## Digram of project
 
-<img width="4754" height="6730" alt="diagram" src="https://github.com/user-attachments/assets/962f7584-16ff-4590-aa48-ce883f79b549" />
+<img width="5528" height="8809" alt="diagram" src="https://github.com/user-attachments/assets/962f7584-16ff-4590-aa48-ce883f79b549" />
 
 
 ## English
