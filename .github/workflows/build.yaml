@@ -8,6 +8,7 @@ on:
       - "LICENSE"
       - ".gitignore"
       - "TODO.md"
+      - "diagram.png"
   workflow_dispatch:
     inputs:
       force_major:
