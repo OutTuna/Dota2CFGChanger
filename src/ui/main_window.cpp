@@ -3,7 +3,6 @@
 #include "localization.h"
 #include "updates.h"
 #include "avatar.h"
-#include <GLFW/glfw3.h>
 
 void ui_render_main(ImFont* font_big, ImVec2 ds) {
     avatar_flush_pending();
@@ -45,64 +44,48 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     }
     if (font_big) ImGui::PopFont();
 
-    if (ui_theme_has_palette_editor(g_current_theme)) {
-        ImGui::SameLine(ds.x - 70.f);
-        ImGui::PushStyleColor(ImGuiCol_Button, { 0.00f, 0.00f, 0.00f, 0.00f });
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.40f, 0.08f, 0.08f, 1.00f });
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.25f, 0.05f, 0.05f, 1.00f });
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.f);
-        if (ImGui::Button("##palette", { 26, 22 }))
+    ensure_theme_metadata_loaded();
+    const float header_y = ImGui::GetStyle().WindowPadding.y + 6.f;
+    const float theme_width = 156.f;
+    const float language_width = 62.f;
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float palette_width = ui_theme_has_palette_editor(g_current_theme) ? 30.f + spacing : 0.f;
+    ImGui::SameLine();
+    ImGui::SetCursorPos({ ds.x - ImGui::GetStyle().WindowPadding.x
+        - theme_width - language_width - spacing - palette_width, header_y });
+    if (palette_width > 0.f) {
+        if (ImGui::Button("...##palette", { 30.f, ImGui::GetFrameHeight() }))
             g_palette_open = !g_palette_open;
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(3);
-
-        ImDrawList* pdl = ImGui::GetWindowDrawList();
-        ImVec2 pmin = ImGui::GetItemRectMin();
-        ImVec2 pmax = ImGui::GetItemRectMax();
-        float pcx = (pmin.x + pmax.x) * 0.5f;
-        float pcy = (pmin.y + pmax.y) * 0.5f;
-        float pr = 4.5f;
-        ImVec2 dots[4] = {
-            { pcx - pr, pcy - pr }, { pcx + pr, pcy - pr },
-            { pcx - pr, pcy + pr }, { pcx + pr, pcy + pr }
-        };
-        ImU32 dot_cols[4] = {
-            IM_COL32(220, 60, 60, 220), IM_COL32(60, 120, 220, 220),
-            IM_COL32(60, 200, 80, 220), IM_COL32(220, 180, 40, 220)
-        };
-        for (int i = 0; i < 4; i++)
-            pdl->AddCircleFilled(dots[i], 3.f, dot_cols[i]);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("palette"));
+        ImGui::SameLine();
     }
-
-    ImGui::SameLine(ds.x - 38.f);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.f);
-    ImGui::PushStyleColor(ImGuiCol_Button, { 0.00f, 0.00f, 0.00f, 0.00f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.25f, 0.25f, 0.28f, 1.00f });
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.18f, 0.18f, 0.20f, 1.00f });
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.f);
-    if (ImGui::Button("##gear", { 26, 22 }))
-        g_settings_open = !g_settings_open;
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
-
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    ImVec2 bmin = ImGui::GetItemRectMin();
-    ImVec2 bmax = ImGui::GetItemRectMax();
-    ImVec2 ctr = { (bmin.x + bmax.x) * 0.5f, (bmin.y + bmax.y) * 0.5f };
-
-    float t = (float)glfwGetTime();
-    float ang = g_settings_open ? t * 1.2f : 0.f;
-    ImU32 col = IM_COL32(160, 160, 170, 220);
-    const float PI = 3.14159f;
-
-    for (int i = 0; i < 8; i++) {
-        float a0 = ang + i * (PI * 2.f / 8.f);
-        float a1 = a0 + 0.35f;
-        dl->PathArcTo(ctr, 6.5f, a0, a1, 4);
-        dl->PathArcTo(ctr, 3.5f, a1, a0 + PI * 2.f / 8.f, 4);
-        dl->PathFillConvex(col);
+    const char* language_labels[] = {"RU", "UA", "EN"};
+    const char* language_codes[] = {"ru", "uk", "en"};
+    int selected_language = language_index() == 1 ? 0 : language_index() == 2 ? 1 : 2;
+    ImGui::SetNextItemWidth(language_width);
+    if (ImGui::Combo("##language", &selected_language, language_labels, 3)) {
+        set_language(language_codes[selected_language]);
+        save_settings();
     }
-    dl->AddCircleFilled(ctr, 2.8f, col);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("language"));
+    ImGui::SameLine();
+    const int theme_index = static_cast<int>(g_current_theme);
+    const char* theme_preview = theme_index == 0 ? "Dark" : g_theme_data[theme_index].name.c_str();
+    ImGui::SetNextItemWidth(theme_width);
+    if (ImGui::BeginCombo("##theme", theme_preview)) {
+        for (int i = 0; i < 5; ++i) {
+            const char* label = i == 0 ? "Dark" : g_theme_data[i].name.c_str();
+            const bool selected = i == theme_index;
+            if (ImGui::Selectable(label, selected)) {
+                ui_apply_theme(static_cast<AppTheme>(i));
+                save_settings();
+            }
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tr("theme"));
+    ImGui::SetCursorPosY(header_y + ImGui::GetFrameHeight() + 16.f);
 
     ImGui::Separator();
 
@@ -124,7 +107,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::TextDisabled("%s", tr("destination"));
     ImGui::PushItemWidth(-1);
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.28f, 0.28f, 0.32f, 1.f });
-    ImGui::InputText("##dst_path", dst_path, 256, ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputText("##dst_path", dst_path, PATH_BUF_SIZE, ImGuiInputTextFlags_ReadOnly);
     ImGui::PopStyleColor();
     if (ImGui::IsItemClicked()) open_dst = true;
     ImGui::PopItemWidth();
@@ -288,17 +271,21 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::BeginChild("##status", {0, 40.f});
     ImGui::TextWrapped("%s", tr_value("status", local_status).c_str());
     ImGui::EndChild();
-    if (ImGui::SmallButton("OutTuna")) open_external(REPOSITORY_URL);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", REPOSITORY_URL);
+    ImGui::SetCursorPosY(ds.y - ImGui::GetStyle().WindowPadding.y - ImGui::GetFrameHeight());
+    if (ImGui::Button("Info")) ImGui::OpenPopup("##info");
+    if (ImGui::BeginPopup("##info")) {
+        ImGui::Text("%s : OutTuna", tr("author"));
+        ImGui::Separator();
+        if (ImGui::Selectable("GitHub")) open_external(REPOSITORY_URL);
+        ImGui::TextDisabled("%s", REPOSITORY_URL);
+        ImGui::EndPopup();
+    }
     ImGui::SameLine();
-    if (ImGui::SmallButton(tr("update_check"))) updates_check(true);
+    if (ImGui::Button(tr("update_check"))) updates_check(true);
     ImGui::SameLine();
     ImGui::TextDisabled("v%s", app_version());
 
     ImGui::End();
-
-    if (g_settings_open)
-        render_settings_panel(ds);
 
     if (g_palette_open && ui_theme_has_palette_editor(g_current_theme))
         render_palette_panel(ds);

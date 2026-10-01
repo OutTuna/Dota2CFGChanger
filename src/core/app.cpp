@@ -56,16 +56,38 @@ void load_settings() {
     auto default_path = default_steam_userdata();
     set_config_path(src_path, default_path);
     set_config_path(dst_path, default_path);
-    if (fs::exists(settings_path())) {
+#ifdef _WIN32
+    const auto registry_settings = read_registry_settings();
+    const bool migrate_settings = registry_settings.empty();
+    const bool have_settings = !registry_settings.empty() || fs::exists(settings_path());
+#else
+    const bool have_settings = fs::exists(settings_path());
+#endif
+    if (have_settings) {
         try {
+            json j;
+#ifdef _WIN32
+            if (!registry_settings.empty()) j = json::parse(registry_settings);
+            else {
+                std::ifstream f(settings_path());
+                f >> j;
+            }
+#else
             std::ifstream f(settings_path());
-            json j; f >> j;
+            f >> j;
+#endif
             std::string s = j.value("src", default_path);
             std::string d = j.value("dst", default_path);
             g_theme = std::clamp(j.value("theme", 0), 0, 4);
             set_language(j.value("language", "en"));
             set_config_path(src_path, s);
             set_config_path(dst_path, d);
+#ifdef _WIN32
+            if (migrate_settings && write_registry_settings(j.dump())) {
+                std::error_code cleanup_error;
+                fs::remove(settings_path(), cleanup_error);
+            }
+#endif
         } catch (...) {}
     }
     if (fs::exists(nick_cache_path())) {
@@ -100,7 +122,15 @@ void save_settings() {
         avatar_copy = avatar_url_cache;
     }
     try {
-        { std::ofstream f(settings_path()); json j = {{"src", source_path},{"dst", destination_path},{"theme", g_theme.load()},{"language", language_code()}}; f << j; }
+        json settings = {{"src", source_path},{"dst", destination_path},{"theme", g_theme.load()},{"language", language_code()}};
+#ifdef _WIN32
+        if (write_registry_settings(settings.dump())) {
+            std::error_code cleanup_error;
+            fs::remove(settings_path(), cleanup_error);
+        }
+#else
+        { std::ofstream f(settings_path()); f << settings; }
+#endif
         { std::ofstream fc(nick_cache_path()); json jc(nick_copy); fc << jc; }
         { std::ofstream fa(avatar_url_cache_path()); json ja(avatar_copy); fa << ja; }
     } catch (...) {}

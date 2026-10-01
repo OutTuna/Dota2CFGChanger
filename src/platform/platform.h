@@ -11,3 +11,8 @@ struct FontPaths {
     std::string bold;
 };
 FontPaths find_font_paths();
+
+#ifdef _WIN32
+std::string read_registry_settings();
+bool write_registry_settings(const std::string& settings);
+#endif
