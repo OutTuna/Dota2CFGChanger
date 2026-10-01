@@ -127,7 +127,7 @@ static void mark_ready(const std::string& id, std::vector<unsigned char>&& pixel
 }
 
 static fs::path disk_cache_path(const std::string& id) {
-    return fs::path(config_dir()) / AVATAR_DISK_DIR / (id + ".img");
+    return fs::u8path(config_dir()) / AVATAR_DISK_DIR / (id + ".img");
 }
 
 static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) {
@@ -141,7 +141,7 @@ static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) 
 
 static void save_to_disk_cache(const std::string& id, const std::string& raw_bytes) {
     try {
-        fs::create_directories(fs::path(config_dir()) / AVATAR_DISK_DIR);
+        fs::create_directories(fs::u8path(config_dir()) / AVATAR_DISK_DIR);
         std::ofstream f(disk_cache_path(id), std::ios::binary);
         if (f) f.write(raw_bytes.data(), (std::streamsize)raw_bytes.size());
     } catch (...) {}

@@ -1,5 +1,6 @@
 #include "ui_internal.h"
 #include "app.h"
+#include "localization.h"
 #include "avatar.h"
 #include <GLFW/glfw3.h>
 #include <thread>
@@ -109,10 +110,12 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::Separator();
 
+    bool scanning = g_scanning.load();
+    if (scanning) ImGui::BeginDisabled();
     static bool open_src = false;
     static bool open_dst = false;
 
-    ImGui::TextDisabled("Откуда конфиг");
+    ImGui::TextDisabled("%s", tr("source"));
     ImGui::PushItemWidth(-1);
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.28f, 0.28f, 0.32f, 1.f });
     ImGui::InputText("##src_path", src_path, PATH_BUF_SIZE, ImGuiInputTextFlags_ReadOnly);
@@ -122,7 +125,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::Spacing();
 
-    ImGui::TextDisabled("Куда конфиг");
+    ImGui::TextDisabled("%s", tr("destination"));
     ImGui::PushItemWidth(-1);
     ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, { 0.28f, 0.28f, 0.32f, 1.f });
     ImGui::InputText("##dst_path", dst_path, 256, ImGuiInputTextFlags_ReadOnly);
@@ -134,19 +137,22 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     if (open_src) {
         open_src = false;
-        auto p = browse_for_folder("Откуда конфиг");
-        if (!p.empty()) { strncpy(src_path, p.c_str(), 255); src_path[255] = 0; }
+        auto p = browse_for_folder(tr("source"));
+        if (!p.empty()) { set_config_path(src_path, p); save_settings(); }
     }
     if (open_dst) {
         open_dst = false;
-        auto p = browse_for_folder("Куда конфиг");
-        if (!p.empty()) { strncpy(dst_path, p.c_str(), 255); dst_path[255] = 0; }
+        auto p = browse_for_folder(tr("destination"));
+        if (!p.empty()) { set_config_path(dst_path, p); save_settings(); }
     }
 
-    bool scanning = g_scanning.load();
+    if (scanning) ImGui::EndDisabled();
     if (scanning) ImGui::BeginDisabled();
-    if (ImGui::Button(scanning ? "SCANNING..." : "SCAN FOLDERS", { -1, 32 }))
+    if (ImGui::Button(scanning ? tr("scanning") : tr("scan"), { -1, 32 }))
+    {
+        g_scanning = true;
         std::thread(scan_thread).detach();
+    }
     if (scanning) ImGui::EndDisabled();
 
     const float AVATAR_SIZE = 24.f;
@@ -165,11 +171,11 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         local_src_list = src_list;
         local_dst_list = dst_list;
         local_nick_cache = nick_cache;
-        local_status = status_msg;
+        local_status = tr_value(status_msg.c_str(), status_detail);
     }
 
     ImGui::Columns(2, "lists", true);
-    ImGui::Text("From (Config)");
+    ImGui::TextUnformatted(tr("from_account"));
 
     auto render_account_list = [&](
         const std::vector<std::string>& list,
@@ -263,13 +269,14 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     render_account_list(local_src_list, selected_src, "##src_list");
 
     ImGui::NextColumn();
-    ImGui::Text("To (Account)");
+    ImGui::TextUnformatted(tr("to_account"));
     render_account_list(local_dst_list, selected_dst, "##dst_list");
 
     ImGui::Columns(1);
     ImGui::Separator();
 
-    if (ImGui::Button("COPY CONFIG NOW", { -1, 38 })) {
+    if (scanning) ImGui::BeginDisabled();
+    if (ImGui::Button(tr("copy"), { -1, 38 })) {
         int s = selected_src.load(), d = selected_dst.load();
         if (s < 0 || d < 0) {
             copy_config();
@@ -284,7 +291,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         }
     }
 
-    ImGui::Text("Status: %s", local_status.c_str());
+    if (scanning) ImGui::EndDisabled();
+    ImGui::TextWrapped("%s", tr_value("status", local_status).c_str());
 
     ImGui::End();
 

@@ -56,10 +56,10 @@ The program is a single executable with no installer: a portable `.exe` on Windo
 
 1. Download `DotaManager.exe` (Windows) or the AppImage (Linux) from [Releases](https://github.com/OutTuna/Dota2CFGChanger/releases).
 2. Close Steam, so the client does not write to the directory while it is being replaced.
-3. Run the program. Click the **Откуда конфиг** (source) field and choose the source root. The destination defaults to `C:\Program Files (x86)\Steam\userdata` on Windows and `~/.local/share/Steam/userdata` on Linux; click its field to change it.
-4. Press `SCAN FOLDERS`.
+3. Run the program. Click **Source config folder** to choose the source root and **Destination account folder** to choose the target root. Both default to the detected Steam userdata directory, or a standard install location if none is found.
+4. Press `Scan folders`.
 5. Select an account in the left list (source) and one in the right list (destination).
-6. Press `COPY CONFIG NOW` and confirm.
+6. Press `Copy config` and confirm.
 
 Both roots are expected to use Steam's `userdata` layout:
 
@@ -74,7 +74,7 @@ Only folders whose names consist entirely of digits are treated as accounts.
 
 ### Behavior
 
-**Files modified.** The destination's `<account_id>/570` directory is replaced with the source's. The copy is written to a temporary folder first and swapped in only when it completes, so a failed copy (disk full, file locked by Dota) leaves the existing config untouched. Once the copy succeeds, however, the operation is destructive: the previous config is gone and there is no automatic backup, so keep your own backup if the current settings matter.
+**Files modified.** The destination's `<account_id>/570` directory is replaced with the source's. The copy is written to a sibling `.dotamanager_tmp` folder first. The old config is renamed to `.dotamanager_backup` before installing the new one; if installation fails, the program tries to restore the old directory. If restoration fails, both working directories are preserved and the backup path is shown. Leftovers from an interrupted copy block another copy until you preserve or restore them manually. Once the copy succeeds, however, the operation is destructive: the temporary backup is removed and there is no permanent automatic backup, so keep your own backup if the current settings matter.
 
 **Network access.** For every account folder found, the program requests the public profile XML at `steamcommunity.com/profiles/<SteamID64>?xml=1` to read the persona name and the avatar URL, then downloads the avatar. The only data sent is the SteamID64, derived from the folder name as `account_id + 76561197960265728`. No login or API key is used. Private profiles yield no name or avatar, and the list shows the numeric ID instead. At most eight avatars download at a time; a failed download is retried after 30 seconds.
 
@@ -82,7 +82,7 @@ Only folders whose names consist entirely of digits are treated as accounts.
 
 | File / folder | Contents |
 | --- | --- |
-| `settings.json` | source path, destination path, selected theme |
+| `settings.json` | source path, destination path, selected theme and language |
 | `nick_cache.json` | account ID to persona name cache |
 | `avatar_url_cache.json` | account ID to avatar URL cache |
 | `avatar_cache/` | downloaded avatar images (`<account_id>.img`) |
@@ -121,9 +121,11 @@ All dependencies are fetched and built by CMake as static libraries.
 | --- | --- |
 | `main.cpp` | Entry point and main loop |
 | `app.cpp`, `app.h` | Folder scan, config copy, settings and caches, Steam profile requests, folder dialog, font lookup |
-| `ui.cpp`, `ui.h` | Rendering, JSON theme system, dialogs, popups |
+| `ui/` | Rendering, JSON theme system, dialogs, popups |
+| `file_ops.cpp`, `file_ops.h` | Path normalization, Steam detection, recoverable config replacement |
+| `localization.cpp`, `localization.h`, `locales/` | Embedded English, Russian and Ukrainian translations |
 | `avatar.cpp`, `avatar.h` | Asynchronous avatar download, disk cache and OpenGL texture upload |
-| `app_icon.h`, `bg_crimson.h` | Embedded icon and fallback background image |
+| `app_icon.h`, `cmake/` | Embedded icon and resource generators |
 | `app.rc.in`, `app.manifest`, `Icon.ico` | Windows version info, manifest and icon (assembled by CMake) |
 | `themes/` | Theme JSON files and background, embedded at build time |
 | `scripts/` | Local development checks (`run-all-checks.sh`, versioning, CMake smoke tests) |
@@ -133,10 +135,10 @@ All dependencies are fetched and built by CMake as static libraries.
 ### Limitations
 
 - No macOS support.
-- The Steam installation is not detected. The defaults are the standard install paths (`C:\Program Files (x86)\Steam\userdata`, `~/.local/share/Steam/userdata`); Flatpak Steam lives elsewhere and must be browsed to manually.
+- Steam userdata is detected from the Windows registry and common Linux locations, including Flatpak and `$XDG_DATA_HOME`. When several installations exist, the first detected directory is selected; choose another manually if needed.
 - On Linux the folder picker requires `zenity` or `kdialog`.
 - Names and avatars require network access and a public profile.
-- Interface strings are currently a mix of English and Russian.
+- English is the default interface language. Russian and Ukrainian are available in settings, and the selected language is remembered.
 
 ### Issues
 
@@ -170,10 +172,10 @@ Dota 2 хранит раскладку клавиш, опции и другие 
 
 1. Скачайте `DotaManager.exe` (Windows) или AppImage (Linux) в разделе [Releases](https://github.com/OutTuna/Dota2CFGChanger/releases).
 2. Закройте Steam, чтобы клиент не писал в каталог в момент его замены.
-3. Запустите программу. Нажмите на поле **Откуда конфиг** и выберите исходный каталог. Целевой каталог по умолчанию: `C:\Program Files (x86)\Steam\userdata` на Windows и `~/.local/share/Steam\userdata` на Linux. Чтобы изменить его, нажмите на соответствующее поле.
-4. Нажмите `SCAN FOLDERS`.
+3. Запустите программу. Нажмите **Source config folder** для выбора источника и **Destination account folder** для назначения. Оба пути по умолчанию указывают на найденный каталог Steam userdata либо стандартный путь установки. В настройках можно выбрать русский или украинский язык.
+4. Нажмите `Scan folders`.
 5. Выберите аккаунт в левом списке (источник) и в правом (назначение).
-6. Нажмите `COPY CONFIG NOW` и подтвердите действие.
+6. Нажмите `Copy config` и подтвердите действие.
 
 Оба каталога должны иметь структуру `userdata` из Steam:
 
@@ -188,7 +190,7 @@ Dota 2 хранит раскладку клавиш, опции и другие 
 
 ### Поведение
 
-**Изменяемые файлы.** Каталог `<account_id>/570` в назначении заменяется каталогом из источника. Сначала копия пишется во временную папку и подменяется только после успешного завершения, поэтому неудачное копирование (нет места на диске, файл занят Dota) не трогает существующий конфиг. После успешного копирования операция деструктивна: прежний конфиг удаётся без автоматической резервной копии, поэтому, если текущие настройки важны, сделайте собственную.
+**Изменяемые файлы.** Каталог `<account_id>/570` в назначении заменяется каталогом из источника. Сначала копия записывается в соседнюю папку `.dotamanager_tmp`. Старый конфиг переименовывается в `.dotamanager_backup` перед установкой нового; при ошибке программа пытается вернуть его обратно. Если восстановление не удалось, обе рабочие папки сохраняются, а путь к резервной копии показывается в статусе. Остатки прерванного копирования блокируют повторную попытку до их ручного сохранения или восстановления. После успешного копирования операция деструктивна: временная резервная копия удаляется, постоянной автоматической копии нет, поэтому, если текущие настройки важны, сделайте собственную.
 
 **Сетевые запросы.** Для каждой найденной папки аккаунта программа запрашивает публичный XML профиля по адресу `steamcommunity.com/profiles/<SteamID64>?xml=1`, берёт из него имя и ссылку на аватар, затем загружает аватар. Передаётся только SteamID64, вычисленный из имени папки как `account_id + 76561197960265728`. Логин и API-ключ не используются. Для закрытых профилей имя и аватар недоступны, и в списке показывается числовой ID. Одновременно загружается не более восьми аватаров; неудачная загрузка повторяется через 30 секунд.
 
@@ -196,7 +198,7 @@ Dota 2 хранит раскладку клавиш, опции и другие 
 
 | Файл / папка | Содержимое |
 | --- | --- |
-| `settings.json` | путь к источнику, путь к назначению, выбранная тема |
+| `settings.json` | путь к источнику, путь к назначению, выбранные тема и язык |
 | `nick_cache.json` | кэш соответствия ID аккаунта и имени |
 | `avatar_url_cache.json` | кэш соответствия ID аккаунта и ссылки на аватар |
 | `avatar_cache/` | скачанные изображения аватаров (`<account_id>.img`) |
@@ -235,9 +237,11 @@ cmake --build build --config Release
 | --- | --- |
 | `main.cpp` | Точка входа и главный цикл |
 | `app.cpp`, `app.h` | Сканирование папок, копирование, настройки и кэши, запросы к профилям Steam, диалог выбора папки, поиск шрифтов |
-| `ui.cpp`, `ui.h` | Отрисовка, JSON-система тем, диалоги, всплывающие окна |
+| `ui/` | Отрисовка, JSON-система тем, диалоги, всплывающие окна |
+| `file_ops.cpp`, `file_ops.h` | Пути, обнаружение Steam, замена конфига с восстановлением |
+| `localization.cpp`, `localization.h`, `locales/` | Встроенные английские, русские и украинские переводы |
 | `avatar.cpp`, `avatar.h` | Асинхронная загрузка аватаров, дисковый кэш и создание текстур OpenGL |
-| `app_icon.h`, `bg_crimson.h` | Встроенная иконка и резервное фоновое изображение |
+| `app_icon.h`, `cmake/` | Встроенная иконка и генераторы ресурсов |
 | `app.rc.in`, `app.manifest`, `Icon.ico` | Информация о версии, манифест и иконка Windows (собираются CMake) |
 | `themes/` | JSON-файлы тем и фон, встраиваются при сборке |
 | `scripts/` | Локальные проверки для разработки (`run-all-checks.sh`, версии, smoke-тесты CMake) |
@@ -247,12 +251,20 @@ cmake --build build --config Release
 ### Ограничения
 
 - Нет поддержки macOS.
-- Каталог установки Steam не определяется автоматически. По умолчанию используются стандартные пути (`C:\Program Files (x86)\Steam\userdata`, `~/.local/share/Steam\userdata`); Steam из Flatpak лежит в другом месте, до него нужно дойти вручную.
+- Каталог Steam userdata определяется по реестру Windows и стандартным Linux-путям, включая Flatpak и `$XDG_DATA_HOME`. Если установок несколько, выбирается первый найденный каталог; другой можно выбрать вручную.
 - На Linux диалогу выбора папки нужны `zenity` или `kdialog`.
 - Для имён и аватаров нужны сеть и публичный профиль.
-- Строки интерфейса сейчас частично на английском, частично на русском.
+- По умолчанию интерфейс на английском. Русский и украинский доступны в настройках; выбранный язык сохраняется.
 
 ### Обратная связь
 
 Сообщения об ошибках и предложения принимаются в [трекере задач](https://github.com/OutTuna/Dota2CFGChanger/issues). Укажите версию ОС и используемый релиз.
 
+
+Core regression checks (paths, copy failures, rollback and translations):
+
+```bash
+python3 tests/core_checks.py build/_deps/json-src/include
+```
+
+These checks need Python 3 and a C++17 compiler and run in a temporary directory on Linux/macOS.

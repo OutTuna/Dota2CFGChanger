@@ -6,7 +6,7 @@
 #include <mutex>
 #include <atomic>
 
-constexpr int PATH_BUF_SIZE = 256;
+constexpr int PATH_BUF_SIZE = 4096;
 
 inline constexpr const char* SETTINGS_FILE     = "settings.json";
 inline constexpr const char* CACHE_FILE        = "nick_cache.json";
@@ -26,17 +26,11 @@ std::string exe_dir();
 // mount, so writing settings.json next to the executable would fail there.
 std::string config_dir();
 
-#ifdef _WIN32
-inline char src_path[PATH_BUF_SIZE] = "C:\\Program Files (x86)\\Steam\\userdata";
-inline char dst_path[PATH_BUF_SIZE] = "C:\\Program Files (x86)\\Steam\\userdata";
-#else
-// Common default Steam location on Linux (native or Flatpak use different
-// paths; the user can still browse to the right folder from the UI).
-inline char src_path[PATH_BUF_SIZE] = "~/.local/share/Steam/userdata";
-inline char dst_path[PATH_BUF_SIZE] = "~/.local/share/Steam/userdata";
-#endif
+inline char src_path[PATH_BUF_SIZE] = {};
+inline char dst_path[PATH_BUF_SIZE] = {};
+bool set_config_path(char* target, const std::string& path);
 
-inline int g_theme = 0;
+inline std::atomic<int> g_theme{0};
 
 inline std::mutex g_data_mutex;
 
@@ -44,7 +38,8 @@ inline std::vector<std::string> src_list;
 inline std::vector<std::string> dst_list;
 inline std::map<std::string, std::string> nick_cache;
 inline std::map<std::string, std::string> avatar_url_cache;
-inline std::string status_msg = "Ready";
+inline std::string status_msg = "ready";
+inline std::string status_detail;
 
 inline std::atomic<int> selected_src{ -1 };
 inline std::atomic<int> selected_dst{ -1 };
