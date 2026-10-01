@@ -10,7 +10,6 @@ A native Windows and Linux utility for copying Dota 2 client settings from one S
   <a href="https://github.com/OutTuna/Dota2CFGChanger/releases"><img alt="Releases" src="https://img.shields.io/badge/releases-GitHub-4c566a?style=flat-square"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/OutTuna/Dota2CFGChanger?style=flat-square"></a>
   <a href="https://github.com/OutTuna/Dota2CFGChanger/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/OutTuna/Dota2CFGChanger?style=flat-square"></a>
-  <a href="https://gitdiagram.com/outtuna/dota2cfgchanger?utm_source=readme&utm_medium=badge"><img alt="Diagram" src="https://gitdiagram.com/diagram-badge.svg"></a>
 </p>
 
 <p>
@@ -28,7 +27,7 @@ A native Windows and Linux utility for copying Dota 2 client settings from one S
 
 ## Digram of project
 
-<img width="4895" height="6747" alt="diagram" src="https://github.com/user-attachments/assets/40e7e300-9a03-4a88-a3a1-0c60b29f2223" />
+<img width="4754" height="6730" alt="diagram" src="https://github.com/user-attachments/assets/962f7584-16ff-4590-aa48-ce883f79b549" />
 
 
 ## English
