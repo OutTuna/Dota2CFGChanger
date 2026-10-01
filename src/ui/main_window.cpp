@@ -61,7 +61,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         - theme_width - language_width - spacing - palette_width, header_y });
     ImGui::BeginChild("##header_controls",
         {theme_width + language_width + spacing + palette_width, 36.f}, false,
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground);
     if (palette_width > 0.f) {
         if (ImGui::Button("...##palette", { 38.f, ImGui::GetFrameHeight() }))
             g_palette_open = !g_palette_open;
@@ -289,16 +289,10 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     bool info_open = true;
     if (ImGui::BeginPopupModal("Info###info", &info_open,
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
-        ImGui::TextUnformatted("Dota 2 Config Manager");
-        ImGui::TextDisabled("v%s", app_version());
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-        ImGui::Text("%s: OutTuna", tr("author"));
+        ImGui::TextUnformatted("OutTuna");
+        ImGui::TextDisabled("Release v%s", app_version());
         ImGui::Spacing();
         if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
-        ImGui::Spacing();
-        if (ImGui::Button(tr("update_close"), {-1.f, 32.f})) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
     ImGui::PopStyleVar();

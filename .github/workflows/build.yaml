@@ -60,7 +60,7 @@ jobs:
           path: build/_deps
           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
+        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Regression tests
@@ -117,7 +117,7 @@ jobs:
           key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
           restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
+        run: cmake -S . -B build -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
 
       - name: Build
         run: cmake --build build --config Release -j"$(nproc)"
