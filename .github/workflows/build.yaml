@@ -88,6 +88,12 @@ jobs:
 
       - name: Install Linux Dependencies
         run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+          fi
+          if [ -f /etc/apt/apt-mirrors-security.txt ]; then
+            printf '%s\n' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors-security.txt > /dev/null
+          fi
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ccache \
