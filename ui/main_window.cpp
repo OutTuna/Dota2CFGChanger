@@ -1,9 +1,9 @@
 #include "ui_internal.h"
 #include "app.h"
 #include "localization.h"
+#include "updates.h"
 #include "avatar.h"
 #include <GLFW/glfw3.h>
-#include <thread>
 
 void ui_render_main(ImFont* font_big, ImVec2 ds) {
     avatar_flush_pending();
@@ -44,10 +44,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::Dummy({ tw, th + 4.f });
     }
     if (font_big) ImGui::PopFont();
-
-    ImGui::SameLine(0, 8.f);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6.f);
-    ImGui::TextDisabled("by OutTuna");
 
     if (ui_theme_has_palette_editor(g_current_theme)) {
         ImGui::SameLine(ds.x - 70.f);
@@ -149,16 +145,13 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (scanning) ImGui::EndDisabled();
     if (scanning) ImGui::BeginDisabled();
     if (ImGui::Button(scanning ? tr("scanning") : tr("scan"), { -1, 32 }))
-    {
-        g_scanning = true;
-        std::thread(scan_thread).detach();
-    }
+        start_scan();
     if (scanning) ImGui::EndDisabled();
 
     const float AVATAR_SIZE = 24.f;
     const float ROW_H = AVATAR_SIZE + 6.f;
 
-    const float bottom_h = 38.f + ImGui::GetTextLineHeightWithSpacing()
+    const float bottom_h = 38.f + 40.f + ImGui::GetFrameHeightWithSpacing()
         + ImGui::GetStyle().ItemSpacing.y * 3
         + ImGui::GetStyle().WindowPadding.y;
     const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
@@ -292,7 +285,15 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     }
 
     if (scanning) ImGui::EndDisabled();
+    ImGui::BeginChild("##status", {0, 40.f});
     ImGui::TextWrapped("%s", tr_value("status", local_status).c_str());
+    ImGui::EndChild();
+    if (ImGui::SmallButton("OutTuna")) open_external(REPOSITORY_URL);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", REPOSITORY_URL);
+    ImGui::SameLine();
+    if (ImGui::SmallButton(tr("update_check"))) updates_check(true);
+    ImGui::SameLine();
+    ImGui::TextDisabled("v%s", app_version());
 
     ImGui::End();
 

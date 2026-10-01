@@ -1,7 +1,6 @@
 #include "app.h"
 #include "file_ops.h"
 #include "localization.h"
-#include <cpr/cpr.h>
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
@@ -10,224 +9,15 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <thread>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <shlobj.h>
-#pragma comment(lib, "shell32.lib")
-#pragma comment(lib, "ole32.lib")
-#endif
+namespace {
+std::thread scan_worker;
+std::atomic<bool> stop_scan{false};
+}
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-
-static const char* USER_AGENT =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-
-namespace steam_api {
-
-static const long long STEAM64_BASE = 76561197960265728LL;
-
-long long steam3_to_64(const std::string& steam3_id) {
-    try {
-        return std::stoll(steam3_id) + STEAM64_BASE;
-    } catch (...) {
-        return 0;
-    }
-}
-
-std::string fetch_profile_xml(long long steam64, int timeout_ms) {
-    if (steam64 <= 0) return {};
-    try {
-        auto r = cpr::Get(
-            cpr::Url{ "https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1" },
-            cpr::Header{{"User-Agent", USER_AGENT}, {"Accept", "text/xml,application/xml,*/*"}},
-            cpr::Timeout{ timeout_ms },
-            cpr::Redirect{ cpr::PostRedirectFlags::POST_ALL });
-        if (r.status_code == 200) return r.text;
-    } catch (...) {}
-    return {};
-}
-
-static std::string decode_xml_entities(std::string s) {
-    struct Entity { const char* from; char to; };
-    // Order matters: &amp; must be decoded last, or "&amp;lt;" would become "<".
-    static const Entity entities[] = {
-        {"&lt;", '<'}, {"&gt;", '>'}, {"&quot;", '"'}, {"&apos;", '\''}, {"&amp;", '&'},
-    };
-    for (const auto& e : entities) {
-        size_t pos = 0;
-        const size_t from_len = std::strlen(e.from);
-        while ((pos = s.find(e.from, pos)) != std::string::npos) {
-            s.replace(pos, from_len, 1, e.to);
-            pos += 1;
-        }
-    }
-    return s;
-}
-
-std::string extract_tag(const std::string& xml, const std::string& tag) {
-    const std::string open  = "<" + tag + ">";
-    const std::string close = "</" + tag + ">";
-    size_t s = xml.find(open);
-    if (s == std::string::npos) return {};
-    size_t e = xml.find(close, s + open.size());
-    if (e == std::string::npos) return {};
-    std::string raw = xml.substr(s + open.size(), e - s - open.size());
-    const std::string cdata_open  = "<![CDATA[";
-    const std::string cdata_close = "]]>";
-    size_t p = raw.find(cdata_open);
-    if (p != std::string::npos) raw.replace(p, cdata_open.size(), "");
-    p = raw.find(cdata_close);
-    if (p != std::string::npos) raw.replace(p, cdata_close.size(), "");
-    while (!raw.empty() && (raw.front() == ' ' || raw.front() == '\n' || raw.front() == '\r'))
-        raw.erase(raw.begin());
-    while (!raw.empty() && (raw.back() == ' ' || raw.back() == '\n' || raw.back() == '\r'))
-        raw.pop_back();
-
-    return decode_xml_entities(raw);
-}
-
-}
-
-std::string exe_dir() {
-#ifdef _WIN32
-    std::vector<wchar_t> buf(32768);
-    DWORD n = GetModuleFileNameW(NULL, buf.data(), static_cast<DWORD>(buf.size()));
-    if (n == 0 || n >= buf.size()) return fs::current_path().u8string();
-    return fs::path(buf.data()).parent_path().u8string();
-#elif defined(__linux__)
-    std::error_code ec;
-    fs::path self = fs::read_symlink("/proc/self/exe", ec);
-    if (ec || self.empty()) return fs::current_path().u8string();
-    return self.parent_path().u8string();
-#else
-    return fs::current_path().u8string();
-#endif
-}
-
-std::string config_dir() {
-    fs::path dir;
-#ifdef _WIN32
-    const wchar_t* appdata = _wgetenv(L"APPDATA");
-    dir = appdata ? (fs::path(appdata) / "DotaManager") : fs::u8path(exe_dir());
-#else
-    const char* xdg = std::getenv("XDG_CONFIG_HOME");
-    if (xdg && *xdg) {
-        dir = fs::path(xdg) / "DotaManager";
-    } else if (const char* home = std::getenv("HOME")) {
-        dir = fs::path(home) / ".config" / "DotaManager";
-    } else {
-        dir = fs::u8path(exe_dir());
-    }
-#endif
-    std::error_code ec;
-    fs::create_directories(dir, ec);
-    return dir.u8string();
-}
-
-std::string browse_for_folder(const char* title) {
-#ifdef _WIN32
-    std::string result;
-    IFileOpenDialog* pfd = nullptr;
-    if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, NULL,
-        CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd)))) {
-        DWORD opts = 0;
-        pfd->GetOptions(&opts);
-        pfd->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
-        wchar_t wtitle[256] = {};
-        MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle, 256);
-        pfd->SetTitle(wtitle);
-        if (SUCCEEDED(pfd->Show(NULL))) {
-            IShellItem* psi = nullptr;
-            if (SUCCEEDED(pfd->GetResult(&psi))) {
-                PWSTR path = nullptr;
-                if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
-                    result = fs::path(path).u8string();
-                    CoTaskMemFree(path);
-                }
-                psi->Release();
-            }
-        }
-        pfd->Release();
-    }
-    return result;
-
-#elif defined(__linux__)
-    auto quote = [](const std::string& value) {
-        std::string out = "'";
-        for (char c : value) out += c == '\'' ? "'\\''" : std::string(1, c);
-        return out + "'";
-    };
-    for (const std::string& command : {
-        "zenity --file-selection --directory --title=" + quote(title) + " 2>/dev/null",
-        "kdialog --getexistingdirectory --title " + quote(title) + " 2>/dev/null"}) {
-        FILE* pipe = popen(command.c_str(), "r");
-        if (!pipe) continue;
-        char buffer[512];
-        std::string result;
-        while (fgets(buffer, sizeof(buffer), pipe)) result += buffer;
-        int code = pclose(pipe);
-        while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) result.pop_back();
-        if (code == 0 && !result.empty()) return result;
-        if (code == 256) return {};
-    }
-    return {};
-
-#else
-    return "";
-#endif
-}
-
-static std::string find_first_existing(const std::vector<fs::path>& paths) {
-    for (const auto& p : paths) {
-        std::error_code ec;
-        if (fs::exists(p, ec) && fs::is_regular_file(p, ec)) return p.u8string();
-    }
-    return {};
-}
-
-FontPaths find_font_paths() {
-    FontPaths result;
-
-#ifdef _WIN32
-    const std::vector<fs::path> regular_candidates = {
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\segoeui.ttf",
-        "C:\\Windows\\Fonts\\tahoma.ttf",
-    };
-
-    const std::vector<fs::path> bold_candidates = {
-        "C:\\Windows\\Fonts\\arialbd.ttf",
-        "C:\\Windows\\Fonts\\segoeuib.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf",
-    };
-#else
-    // Common distro paths for fonts that cover Cyrillic (the UI text is in
-    // Russian). DejaVu ships with essentially every desktop distro; Liberation
-    // and Noto are common fallbacks.
-    const std::vector<fs::path> regular_candidates = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    };
-
-    const std::vector<fs::path> bold_candidates = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-    };
-#endif
-
-    result.regular = find_first_existing(regular_candidates);
-    result.bold = find_first_existing(bold_candidates);
-
-    return result;
-}
 
 static void set_status(const std::string& s, const std::string& detail = {}) {
     std::lock_guard<std::mutex> lock(g_data_mutex);
@@ -339,7 +129,7 @@ static void fetch_profile_info(const std::string& id) {
     if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
 }
 
-void scan_thread() {
+static void scan_thread() {
     g_scanning = true;
     set_status("scanning");
     save_settings();
@@ -384,12 +174,16 @@ void scan_thread() {
 
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
+        selected_src = -1;
+        selected_dst = -1;
         src_list = new_src;
         dst_list = new_dst;
     }
 
-    for (const auto& id : all_ids)
+    for (const auto& id : all_ids) {
+        if (stop_scan.load()) break;
         fetch_profile_info(id);
+    }
 
     save_settings();
     if (!scan_failed) set_status("scan_complete");
@@ -397,6 +191,7 @@ void scan_thread() {
 }
 
 void copy_config() {
+    if (g_scanning.load()) return;
     int s_idx = selected_src.load();
     int d_idx = selected_dst.load();
 
@@ -441,4 +236,21 @@ void copy_config() {
     } catch (const std::exception& e) {
         set_status("error", e.what());
     }
+}
+
+void start_scan() {
+    if (g_scanning.exchange(true)) return;
+    if (scan_worker.joinable()) scan_worker.join();
+    stop_scan = false;
+    scan_worker = std::thread([] {
+        try { scan_thread(); }
+        catch (const std::exception& e) { set_status("error", e.what()); }
+        g_scanning = false;
+    });
+}
+
+void app_shutdown() {
+    stop_scan = true;
+    if (scan_worker.joinable()) scan_worker.join();
+    save_settings();
 }

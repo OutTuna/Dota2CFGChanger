@@ -62,3 +62,5 @@ build-syntax/
 
 __pycache__/
 *.pyc
+
+/.ccache/

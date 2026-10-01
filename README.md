@@ -120,11 +120,15 @@ All dependencies are fetched and built by CMake as static libraries.
 | Path | Role |
 | --- | --- |
 | `main.cpp` | Entry point and main loop |
-| `app.cpp`, `app.h` | Folder scan, config copy, settings and caches, Steam profile requests, folder dialog, font lookup |
+| `app.cpp`, `app.h` | Scan/copy coordination, settings and caches, managed scan worker |
+| `steam_api.cpp`, `steam_api.h` | Steam profile requests and XML parsing |
+| `platform.cpp`, `platform.h` | Native paths, folder dialogs, fonts and external links |
 | `ui/` | Rendering, JSON theme system, dialogs, popups |
 | `file_ops.cpp`, `file_ops.h` | Path normalization, Steam detection, recoverable config replacement |
 | `localization.cpp`, `localization.h`, `locales/` | Embedded English, Russian and Ukrainian translations |
-| `avatar.cpp`, `avatar.h` | Asynchronous avatar download, disk cache and OpenGL texture upload |
+| `avatar_data.cpp`, `avatar_data.h` | Background avatar downloads, disk cache and image decoding |
+| `avatar.cpp`, `avatar.h` | OpenGL texture upload and rendering adapter |
+| `updates.*`, `update_transport.*`, `release_info.*`, `checksum.*` | Update state, GitHub requests, version comparison and SHA-256 validation |
 | `app_icon.h`, `cmake/` | Embedded icon and resource generators |
 | `app.rc.in`, `app.manifest`, `Icon.ico` | Windows version info, manifest and icon (assembled by CMake) |
 | `themes/` | Theme JSON files and background, embedded at build time |
@@ -236,11 +240,15 @@ cmake --build build --config Release
 | Путь | Назначение |
 | --- | --- |
 | `main.cpp` | Точка входа и главный цикл |
-| `app.cpp`, `app.h` | Сканирование папок, копирование, настройки и кэши, запросы к профилям Steam, диалог выбора папки, поиск шрифтов |
+| `app.cpp`, `app.h` | Управление сканированием и копированием, настройки и кэши |
+| `steam_api.cpp`, `steam_api.h` | Запросы к Steam и разбор XML |
+| `platform.cpp`, `platform.h` | Пути, диалоги выбора папки, шрифты и внешние ссылки |
 | `ui/` | Отрисовка, JSON-система тем, диалоги, всплывающие окна |
 | `file_ops.cpp`, `file_ops.h` | Пути, обнаружение Steam, замена конфига с восстановлением |
 | `localization.cpp`, `localization.h`, `locales/` | Встроенные английские, русские и украинские переводы |
-| `avatar.cpp`, `avatar.h` | Асинхронная загрузка аватаров, дисковый кэш и создание текстур OpenGL |
+| `avatar_data.cpp`, `avatar_data.h` | Загрузка аватаров, дисковый кэш и декодирование изображений |
+| `avatar.cpp`, `avatar.h` | Создание текстур OpenGL и адаптер отрисовки |
+| `updates.*`, `update_transport.*`, `release_info.*`, `checksum.*` | Проверка и загрузка обновлений, сравнение версий, SHA-256 |
 | `app_icon.h`, `cmake/` | Встроенная иконка и генераторы ресурсов |
 | `app.rc.in`, `app.manifest`, `Icon.ico` | Информация о версии, манифест и иконка Windows (собираются CMake) |
 | `themes/` | JSON-файлы тем и фон, встраиваются при сборке |
@@ -268,3 +276,30 @@ python3 tests/core_checks.py build/_deps/json-src/include
 ```
 
 These checks need Python 3 and a C++17 compiler and run in a temporary directory on Linux/macOS.
+
+### Updates and author link
+
+The footer's **OutTuna** button opens the repository. **Check updates** opens the update dialog. Release builds also check once at startup in the background; a newer version opens the dialog, while an offline startup stays quiet. Development builds with version `0.0` only check manually.
+
+The checker uses the repository's `latest` release tag, including prereleases, and reads the numeric version from `Latest Build (vX.Y)`. No GitHub login is required. This adds a request to `api.github.com` at startup and when checking manually.
+
+**Download** fetches the Windows `.exe` or Linux x86-64 `.AppImage` only after a click. The file is streamed into `<config directory>/updates/<version>/`, verified against GitHub's asset size and SHA-256 digest, then renamed from `.part`. The dialog can open that folder. Close the old application and run the downloaded file; no running executable is overwritten. If a matching asset or digest is unavailable, **Open GitHub release** provides manual downloading. Interrupted or invalid partial downloads are removed.
+
+На панели снизу **OutTuna** открывает репозиторий, а **Проверить обновления** — окно обновления. Релизная сборка также проверяет обновления в фоне при запуске; окно появляется при наличии новой версии. Ошибка фоновой проверки не мешает работе приложения. Версия `0.0` проверяется только вручную.
+
+**Скачать** загружает файл только после нажатия, в `<каталог настроек>/updates/<версия>/`. Размер и SHA-256 проверяются до завершения загрузки. Затем можно открыть папку, закрыть старую программу и запустить новый файл. Текущий исполняемый файл не перезаписывается. Кнопка **Открыть релиз GitHub** позволяет скачать вручную.
+
+### CI cache and regression checks
+
+CI caches `build/_deps` separately by OS, architecture, compiler identity and `CMakeLists.txt`. Linux also keeps a 500 MB compiler cache through ccache. Every run configures and builds the application; a cache hit never substitutes an old application executable. The first run fills the cache, so compare later runs to measure the speedup.
+
+`dotamanager_core` contains file operations, Steam/avatars, settings, translations and updates without ImGui/OpenGL dependencies. The GUI owns texture upload and window rendering.
+
+```bash
+cmake -S . -B build -DDOTAMANAGER_BUILD_TESTS=ON
+cmake --build build --config Release
+ctest --test-dir build --build-config Release --output-on-failure
+python3 tests/core_checks.py build/_deps/json-src/include
+```
+
+CI runs update metadata/checksum tests, update cancellation/download tests headless avatar-cache tests and update-dialog layout checks in all three languages on Windows and Linux. Linux also runs the path, rollback and localization checks.

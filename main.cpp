@@ -6,6 +6,7 @@
 #include "avatar.h"
 #include "ui.h"
 #include "app_icon.h"
+#include "updates.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -61,6 +62,8 @@ int main(int, char**) {
     if (!font_big)     font_big     = font_default;
     (void)font_default;
 
+    updates_check(false);
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         ImGui_ImplOpenGL3_NewFrame();
@@ -71,6 +74,7 @@ int main(int, char**) {
 
         ui_render_main(font_big, ds);
         ui_render_success_popup(font_big, ds, io.DeltaTime);
+        ui_render_update_popup();
 
         ImGui::Render();
         int dw, dh;
@@ -82,6 +86,8 @@ int main(int, char**) {
         glfwSwapBuffers(window);
     }
 
+    updates_shutdown();
+    app_shutdown();
     avatar_shutdown();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

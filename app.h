@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include "platform.h"
+#include "steam_api.h"
 #include <vector>
 #include <map>
 #include <mutex>
@@ -13,18 +15,6 @@ inline constexpr const char* CACHE_FILE        = "nick_cache.json";
 inline constexpr const char* AVATAR_URL_CACHE_FILE = "avatar_url_cache.json";
 inline constexpr const char* AVATAR_DISK_DIR   = "avatar_cache";
 inline constexpr const char* DOTA_ID           = "570";
-
-// Directory the running executable lives in (Windows: next to the .exe;
-// Linux/AppImage: inside the mounted, read-only AppDir). Used to find
-// bundled, read-only assets like themes/.
-std::string exe_dir();
-
-// Per-user, writable directory for settings and caches:
-// %APPDATA%\DotaManager on Windows, $XDG_CONFIG_HOME/DotaManager (or
-// ~/.config/DotaManager) on Linux. Created on first call if missing.
-// Deliberately NOT exe_dir(): an AppImage's own directory is a read-only
-// mount, so writing settings.json next to the executable would fail there.
-std::string config_dir();
 
 inline char src_path[PATH_BUF_SIZE] = {};
 inline char dst_path[PATH_BUF_SIZE] = {};
@@ -62,19 +52,8 @@ inline SuccessPopupState g_success;
 
 void load_settings();
 void save_settings();
-void scan_thread();
 void copy_config();
 std::string browse_for_folder(const char* title);
 
-struct FontPaths {
-    std::string regular;
-    std::string bold;
-};
-
-FontPaths find_font_paths();
-
-namespace steam_api {
-long long steam3_to_64(const std::string& steam3_id);
-std::string fetch_profile_xml(long long steam64, int timeout_ms);
-std::string extract_tag(const std::string& xml, const std::string& tag);
-}
+void start_scan();
+void app_shutdown();
