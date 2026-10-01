@@ -1,5 +1,11 @@
 # Dota 2 Config Manager
 
+[![Build](https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?branch=main&style=flat&label=build)](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml)
+[![Download Latest](https://img.shields.io/badge/download-Latest-c95050?style=flat)](https://github.com/OutTuna/Dota2CFGChanger/releases/latest)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-586575?style=flat)](#getting-started)
+[![Languages](https://img.shields.io/badge/languages-EN%20%7C%20RU%20%7C%20UA-586575?style=flat)](#a-few-details)
+[![License: MIT](https://img.shields.io/badge/license-MIT-586575?style=flat)](LICENSE)
+
 Copy your Dota 2 settings from one Steam account to another. Pick the account with the setup you want, choose the destination, and confirm the copy.
 
 [Download](https://github.com/OutTuna/Dota2CFGChanger/releases) · [Issues](https://github.com/OutTuna/Dota2CFGChanger/issues) · [Roadmap](docs/TODO.md) · [Русский](#русский)
