@@ -9,9 +9,7 @@
 #include <thread>
 #include <stdexcept>
 
-#ifndef DOTA_APP_VERSION
-#define DOTA_APP_VERSION "0.0"
-#endif
+#include "app_version.h"
 
 namespace fs = std::filesystem;
 namespace {
