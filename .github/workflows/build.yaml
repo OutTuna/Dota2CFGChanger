@@ -54,12 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DotaManager-Windows
-          # themes/ is copied next to the exe by CMake's POST_BUILD step;
-          # the app looks it up relative to its own exe path, so it has to
-          # ship alongside DotaManager.exe, not just the exe on its own.
-          path: |
-            build/Release/DotaManager.exe
-            build/Release/themes/
+          path: build/Release/DotaManager.exe
           if-no-files-found: error
 
   build-linux:
@@ -116,15 +111,8 @@ jobs:
           convert "Icon.ico[0]" -resize 256x256 dotamanager.png 2>/dev/null \
             || convert -size 256x256 xc:blue dotamanager.png
 
-          # Stage AppDir/usr/bin ourselves instead of only pointing -e at
-          # build/DotaManager: linuxdeploy only bundles the executable (plus
-          # its shared-library deps), it does NOT pick up sibling files like
-          # themes/. The app looks up themes/ next to its own exe path, so
-          # themes has to be placed next to it inside the AppImage too, or
-          # every theme silently falls back to built-in defaults at runtime.
           mkdir -p AppDir/usr/bin
           cp build/DotaManager AppDir/usr/bin/
-          cp -r themes AppDir/usr/bin/themes
 
           linuxdeploy \
             --appdir AppDir \

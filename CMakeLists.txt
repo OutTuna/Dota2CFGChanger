@@ -60,10 +60,31 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(imgui)
 
-FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20 GIT_SHALLOW TRUE)
+FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20 GIT_SHALLOW FALSE)
 FetchContent_MakeAvailable(stb)
 
+set(THEME_RESOURCES
+    ${CMAKE_SOURCE_DIR}/themes/theme_dark.json
+    ${CMAKE_SOURCE_DIR}/themes/theme_indigo.json
+    ${CMAKE_SOURCE_DIR}/themes/theme_vermillion.json
+    ${CMAKE_SOURCE_DIR}/themes/theme_classic_steam.json
+    ${CMAKE_SOURCE_DIR}/themes/theme_crimson.json
+    ${CMAKE_SOURCE_DIR}/themes/bg_crimson.png
+)
+set(EMBEDDED_THEMES_DIR "${CMAKE_BINARY_DIR}/generated")
+add_custom_command(
+    OUTPUT "${EMBEDDED_THEMES_DIR}/embedded_themes.cpp" "${EMBEDDED_THEMES_DIR}/embedded_themes.h"
+    COMMAND ${CMAKE_COMMAND}
+        "-DTHEMES_DIR=${CMAKE_SOURCE_DIR}/themes"
+        "-DOUTPUT_DIR=${EMBEDDED_THEMES_DIR}"
+        -P "${CMAKE_SOURCE_DIR}/cmake/EmbedThemes.cmake"
+    DEPENDS ${THEME_RESOURCES} "${CMAKE_SOURCE_DIR}/cmake/EmbedThemes.cmake"
+    VERBATIM
+)
+
 add_executable(DotaManager
+        ${EMBEDDED_THEMES_DIR}/embedded_themes.cpp
+        ${EMBEDDED_THEMES_DIR}/embedded_themes.h
         main.cpp
         app.cpp
         app.h
@@ -85,6 +106,7 @@ add_executable(DotaManager
 )
 
 target_include_directories(DotaManager PRIVATE
+        ${EMBEDDED_THEMES_DIR}
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/ui
         ${imgui_SOURCE_DIR}
@@ -98,14 +120,6 @@ if(NOT WIN32)
     target_link_libraries(DotaManager PRIVATE OpenGL::GL)
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/themes")
-    add_custom_command(TARGET DotaManager POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${CMAKE_SOURCE_DIR}/themes"
-                    "$<TARGET_FILE_DIR:DotaManager>/themes"
-            COMMENT "Copying themes/ next to the built executable"
-    )
-endif()
 
 if(WIN32)
     if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/app.manifest")
