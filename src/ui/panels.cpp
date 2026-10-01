@@ -70,9 +70,9 @@ void render_palette_panel(ImVec2 ds) {
 }
 
 void render_confirm_copy_popup(ImVec2 ds) {
-    const float POP_W = 380.f, POP_H = 0.f;
-    ImGui::SetNextWindowPos({ (ds.x - POP_W) * 0.5f, ds.y * 0.35f });
-    ImGui::SetNextWindowSize({ POP_W, POP_H });
+    const float POP_W = 380.f;
+    ImGui::SetNextWindowPos({ds.x * 0.5f, ds.y * 0.5f}, ImGuiCond_Always, {0.5f, 0.5f});
+    ImGui::SetNextWindowSizeConstraints({POP_W, 0.f}, {POP_W, ds.y - 32.f});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 16.f, 14.f });
 
