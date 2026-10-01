@@ -29,8 +29,8 @@ The folders should follow Steam's layout: `<root>/<account_id>/570/`. You can us
 
 ## A few details
 
-- English is the default language. Russian and Ukrainian are available in settings.
-- Five themes are included. The Crimson theme also has a palette editor. A local `themes/` folder can override the built-in themes; missing or invalid resources fall back to the embedded ones.
+- English is the default language. Switch between **RU / UA / EN** at the top right, immediately beside the theme selector. Language and theme are saved automatically.
+- Dark is the default theme; five themes are included. The Crimson theme also has a palette editor. A local `themes/` folder can override the built-in themes; missing or invalid resources fall back to the embedded ones.
 - Account names and avatars come from public Steam Community profiles and are cached locally. This needs an internet connection, but no Steam login or API key. If a profile lookup fails, the account ID still appears in the list.
 - Release builds check for updates at startup. You can also check using the button at the bottom of the window. Downloading starts only when you click **Download**; the app checks the file size and SHA-256 before keeping it. If a verified download is unavailable, use **Open release**. Launch the new file yourself after closing the old version.
 
@@ -56,7 +56,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
 
-With the Visual Studio generator, the result is `build/Release/DotaManager.exe`. On Linux it is `build/DotaManager`; the GitHub Actions workflow handles AppImage packaging. CI publishes the Windows `.exe` and Linux `.AppImage`, and caches dependencies between builds.
+With the Visual Studio generator, the result is `build/Release/DotaManager.exe`. On Linux it is `build/DotaManager`; the GitHub Actions workflow handles AppImage packaging. CI publishes the Windows `.exe` and Linux `.AppImage` as a stable Latest release, checks the compiled version and caches dependencies between builds. Linux jobs use Ubuntu 24.04; official Actions use Node.js 24.
 
 For a versioned local build, pass `-DAPP_VERSION=x.y` when configuring. The default `0.0` development build skips the startup update check.
 
@@ -94,55 +94,59 @@ The AppImage uses the checked-in PNG icon. CI does not need an image converter.
 
 ```mermaid
 flowchart TB
-    node_main_window["Main window<br/>src/ui/main_window.cpp"]
-    node_panels["Settings and confirmation<br/>src/ui/panels.cpp"]
-    node_success_popup["Copy success popup<br/>src/ui/success_popup.cpp"]
-    node_update_popup["Update popup<br/>src/ui/update_popup.cpp"]
-    node_main["Application entry<br/>main.cpp"]
-    node_app["App coordinator<br/>src/core/app.cpp"]
-    node_file_ops["Config replacement<br/>src/core/file_ops.cpp"]
-    node_platform["Platform services<br/>src/platform/platform.cpp"]
-    node_steam_api["Profile lookup<br/>src/network/steam_api.cpp"]
-    node_avatar_data["Avatar downloads<br/>src/core/avatar_data.cpp"]
-    node_avatar["Avatar rendering<br/>src/ui/avatar.cpp"]
-    node_theme["Theme system<br/>src/ui/theme.cpp"]
-    node_theme_resources["Theme resources"]
-    node_localization["Localization<br/>src/core/localization.cpp"]
-    node_settings_cache["Settings and caches<br/>src/core/app.cpp"]
-    node_updates["Release updates<br/>src/core/updates.cpp"]
-    node_update_transport["Update transport"]
-    node_release_info["Release metadata<br/>src/core/release_info.cpp"]
-    node_user["User"]
-    node_steam_data["Steam userdata"]
-    node_steam_community["Steam Community"]
-    node_release_service["Release service"]
-    node_user --> node_main_window
-    node_main --> node_app
-    node_main --> node_main_window
-    node_main --> node_updates
-    node_main --> node_avatar
-    node_main_window --> node_app
-    node_main_window --> node_panels
-    node_panels --> node_app
-    node_app --> node_steam_data
-    node_app --> node_steam_api
-    node_steam_api --> node_steam_community
-    node_app --> node_file_ops
-    node_file_ops --> node_steam_data
-    node_app --> node_settings_cache
-    node_avatar_data --> node_app
-    node_avatar --> node_avatar_data
-    node_main_window --> node_avatar
-    node_main_window --> node_theme
-    node_panels --> node_localization
-    node_theme --> node_theme_resources
-    node_updates --> node_update_transport
-    node_updates --> node_release_info
-    node_update_transport -.-> node_release_service
-    node_main --> node_update_popup
-    node_update_popup --> node_updates
-    node_main_window --> node_platform
-    node_app --> node_localization
+    main["main.cpp<br/>Window and application loop"]
+    ui["src/ui/main_window.cpp<br/>Accounts, paths, language, theme, status and Info"]
+    panels["src/ui/panels.cpp<br/>Palette and copy confirmation"]
+    success["src/ui/success_popup.cpp<br/>Copy result"]
+    updater_ui["src/ui/update_popup.cpp<br/>Update dialog"]
+    app["src/core/app.cpp<br/>Settings, scanning and copy coordination"]
+    files["src/core/file_ops.cpp<br/>Config replacement and rollback"]
+    steam["src/network/steam_api.cpp<br/>Public profile lookup"]
+    avatars["src/core/avatar_data.cpp<br/>Downloads and image cache"]
+    textures["src/ui/avatar.cpp<br/>OpenGL textures"]
+    platform["src/platform/platform.cpp<br/>Native dialogs, paths, registry and links"]
+    settings["Windows: HKCU Software / OutTuna / Dota2CFGChanger<br/>Linux: settings.json"]
+    theme["src/ui/theme.cpp<br/>Theme and palette"]
+    resources["resources/<br/>Themes, locales, icons and Windows metadata"]
+    locales["src/core/localization.cpp<br/>English, Russian and Ukrainian"]
+    updates["src/core/updates.cpp<br/>Background checks and downloads"]
+    transport["src/network/update_transport.cpp<br/>GitHub HTTP requests"]
+    release["src/core/release_info.cpp<br/>Release metadata and version comparison"]
+    checksum["src/core/checksum.cpp<br/>SHA-256 verification"]
+    version["cmake/AppVersion.h.in<br/>Compiled release version"]
+    userdata["Steam userdata / account / 570"]
+    community["Steam Community"]
+    github["GitHub latest release<br/>Windows .exe and Linux .AppImage"]
+    main --> ui
+    main --> success
+    main --> updater_ui
+    main --> updates
+    ui --> panels
+    ui --> app
+    ui --> theme
+    ui --> locales
+    ui --> textures
+    ui --> platform
+    panels --> app
+    success --> app
+    textures --> avatars
+    avatars --> app
+    app --> files
+    app --> steam
+    app --> locales
+    app --> platform
+    platform --> settings
+    files --> userdata
+    steam --> community
+    theme --> resources
+    locales --> resources
+    updater_ui --> updates
+    updates --> version
+    updates --> transport
+    updates --> release
+    updates --> checksum
+    updates --> platform
+    transport --> github
 ```
 
 </details>
@@ -155,8 +159,16 @@ flowchart TB
 
 Копируется папка `<account_id>/570` целиком. Если старые настройки нужны, сохраните их отдельно: после успешной замены временная резервная копия удаляется.
 
-Язык и тема меняются в настройках. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После загрузки закройте старую версию и запустите новую.
+Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После загрузки закройте старую версию и запустите новую.
 
 ## License
 
 [MIT](LICENSE). OutTuna.
+
+## Testers
+
+Thanks for testing builds and helping catch UI issues:
+
+- [Qoudanna](https://github.com/Qoudanna)
+- [ciqparis](https://github.com/ciqparis)
+- [paradisetears](https://github.com/paradisetears)
