@@ -280,9 +280,16 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (scanning) ImGui::EndDisabled();
     const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
     ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
-    ImGui::BeginChild("##status", {0, 32.f});
-    ImGui::TextWrapped("%s", tr_value("status", local_status).c_str());
+    const auto status_text = tr_value("status", local_status);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
+    ImGui::BeginChild("##status", {0, 32.f},
+        ImGuiChildFlags_Borders | ImGuiChildFlags_AlwaysUseWindowPadding,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::TextUnformatted(status_text.c_str());
     ImGui::EndChild();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", status_text.c_str());
+    ImGui::PopStyleVar(2);
     ImGui::SetCursorPosY(footer_y);
     if (ImGui::Button("Info", {64.f, 32.f})) ImGui::OpenPopup("Info###info");
     ImGui::SetNextWindowPos({ds.x * 0.5f, ds.y * 0.5f}, ImGuiCond_Always, {0.5f, 0.5f});
