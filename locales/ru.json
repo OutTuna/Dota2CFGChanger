@@ -47,5 +47,20 @@
   "theme_description_1": "Синяя тема Indigo с границами",
   "theme_description_2": "Красная тема Vermillion",
   "theme_description_3": "Классическая зелёная тема Steam",
-  "theme_description_4": "Тема Crimson с фоном и редактором палитры"
+  "theme_description_4": "Тема Crimson с фоном и редактором палитры",
+  "updates": "Обновления",
+  "current_version": "Текущая версия",
+  "update_check": "Проверить обновления",
+  "update_checking": "Проверка обновлений...",
+  "update_current": "У вас актуальная версия.",
+  "update_available": "Доступна новая версия: {value}",
+  "update_downloading": "Загрузка... Можно продолжать пользоваться приложением.",
+  "update_downloaded": "Загрузка завершена. Закройте приложение и запустите новый файл. Текущий исполняемый файл не заменялся.",
+  "update_open_folder": "Открыть папку загрузки",
+  "update_download": "Скачать",
+  "update_release": "Открыть релиз GitHub",
+  "update_retry": "Проверить снова",
+  "update_close": "Закрыть",
+  "update_check_failed": "Не удалось проверить обновления: {value}",
+  "update_download_failed": "Не удалось скачать: {value}. Можно скачать вручную с GitHub."
 }

@@ -95,14 +95,40 @@ add_custom_command(
     VERBATIM
 )
 
+find_package(Threads REQUIRED)
+add_library(dotamanager_core STATIC
+    app.cpp
+    file_ops.cpp
+    localization.cpp
+    platform.cpp
+    steam_api.cpp
+    avatar_data.cpp
+    release_info.cpp
+    checksum.cpp
+    updates.cpp
+    update_transport.cpp
+    ${EMBEDDED_THEMES_DIR}/embedded_locales.h
+)
+target_include_directories(dotamanager_core PUBLIC ${CMAKE_SOURCE_DIR} ${EMBEDDED_THEMES_DIR}
+    PRIVATE ${stb_SOURCE_DIR})
+target_link_libraries(dotamanager_core PUBLIC cpr::cpr nlohmann_json::nlohmann_json Threads::Threads)
+target_compile_definitions(dotamanager_core PRIVATE DOTA_APP_VERSION="${APP_VERSION_STRING}")
+if(WIN32)
+    target_link_libraries(dotamanager_core PUBLIC shell32 ole32 advapi32 bcrypt)
+    if(MSVC)
+        target_compile_options(dotamanager_core PRIVATE /utf-8)
+    else()
+        target_compile_options(dotamanager_core PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+    endif()
+else()
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+    target_link_libraries(dotamanager_core PUBLIC OpenSSL::Crypto)
+endif()
+
 add_executable(DotaManager
-        ${EMBEDDED_THEMES_DIR}/embedded_locales.h
         ${EMBEDDED_THEMES_DIR}/embedded_themes.cpp
         ${EMBEDDED_THEMES_DIR}/embedded_themes.h
         main.cpp
-        app.cpp
-        file_ops.cpp
-        localization.cpp
         app.h
         avatar.cpp
         avatar.h
@@ -112,6 +138,7 @@ add_executable(DotaManager
         ui/panels.cpp
         ui/main_window.cpp
         ui/success_popup.cpp
+        ui/update_popup.cpp
         app_icon.h
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -130,7 +157,7 @@ target_include_directories(DotaManager PRIVATE
         ${stb_SOURCE_DIR}
 )
 
-target_link_libraries(DotaManager PRIVATE cpr::cpr nlohmann_json::nlohmann_json glfw)
+target_link_libraries(DotaManager PRIVATE dotamanager_core glfw)
 if(NOT WIN32)
     find_package(OpenGL REQUIRED)
     target_link_libraries(DotaManager PRIVATE OpenGL::GL)
@@ -164,4 +191,38 @@ if(WIN32)
     else()
         target_compile_options(DotaManager PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
     endif()
+endif()
+
+option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
+if(DOTAMANAGER_BUILD_TESTS)
+    enable_testing()
+    add_executable(update_checks tests/update_checks.cpp release_info.cpp checksum.cpp)
+    add_executable(update_service_checks tests/update_service_checks.cpp updates.cpp release_info.cpp checksum.cpp)
+    add_executable(avatar_checks tests/avatar_checks.cpp)
+    target_link_libraries(avatar_checks PRIVATE dotamanager_core)
+    add_executable(update_ui_checks tests/update_ui_checks.cpp ui/update_popup.cpp
+        ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
+    target_include_directories(update_ui_checks PRIVATE ${imgui_SOURCE_DIR})
+    target_link_libraries(update_ui_checks PRIVATE dotamanager_core)
+    foreach(test_target update_checks update_service_checks avatar_checks update_ui_checks)
+        target_include_directories(${test_target} PRIVATE ${CMAKE_SOURCE_DIR})
+        target_link_libraries(${test_target} PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
+        if(WIN32)
+            target_link_libraries(${test_target} PRIVATE bcrypt)
+        else()
+            target_link_libraries(${test_target} PRIVATE OpenSSL::Crypto)
+        endif()
+        if(MSVC)
+            target_compile_options(${test_target} PRIVATE /UNDEBUG /utf-8)
+        else()
+            target_compile_options(${test_target} PRIVATE -UNDEBUG)
+        endif()
+        if(test_target STREQUAL "avatar_checks")
+            add_test(NAME ${test_target} COMMAND ${test_target} "${CMAKE_SOURCE_DIR}/themes/bg_crimson.png")
+        else()
+            add_test(NAME ${test_target} COMMAND ${test_target})
+        endif()
+    endforeach()
+    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9")
 endif()

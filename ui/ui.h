@@ -24,3 +24,5 @@ bool ui_load_theme_from_file(AppTheme theme, const std::string& base_path);
 void ui_get_theme_palette(AppTheme theme, ImVec4& child_bg, ImVec4& selected_bg, ImVec4& hovered_bg, ImVec4& text);
 bool ui_theme_has_palette_editor(AppTheme theme);
 const char* ui_theme_background_image(AppTheme theme);
+
+void ui_render_update_popup();

@@ -47,5 +47,20 @@
   "theme_description_1": "Blue indigo theme with borders",
   "theme_description_2": "Red vermillion theme",
   "theme_description_3": "Classic Steam green theme",
-  "theme_description_4": "Crimson theme with custom background and palette editor"
+  "theme_description_4": "Crimson theme with custom background and palette editor",
+  "updates": "Updates",
+  "current_version": "Current version",
+  "update_check": "Check updates",
+  "update_checking": "Checking for updates...",
+  "update_current": "You are up to date.",
+  "update_available": "A new version is available: {value}",
+  "update_downloading": "Downloading... You can keep using the app.",
+  "update_downloaded": "Download complete. Close this app and run the new file. The running executable has not been replaced.",
+  "update_open_folder": "Open download folder",
+  "update_download": "Download",
+  "update_release": "Open GitHub release",
+  "update_retry": "Check again",
+  "update_close": "Close",
+  "update_check_failed": "Could not check updates: {value}",
+  "update_download_failed": "Download failed: {value}. You can download manually from GitHub."
 }
