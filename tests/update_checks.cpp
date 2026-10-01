@@ -7,6 +7,8 @@
 #include <chrono>
 
 int main() {
+    assert(newer_version("v1.1", "1"));
+    assert(!newer_version("v1", "1.0"));
     using json = nlohmann::json;
     assert(newer_version("v1.10", "1.9"));
     assert(!newer_version("v1.9", "1.10"));

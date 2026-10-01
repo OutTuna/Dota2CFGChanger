@@ -55,7 +55,7 @@ int main(int, char**) {
     }
     if (!fonts.bold.empty()) {
         font_big = io.Fonts->AddFontFromFileTTF(
-            fonts.bold.c_str(), 34.0f, NULL, io.Fonts->GetGlyphRangesCyrillic());
+            fonts.bold.c_str(), 28.0f, NULL, io.Fonts->GetGlyphRangesCyrillic());
     }
 
     if (!font_default) font_default = io.Fonts->AddFontDefault();
