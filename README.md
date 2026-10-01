@@ -1,14 +1,31 @@
-# Dota 2 Config Manager
+<p align="center">
+  <img src="resources/icons/dotamanager.png" width="64" height="64" alt="Dota 2 Config Manager icon">
+</p>
 
-[![Build](https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?branch=main&style=flat&label=build)](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml)
-[![Download Latest](https://img.shields.io/badge/download-Latest-c95050?style=flat)](https://github.com/OutTuna/Dota2CFGChanger/releases/latest)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-586575?style=flat)](#getting-started)
-[![Languages](https://img.shields.io/badge/languages-EN%20%7C%20RU%20%7C%20UA-586575?style=flat)](#a-few-details)
-[![License: MIT](https://img.shields.io/badge/license-MIT-586575?style=flat)](LICENSE)
+<h1 align="center">Dota 2 Config Manager</h1>
+
+<p align="center">Your Dota 2 setup, on another Steam account.</p>
+
+<p align="center">
+  <img src="docs/assets/readme-divider.svg" width="640" height="6" alt="">
+</p>
+
+<p align="center">
+  <a href="https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml"><img src="https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?branch=main&amp;style=for-the-badge&amp;label=build" alt="Build status"></a>
+  <a href="https://github.com/OutTuna/Dota2CFGChanger/releases/latest"><img src="https://img.shields.io/badge/download-Latest-c95050?style=for-the-badge" alt="Download Latest"></a>
+  <a href="#getting-started"><img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-586575?style=for-the-badge" alt="Windows and Linux"></a>
+  <a href="#a-few-details"><img src="https://img.shields.io/badge/languages-EN%20%7C%20RU%20%7C%20UA-586575?style=for-the-badge" alt="English, Russian and Ukrainian"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-586575?style=for-the-badge" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/OutTuna/Dota2CFGChanger/releases/latest">Download</a> ·
+  <a href="https://github.com/OutTuna/Dota2CFGChanger/issues">Issues</a> ·
+  <a href="docs/TODO.md">Roadmap</a> ·
+  <a href="#русский">Русский</a>
+</p>
 
 Copy your Dota 2 settings from one Steam account to another. Pick the account with the setup you want, choose the destination, and confirm the copy.
-
-[Download](https://github.com/OutTuna/Dota2CFGChanger/releases) · [Issues](https://github.com/OutTuna/Dota2CFGChanger/issues) · [Roadmap](docs/TODO.md) · [Русский](#русский)
 
 ## Getting started
 
