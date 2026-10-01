@@ -1,305 +1,147 @@
 # Dota 2 Config Manager
 
-A native Windows and Linux utility for copying Dota 2 client settings from one Steam account to another.
+Copy your Dota 2 settings from one Steam account to another. Pick the account with the setup you want, choose the destination, and confirm the copy.
 
-<p>
-  <img alt="Platform: Windows & Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078D6?style=flat-square">
-  <img alt="Build: Windows + Linux" src="https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?style=flat-square">
-  <img alt="Language: C++17" src="https://img.shields.io/badge/C%2B%2B-17-00599C?style=flat-square">
-  <img alt="Build system: CMake" src="https://img.shields.io/badge/build-CMake%203.14%2B-064F8C?style=flat-square">
-  <a href="https://github.com/OutTuna/Dota2CFGChanger/releases"><img alt="Releases" src="https://img.shields.io/badge/releases-GitHub-4c566a?style=flat-square"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/OutTuna/Dota2CFGChanger?style=flat-square"></a>
-  <a href="https://github.com/OutTuna/Dota2CFGChanger/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/OutTuna/Dota2CFGChanger?style=flat-square"></a>
-</p>
+[Download](https://github.com/OutTuna/Dota2CFGChanger/releases) · [Issues](https://github.com/OutTuna/Dota2CFGChanger/issues) · [Roadmap](TODO.md) · [Русский](#русский)
 
-<p>
-  <a href="https://github.com/ocornut/imgui"><img alt="Dear ImGui 1.91.6" src="https://img.shields.io/badge/Dear_ImGui-1.91.6-4c566a?style=flat-square"></a>
-  <a href="https://github.com/glfw/glfw"><img alt="GLFW 3.3.8" src="https://img.shields.io/badge/GLFW-3.3.8-4c566a?style=flat-square"></a>
-  <img alt="OpenGL 3 backend" src="https://img.shields.io/badge/OpenGL-3%20backend-4c566a?style=flat-square">
-  <a href="https://github.com/libcpr/cpr"><img alt="cpr 1.11.1" src="https://img.shields.io/badge/cpr-1.11.1-4c566a?style=flat-square"></a>
-  <a href="https://github.com/nlohmann/json"><img alt="nlohmann/json 3.11.3" src="https://img.shields.io/badge/nlohmann%2Fjson-3.11.3-4c566a?style=flat-square"></a>
-  <a href="https://github.com/nothings/stb"><img alt="stb_image" src="https://img.shields.io/badge/stb__image-single--header-4c566a?style=flat-square"></a>
-</p>
+## Getting started
 
-[English](#english) | [Русский](#русский)
+Download `DotaManager.exe` for Windows or `Dota2_CFG_Changer-x86_64.AppImage` for Linux from the releases page. Themes and translations are built in; there is no installer or extra resource folder to download.
 
----
+On Linux, make the AppImage executable before opening it:
 
-## Digram of project
-
-<img width="5528" height="8809" alt="diagram_new" src="https://github.com/OutTuna/Dota2CFGChanger/blob/main/diagram_new.png" />
-
-
-## English
-
-### Overview
-
-Dota 2 keeps keybinds, options and other client-side settings per account, inside Steam's `userdata` directory. This tool copies that one directory (app ID `570`) from one account folder to another, so a setup made once can be reused on a second account, on another machine, or restored from a saved copy.
-
-The program is a single executable with no installer: a portable `.exe` on Windows and an AppImage on Linux. Third-party libraries are linked statically.
-
-### Features
-
-- Copies only `<account_id>/570`. The rest of the account folder is left alone.
-- Scans a source root and a destination root and lists every account folder found in each.
-- Shows persona names and avatars, resolved from public Steam Community profiles. Names and avatars are cached locally, on disk.
-- Asks for confirmation before replacing the target's settings.
-- Five interface themes, remembered between runs. All theme JSON files and the Crimson background are embedded in the executable. An optional `themes/` folder next to it can override the embedded resources; missing or invalid files fall back to the embedded versions. The Crimson theme adds a live palette editor and a custom background.
-
-### Requirements
-
-- Windows with a GPU driver that provides OpenGL, or a Linux desktop with OpenGL (mesa or vendor driver).
-- On Linux: `zenity` or `kdialog` for the folder picker, and a system font with Cyrillic coverage (DejaVu, Liberation or Noto — any desktop distro ships one).
-- A Steam `userdata` directory for the destination, and a directory with the same layout for the source (which may be the same directory).
-
-### Usage
-
-1. Download `DotaManager.exe` (Windows) or the AppImage (Linux) from [Releases](https://github.com/OutTuna/Dota2CFGChanger/releases).
-2. Close Steam, so the client does not write to the directory while it is being replaced.
-3. Run the program. Click **Source config folder** to choose the source root and **Destination account folder** to choose the target root. Both default to the detected Steam userdata directory, or a standard install location if none is found.
-4. Press `Scan folders`.
-5. Select an account in the left list (source) and one in the right list (destination).
-6. Press `Copy config` and confirm.
-
-Both roots are expected to use Steam's `userdata` layout:
-
-```
-<root>/
-  <account_id>/
-    570/
-      ...
+```sh
+chmod +x Dota2_CFG_Changer-x86_64.AppImage
+./Dota2_CFG_Changer-x86_64.AppImage
 ```
 
-Only folders whose names consist entirely of digits are treated as accounts.
+Both platforms need a working OpenGL driver. The Linux folder picker uses `zenity` or `kdialog`, and the interface needs a system font such as DejaVu, Liberation or Noto. macOS is not supported.
 
-### Behavior
+1. Close Dota 2 and Steam before copying.
+2. Check the source and destination folders. The app tries to find Steam's `userdata` directory, including Linux Flatpak installations. You can choose another folder manually.
+3. Click **Scan folders**.
+4. Select the source account on the left and the destination account on the right.
+5. Click **Copy config** and confirm.
 
-**Files modified.** The destination's `<account_id>/570` directory is replaced with the source's. The copy is written to a sibling `.dotamanager_tmp` folder first. The old config is renamed to `.dotamanager_backup` before installing the new one; if installation fails, the program tries to restore the old directory. If restoration fails, both working directories are preserved and the backup path is shown. Leftovers from an interrupted copy block another copy until you preserve or restore them manually. Once the copy succeeds, however, the operation is destructive: the temporary backup is removed and there is no permanent automatic backup, so keep your own backup if the current settings matter.
+The folders should follow Steam's layout: `<root>/<account_id>/570/`. You can use the same `userdata` root for both lists, or a saved copy as the source. Only the selected account's `570` directory is replaced.
 
-**Network access.** For every account folder found, the program requests the public profile XML at `steamcommunity.com/profiles/<SteamID64>?xml=1` to read the persona name and the avatar URL, then downloads the avatar. The only data sent is the SteamID64, derived from the folder name as `account_id + 76561197960265728`. No login or API key is used. Private profiles yield no name or avatar, and the list shows the numeric ID instead. At most eight avatars download at a time; a failed download is retried after 30 seconds.
+**Keep a separate backup of any settings you want to keep.** The app prepares the new files before replacing the destination and attempts to restore the old directory if the replacement fails. After a successful copy, the temporary backup is removed. If interrupted files remain, resolve them before trying again; the app will show the affected paths.
 
-**Local files.** Settings and caches are written to a per-user config directory — `%APPDATA%\DotaManager` on Windows, `$XDG_CONFIG_HOME/DotaManager` (or `~/.config/DotaManager`) on Linux — created on first run, not next to the executable:
+## A few details
 
-| File / folder | Contents |
-| --- | --- |
-| `settings.json` | source path, destination path, selected theme and language |
-| `nick_cache.json` | account ID to persona name cache |
-| `avatar_url_cache.json` | account ID to avatar URL cache |
-| `avatar_cache/` | downloaded avatar images (`<account_id>.img`) |
+- English is the default language. Russian and Ukrainian are available in settings.
+- Five themes are included. The Crimson theme also has a palette editor. A local `themes/` folder can override the built-in themes; missing or invalid resources fall back to the embedded ones.
+- Account names and avatars come from public Steam Community profiles and are cached locally. This needs an internet connection, but no Steam login or API key. If a profile lookup fails, the account ID still appears in the list.
+- Release builds check for updates at startup. You can also check using the button at the bottom of the window. Downloading starts only when you click **Download**; the app checks the file size and SHA-256 before keeping it. If a verified download is unavailable, use **Open release**. Launch the new file yourself after closing the old version.
 
-### Building
+Settings, profile caches, avatars and downloaded updates live in `%APPDATA%\DotaManager` on Windows, or `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` on Linux.
 
-Requirements: CMake 3.14 or newer, a C++17 compiler (MSVC or MinGW on Windows, GCC/Clang on Linux), Git, and network access during configuration, because dependencies are fetched with `FetchContent`.
+## Building
 
+You need Git, CMake 3.14+, a C++17 compiler and internet access for the first configuration. CMake fetches the pinned dependencies: Dear ImGui, GLFW, cpr/libcurl, nlohmann/json and stb.
+
+On Debian or Ubuntu, install the development packages first:
+
+```sh
+sudo apt install build-essential cmake git libgl1-mesa-dev libx11-dev \
+  libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev
 ```
+
+From a Visual Studio developer terminal on Windows, or a shell on Linux:
+
+```sh
 git clone https://github.com/OutTuna/Dota2CFGChanger.git
 cd Dota2CFGChanger
-cmake -S . -B build
-cmake --build build --config Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
 ```
 
-- Windows (Visual Studio generator): the executable is written to `build/Release/DotaManager.exe`.
-- Linux: install the dev packages first (`build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev`), configure with `-DCMAKE_BUILD_TYPE=Release`; the executable is `build/DotaManager`.
+With the Visual Studio generator, the result is `build/Release/DotaManager.exe`. On Linux it is `build/DotaManager`; the GitHub Actions workflow handles AppImage packaging. CI publishes the Windows `.exe` and Linux `.AppImage`, and caches dependencies between builds.
 
-The first configuration also builds cURL and its dependencies through cpr, so it takes noticeably longer than later ones. An `-DAPP_VERSION=<x.y>` option stamps the Windows version resource; CI computes it automatically.
+For a versioned local build, pass `-DAPP_VERSION=x.y` when configuring. The default `0.0` development build skips the startup update check.
 
-### Dependencies
+To build and run the C++ checks:
 
-All dependencies are fetched and built by CMake as static libraries.
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
 
-| Library | Version | Purpose | License |
-| --- | --- | --- | --- |
-| [Dear ImGui](https://github.com/ocornut/imgui) | 1.91.6 | User interface | MIT |
-| [GLFW](https://github.com/glfw/glfw) | 3.3.8 | Window, input, OpenGL context | zlib/libpng |
-| [cpr](https://github.com/libcpr/cpr) | 1.11.1 | HTTP client (C++ wrapper over libcurl) | MIT |
-| [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | Settings and cache files | MIT |
-| [stb](https://github.com/nothings/stb) | pinned commit | Image decoding (`stb_image`) | Public domain / MIT |
+## How the code fits together
 
-### Source layout
+`main.cpp` runs the window. `ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `avatar.cpp` uploads the images from `avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
 
-| Path | Role |
-| --- | --- |
-| `main.cpp` | Entry point and main loop |
-| `app.cpp`, `app.h` | Scan/copy coordination, settings and caches, managed scan worker |
-| `steam_api.cpp`, `steam_api.h` | Steam profile requests and XML parsing |
-| `platform.cpp`, `platform.h` | Native paths, folder dialogs, fonts and external links |
-| `ui/` | Rendering, JSON theme system, dialogs, popups |
-| `file_ops.cpp`, `file_ops.h` | Path normalization, Steam detection, recoverable config replacement |
-| `localization.cpp`, `localization.h`, `locales/` | Embedded English, Russian and Ukrainian translations |
-| `avatar_data.cpp`, `avatar_data.h` | Background avatar downloads, disk cache and image decoding |
-| `avatar.cpp`, `avatar.h` | OpenGL texture upload and rendering adapter |
-| `updates.*`, `update_transport.*`, `release_info.*`, `checksum.*` | Update state, GitHub requests, version comparison and SHA-256 validation |
-| `app_icon.h`, `cmake/` | Embedded icon and resource generators |
-| `app.rc.in`, `app.manifest`, `Icon.ico` | Windows version info, manifest and icon (assembled by CMake) |
-| `themes/` | Theme JSON files and background, embedded at build time |
-| `scripts/` | Local development checks (`run-all-checks.sh`, versioning, CMake smoke tests) |
-| `.github/workflows/build.yaml` | CI: builds Windows `.exe` and Linux AppImage, publishes a release |
-| `CMakeLists.txt` | Build definition and dependency pinning |
+[Open the full diagram in GitDiagram](https://gitdiagram.com/outtuna/dota2cfgchanger).
 
-### Limitations
+<details>
+<summary>Project diagram</summary>
 
-- No macOS support.
-- Steam userdata is detected from the Windows registry and common Linux locations, including Flatpak and `$XDG_DATA_HOME`. When several installations exist, the first detected directory is selected; choose another manually if needed.
-- On Linux the folder picker requires `zenity` or `kdialog`.
-- Names and avatars require network access and a public profile.
-- English is the default interface language. Russian and Ukrainian are available in settings, and the selected language is remembered.
+```mermaid
+flowchart TB
+    node_main_window["Main window<br/>main_window.cpp"]
+    node_panels["Settings and confirmation<br/>panels.cpp"]
+    node_success_popup["Copy success popup<br/>success_popup.cpp"]
+    node_update_popup["Update popup<br/>update_popup.cpp"]
+    node_main["Application entry<br/>main.cpp"]
+    node_app["App coordinator<br/>app.cpp"]
+    node_file_ops["Config replacement<br/>file_ops.cpp"]
+    node_platform["Platform services<br/>platform.cpp"]
+    node_steam_api["Profile lookup<br/>steam_api.cpp"]
+    node_avatar_data["Avatar downloads<br/>avatar_data.cpp"]
+    node_avatar["Avatar rendering<br/>avatar.cpp"]
+    node_theme["Theme system<br/>theme.cpp"]
+    node_theme_resources["Theme resources"]
+    node_localization["Localization<br/>localization.cpp"]
+    node_settings_cache["Settings and caches<br/>app.cpp"]
+    node_updates["Release updates<br/>updates.cpp"]
+    node_update_transport["Update transport"]
+    node_release_info["Release metadata<br/>release_info.cpp"]
+    node_user["User"]
+    node_steam_data["Steam userdata"]
+    node_steam_community["Steam Community"]
+    node_release_service["Release service"]
+    node_user --> node_main_window
+    node_main --> node_app
+    node_main --> node_main_window
+    node_main --> node_updates
+    node_main --> node_avatar
+    node_main_window --> node_app
+    node_main_window --> node_panels
+    node_panels --> node_app
+    node_app --> node_steam_data
+    node_app --> node_steam_api
+    node_steam_api --> node_steam_community
+    node_app --> node_file_ops
+    node_file_ops --> node_steam_data
+    node_app --> node_settings_cache
+    node_avatar_data --> node_app
+    node_avatar --> node_avatar_data
+    node_main_window --> node_avatar
+    node_main_window --> node_theme
+    node_panels --> node_localization
+    node_theme --> node_theme_resources
+    node_updates --> node_update_transport
+    node_updates --> node_release_info
+    node_update_transport -.-> node_release_service
+    node_main --> node_update_popup
+    node_update_popup --> node_updates
+    node_main_window --> node_platform
+    node_app --> node_localization
+```
 
-### Issues
-
-Bug reports and feature requests go to the [issue tracker](https://github.com/OutTuna/Dota2CFGChanger/issues). Please include your OS version and the release you are running.
-
----
+</details>
 
 ## Русский
 
-### Описание
+Программа переносит настройки Dota 2 между Steam-аккаунтами. Скачайте `.exe` для Windows или `.AppImage` для Linux из [релизов](https://github.com/OutTuna/Dota2CFGChanger/releases). Темы и переводы уже внутри.
 
-Dota 2 хранит раскладку клавиш, опции и другие клиентские настройки отдельно для каждого аккаунта, внутри каталога Steam `userdata`. Утилита копирует один этот каталог (app ID `570`) из папки одного аккаунта в папку другого. Настройки, собранные один раз, можно применить ко второму аккаунту, перенести на другой компьютер или восстановить из сохранённой копии.
+Закройте Dota 2 и Steam, проверьте пути к `userdata` и запустите сканирование. Слева выберите аккаунт с нужными настройками, справа — тот, куда их перенести. Нажмите кнопку копирования и подтвердите замену.
 
-Программа поставляется одним исполняемым файлом без установщика: портативный `.exe` на Windows и AppImage на Linux. Сторонние библиотеки собраны статически.
+Копируется папка `<account_id>/570` целиком. Если старые настройки нужны, сохраните их отдельно: после успешной замены временная резервная копия удаляется.
 
-### Возможности
+Язык и тема меняются в настройках. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После загрузки закройте старую версию и запустите новую.
 
-- Копируется только `<account_id>/570`. Остальное содержимое папки аккаунта не затрагивается.
-- Сканирует исходный и целевой каталоги и показывает найденные в каждом папки аккаунтов.
-- Показывает имена и аватары, полученные из публичных профилей Steam Community. Имена и аватары кэшируются локально, на диске.
-- Перед заменой настроек запрашивает подтверждение.
-- Пять тем оформления, выбор сохраняется между запусками. Все JSON-темы и фон Crimson встроены в исполняемый файл. Необязательная папка `themes/` рядом с ним позволяет переопределить ресурсы; при отсутствии или повреждении файлов используются встроенные версии. Тема Crimson добавляет редактор палитры и собственный фон.
+## License
 
-### Требования
-
-- Windows с видеодрайвером с поддержкой OpenGL либо Linux-десктоп с OpenGL (mesa или драйвер вендора).
-- На Linux: `zenity` или `kdialog` для диалога выбора папки и системный шрифт с кириллицей (DejaVu, Liberation или Noto — есть в любом десктопном дистрибутиве).
-- Каталог Steam `userdata` для назначения и каталог с такой же структурой для источника (это может быть один и тот же каталог).
-
-### Использование
-
-1. Скачайте `DotaManager.exe` (Windows) или AppImage (Linux) в разделе [Releases](https://github.com/OutTuna/Dota2CFGChanger/releases).
-2. Закройте Steam, чтобы клиент не писал в каталог в момент его замены.
-3. Запустите программу. Нажмите **Source config folder** для выбора источника и **Destination account folder** для назначения. Оба пути по умолчанию указывают на найденный каталог Steam userdata либо стандартный путь установки. В настройках можно выбрать русский или украинский язык.
-4. Нажмите `Scan folders`.
-5. Выберите аккаунт в левом списке (источник) и в правом (назначение).
-6. Нажмите `Copy config` и подтвердите действие.
-
-Оба каталога должны иметь структуру `userdata` из Steam:
-
-```
-<root>/
-  <account_id>/
-    570/
-      ...
-```
-
-Аккаунтами считаются только папки, имя которых состоит исключительно из цифр.
-
-### Поведение
-
-**Изменяемые файлы.** Каталог `<account_id>/570` в назначении заменяется каталогом из источника. Сначала копия записывается в соседнюю папку `.dotamanager_tmp`. Старый конфиг переименовывается в `.dotamanager_backup` перед установкой нового; при ошибке программа пытается вернуть его обратно. Если восстановление не удалось, обе рабочие папки сохраняются, а путь к резервной копии показывается в статусе. Остатки прерванного копирования блокируют повторную попытку до их ручного сохранения или восстановления. После успешного копирования операция деструктивна: временная резервная копия удаляется, постоянной автоматической копии нет, поэтому, если текущие настройки важны, сделайте собственную.
-
-**Сетевые запросы.** Для каждой найденной папки аккаунта программа запрашивает публичный XML профиля по адресу `steamcommunity.com/profiles/<SteamID64>?xml=1`, берёт из него имя и ссылку на аватар, затем загружает аватар. Передаётся только SteamID64, вычисленный из имени папки как `account_id + 76561197960265728`. Логин и API-ключ не используются. Для закрытых профилей имя и аватар недоступны, и в списке показывается числовой ID. Одновременно загружается не более восьми аватаров; неудачная загрузка повторяется через 30 секунд.
-
-**Локальные файлы.** Настройки и кэши записываются в пользовательский каталог конфигурации — `%APPDATA%\DotaManager` на Windows, `$XDG_CONFIG_HOME/DotaManager` (или `~/.config/DotaManager`) на Linux — он создаётся при первом запуске, а не рядом с исполняемым файлом:
-
-| Файл / папка | Содержимое |
-| --- | --- |
-| `settings.json` | путь к источнику, путь к назначению, выбранные тема и язык |
-| `nick_cache.json` | кэш соответствия ID аккаунта и имени |
-| `avatar_url_cache.json` | кэш соответствия ID аккаунта и ссылки на аватар |
-| `avatar_cache/` | скачанные изображения аватаров (`<account_id>.img`) |
-
-### Сборка
-
-Требования: CMake 3.14 или новее, компилятор C++17 (MSVC или MinGW на Windows, GCC/Clang на Linux), Git и доступ к сети на этапе конфигурации, поскольку зависимости загружаются через `FetchContent`.
-
-```
-git clone https://github.com/OutTuna/Dota2CFGChanger.git
-cd Dota2CFGChanger
-cmake -S . -B build
-cmake --build build --config Release
-```
-
-- Windows (генератор Visual Studio): исполняемый файл создаётся по пути `build/Release/DotaManager.exe`.
-- Linux: сначала установите dev-пакеты (`build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev`), конфигурируйте с `-DCMAKE_BUILD_TYPE=Release`; исполняемый файл — `build/DotaManager`.
-
-Первая конфигурация дополнительно собирает cURL и его зависимости через cpr, поэтому занимает заметно больше времени, чем последующие. Опция `-DAPP_VERSION=<x.y>` записывает версию в ресурс Windows-файла; в CI версия вычисляется автоматически.
-
-### Зависимости
-
-Все зависимости загружаются и собираются CMake как статические библиотеки.
-
-| Библиотека | Версия | Назначение | Лицензия |
-| --- | --- | --- | --- |
-| [Dear ImGui](https://github.com/ocornut/imgui) | 1.91.6 | Пользовательский интерфейс | MIT |
-| [GLFW](https://github.com/glfw/glfw) | 3.3.8 | Окно, ввод, контекст OpenGL | zlib/libpng |
-| [cpr](https://github.com/libcpr/cpr) | 1.11.1 | HTTP-клиент (обёртка над libcurl) | MIT |
-| [nlohmann/json](https://github.com/nlohmann/json) | 3.11.3 | Файлы настроек и кэша | MIT |
-| [stb](https://github.com/nothings/stb) | зафиксированный коммит | Декодирование изображений (`stb_image`) | Public domain / MIT |
-
-### Структура исходников
-
-| Путь | Назначение |
-| --- | --- |
-| `main.cpp` | Точка входа и главный цикл |
-| `app.cpp`, `app.h` | Управление сканированием и копированием, настройки и кэши |
-| `steam_api.cpp`, `steam_api.h` | Запросы к Steam и разбор XML |
-| `platform.cpp`, `platform.h` | Пути, диалоги выбора папки, шрифты и внешние ссылки |
-| `ui/` | Отрисовка, JSON-система тем, диалоги, всплывающие окна |
-| `file_ops.cpp`, `file_ops.h` | Пути, обнаружение Steam, замена конфига с восстановлением |
-| `localization.cpp`, `localization.h`, `locales/` | Встроенные английские, русские и украинские переводы |
-| `avatar_data.cpp`, `avatar_data.h` | Загрузка аватаров, дисковый кэш и декодирование изображений |
-| `avatar.cpp`, `avatar.h` | Создание текстур OpenGL и адаптер отрисовки |
-| `updates.*`, `update_transport.*`, `release_info.*`, `checksum.*` | Проверка и загрузка обновлений, сравнение версий, SHA-256 |
-| `app_icon.h`, `cmake/` | Встроенная иконка и генераторы ресурсов |
-| `app.rc.in`, `app.manifest`, `Icon.ico` | Информация о версии, манифест и иконка Windows (собираются CMake) |
-| `themes/` | JSON-файлы тем и фон, встраиваются при сборке |
-| `scripts/` | Локальные проверки для разработки (`run-all-checks.sh`, версии, smoke-тесты CMake) |
-| `.github/workflows/build.yaml` | CI: собирает `.exe` для Windows и AppImage для Linux, публикует релиз |
-| `CMakeLists.txt` | Описание сборки и версии зависимостей |
-
-### Ограничения
-
-- Нет поддержки macOS.
-- Каталог Steam userdata определяется по реестру Windows и стандартным Linux-путям, включая Flatpak и `$XDG_DATA_HOME`. Если установок несколько, выбирается первый найденный каталог; другой можно выбрать вручную.
-- На Linux диалогу выбора папки нужны `zenity` или `kdialog`.
-- Для имён и аватаров нужны сеть и публичный профиль.
-- По умолчанию интерфейс на английском. Русский и украинский доступны в настройках; выбранный язык сохраняется.
-
-### Обратная связь
-
-Сообщения об ошибках и предложения принимаются в [трекере задач](https://github.com/OutTuna/Dota2CFGChanger/issues). Укажите версию ОС и используемый релиз.
-
-
-Core regression checks (paths, copy failures, rollback and translations):
-
-```bash
-python3 tests/core_checks.py build/_deps/json-src/include
-```
-
-These checks need Python 3 and a C++17 compiler and run in a temporary directory on Linux/macOS.
-
-### Updates and author link
-
-The footer's **OutTuna** button opens the repository. **Check updates** opens the update dialog. Release builds also check once at startup in the background; a newer version opens the dialog, while an offline startup stays quiet. Development builds with version `0.0` only check manually.
-
-The checker uses the repository's `latest` release tag, including prereleases, and reads the numeric version from `Latest Build (vX.Y)`. No GitHub login is required. This adds a request to `api.github.com` at startup and when checking manually.
-
-**Download** fetches the Windows `.exe` or Linux x86-64 `.AppImage` only after a click. The file is streamed into `<config directory>/updates/<version>/`, verified against GitHub's asset size and SHA-256 digest, then renamed from `.part`. The dialog can open that folder. Close the old application and run the downloaded file; no running executable is overwritten. If a matching asset or digest is unavailable, **Open GitHub release** provides manual downloading. Interrupted or invalid partial downloads are removed.
-
-На панели снизу **OutTuna** открывает репозиторий, а **Проверить обновления** — окно обновления. Релизная сборка также проверяет обновления в фоне при запуске; окно появляется при наличии новой версии. Ошибка фоновой проверки не мешает работе приложения. Версия `0.0` проверяется только вручную.
-
-**Скачать** загружает файл только после нажатия, в `<каталог настроек>/updates/<версия>/`. Размер и SHA-256 проверяются до завершения загрузки. Затем можно открыть папку, закрыть старую программу и запустить новый файл. Текущий исполняемый файл не перезаписывается. Кнопка **Открыть релиз GitHub** позволяет скачать вручную.
-
-### CI cache and regression checks
-
-CI caches `build/_deps` separately by OS, architecture, compiler identity and `CMakeLists.txt`. Linux also keeps a 500 MB compiler cache through ccache. Every run configures and builds the application; a cache hit never substitutes an old application executable. The first run fills the cache, so compare later runs to measure the speedup.
-
-`dotamanager_core` contains file operations, Steam/avatars, settings, translations and updates without ImGui/OpenGL dependencies. The GUI owns texture upload and window rendering.
-
-```bash
-cmake -S . -B build -DDOTAMANAGER_BUILD_TESTS=ON
-cmake --build build --config Release
-ctest --test-dir build --build-config Release --output-on-failure
-python3 tests/core_checks.py build/_deps/json-src/include
-```
-
-CI runs update metadata/checksum tests, update cancellation/download tests headless avatar-cache tests and update-dialog layout checks in all three languages on Windows and Linux. Linux also runs the path, rollback and localization checks.
+[MIT](LICENSE). OutTuna.
