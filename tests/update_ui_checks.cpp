@@ -5,6 +5,7 @@
 #include <imgui_internal.h>
 #include <cassert>
 #include <iostream>
+#include <cmath>
 
 UpdateSnapshot snapshot;
 UpdateSnapshot updates_snapshot() { return snapshot; }
@@ -38,6 +39,8 @@ int main() {
             auto window = ImGui::FindWindowByName("Updates###update_popup");
             assert(window && window->Active);
             assert(window->Size.x <= io.DisplaySize.x && window->Size.y <= io.DisplaySize.y);
+            assert(std::abs(window->Pos.x + window->Size.x * 0.5f - io.DisplaySize.x * 0.5f) <= 1.f);
+            assert(std::abs(window->Pos.y + window->Size.y * 0.5f - io.DisplaySize.y * 0.5f) <= 1.f);
             ImGui::DestroyContext();
         }
     }

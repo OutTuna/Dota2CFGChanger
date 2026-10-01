@@ -278,13 +278,15 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     }
 
     if (scanning) ImGui::EndDisabled();
-    ImGui::BeginChild("##status", {0, 40.f});
+    const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
+    ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
+    ImGui::BeginChild("##status", {0, 32.f});
     ImGui::TextWrapped("%s", tr_value("status", local_status).c_str());
     ImGui::EndChild();
-    ImGui::SetCursorPosY(ds.y - ImGui::GetStyle().WindowPadding.y - 32.f);
+    ImGui::SetCursorPosY(footer_y);
     if (ImGui::Button("Info", {64.f, 32.f})) ImGui::OpenPopup("Info###info");
-    ImGui::SetNextWindowPos({ds.x * 0.5f, ds.y * 0.5f}, ImGuiCond_Appearing, {0.5f, 0.5f});
-    ImGui::SetNextWindowSize({360.f, 0.f}, ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos({ds.x * 0.5f, ds.y * 0.5f}, ImGuiCond_Always, {0.5f, 0.5f});
+    ImGui::SetNextWindowSizeConstraints({280.f, 0.f}, {280.f, ds.y - 32.f});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
     bool info_open = true;
     if (ImGui::BeginPopupModal("Info###info", &info_open,

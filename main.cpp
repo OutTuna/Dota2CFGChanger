@@ -24,7 +24,7 @@ int main(int, char**) {
 
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* window = glfwCreateWindow(720, 560, "Dota 2 CFG Changer", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(720, 600, "Dota 2 CFG Changer", NULL, NULL);
     if (!window) return 1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);

@@ -9,7 +9,11 @@ void ui_render_update_popup() {
     auto update = updates_snapshot();
     const char* id = "###update_popup";
     if (update.popup && !ImGui::IsPopupOpen(id)) ImGui::OpenPopup(id);
-    ImGui::SetNextWindowSize({ 520.f, 0.f }, ImGuiCond_Appearing);
+    const auto display = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos({display.x * 0.5f, display.y * 0.5f},
+        ImGuiCond_Always, {0.5f, 0.5f});
+    const float width = std::min(520.f, display.x - 32.f);
+    ImGui::SetNextWindowSizeConstraints({width, 0.f}, {width, display.y - 32.f});
     bool open = update.popup;
     std::string title = std::string(tr("updates")) + id;
     if (ImGui::BeginPopupModal(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize)) {
