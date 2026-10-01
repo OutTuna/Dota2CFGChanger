@@ -62,5 +62,6 @@
   "update_retry": "Check again",
   "update_close": "Close",
   "update_check_failed": "Could not check updates: {value}",
-  "update_download_failed": "Download failed: {value}. You can download manually from GitHub."
+  "update_download_failed": "Download failed: {value}. You can download manually from GitHub.",
+  "author": "Author"
 }
