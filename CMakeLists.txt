@@ -64,18 +64,18 @@ FetchContent_Declare(stb   GIT_REPOSITORY https://github.com/nothings/stb GIT_TA
 FetchContent_MakeAvailable(stb)
 
 set(THEME_RESOURCES
-    ${CMAKE_SOURCE_DIR}/themes/theme_dark.json
-    ${CMAKE_SOURCE_DIR}/themes/theme_indigo.json
-    ${CMAKE_SOURCE_DIR}/themes/theme_vermillion.json
-    ${CMAKE_SOURCE_DIR}/themes/theme_classic_steam.json
-    ${CMAKE_SOURCE_DIR}/themes/theme_crimson.json
-    ${CMAKE_SOURCE_DIR}/themes/bg_crimson.png
+    ${CMAKE_SOURCE_DIR}/resources/themes/theme_dark.json
+    ${CMAKE_SOURCE_DIR}/resources/themes/theme_indigo.json
+    ${CMAKE_SOURCE_DIR}/resources/themes/theme_vermillion.json
+    ${CMAKE_SOURCE_DIR}/resources/themes/theme_classic_steam.json
+    ${CMAKE_SOURCE_DIR}/resources/themes/theme_crimson.json
+    ${CMAKE_SOURCE_DIR}/resources/themes/bg_crimson.png
 )
 set(EMBEDDED_THEMES_DIR "${CMAKE_BINARY_DIR}/generated")
 add_custom_command(
     OUTPUT "${EMBEDDED_THEMES_DIR}/embedded_themes.cpp" "${EMBEDDED_THEMES_DIR}/embedded_themes.h"
     COMMAND ${CMAKE_COMMAND}
-        "-DTHEMES_DIR=${CMAKE_SOURCE_DIR}/themes"
+        "-DTHEMES_DIR=${CMAKE_SOURCE_DIR}/resources/themes"
         "-DOUTPUT_DIR=${EMBEDDED_THEMES_DIR}"
         -P "${CMAKE_SOURCE_DIR}/cmake/EmbedThemes.cmake"
     DEPENDS ${THEME_RESOURCES} "${CMAKE_SOURCE_DIR}/cmake/EmbedThemes.cmake"
@@ -85,31 +85,36 @@ add_custom_command(
 add_custom_command(
     OUTPUT "${EMBEDDED_THEMES_DIR}/embedded_locales.h"
     COMMAND ${CMAKE_COMMAND}
-        "-DLOCALES_DIR=${CMAKE_SOURCE_DIR}/locales"
+        "-DLOCALES_DIR=${CMAKE_SOURCE_DIR}/resources/locales"
         "-DOUTPUT_DIR=${EMBEDDED_THEMES_DIR}"
         -P "${CMAKE_SOURCE_DIR}/cmake/EmbedLocales.cmake"
-    DEPENDS "${CMAKE_SOURCE_DIR}/locales/en.json"
-        "${CMAKE_SOURCE_DIR}/locales/ru.json"
-        "${CMAKE_SOURCE_DIR}/locales/uk.json"
+    DEPENDS "${CMAKE_SOURCE_DIR}/resources/locales/en.json"
+        "${CMAKE_SOURCE_DIR}/resources/locales/ru.json"
+        "${CMAKE_SOURCE_DIR}/resources/locales/uk.json"
         "${CMAKE_SOURCE_DIR}/cmake/EmbedLocales.cmake"
     VERBATIM
 )
 
 find_package(Threads REQUIRED)
 add_library(dotamanager_core STATIC
-    app.cpp
-    file_ops.cpp
-    localization.cpp
-    platform.cpp
-    steam_api.cpp
-    avatar_data.cpp
-    release_info.cpp
-    checksum.cpp
-    updates.cpp
-    update_transport.cpp
+    src/core/app.cpp
+    src/core/file_ops.cpp
+    src/core/localization.cpp
+    src/platform/platform.cpp
+    src/network/steam_api.cpp
+    src/core/avatar_data.cpp
+    src/core/release_info.cpp
+    src/core/checksum.cpp
+    src/core/updates.cpp
+    src/network/update_transport.cpp
     ${EMBEDDED_THEMES_DIR}/embedded_locales.h
 )
-target_include_directories(dotamanager_core PUBLIC ${CMAKE_SOURCE_DIR} ${EMBEDDED_THEMES_DIR}
+target_include_directories(dotamanager_core PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/network
+    ${CMAKE_SOURCE_DIR}/src/platform
+    ${EMBEDDED_THEMES_DIR}
     PRIVATE ${stb_SOURCE_DIR})
 target_link_libraries(dotamanager_core PUBLIC cpr::cpr nlohmann_json::nlohmann_json Threads::Threads)
 target_compile_definitions(dotamanager_core PRIVATE DOTA_APP_VERSION="${APP_VERSION_STRING}")
@@ -129,17 +134,17 @@ add_executable(DotaManager
         ${EMBEDDED_THEMES_DIR}/embedded_themes.cpp
         ${EMBEDDED_THEMES_DIR}/embedded_themes.h
         main.cpp
-        app.h
-        avatar.cpp
-        avatar.h
-        ui/ui.h
-        ui/ui_internal.h
-        ui/theme.cpp
-        ui/panels.cpp
-        ui/main_window.cpp
-        ui/success_popup.cpp
-        ui/update_popup.cpp
-        app_icon.h
+        src/core/app.h
+        src/ui/avatar.cpp
+        src/ui/avatar.h
+        src/ui/ui.h
+        src/ui/ui_internal.h
+        src/ui/theme.cpp
+        src/ui/panels.cpp
+        src/ui/main_window.cpp
+        src/ui/success_popup.cpp
+        src/ui/update_popup.cpp
+        resources/icons/app_icon.h
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp
@@ -150,8 +155,8 @@ add_executable(DotaManager
 
 target_include_directories(DotaManager PRIVATE
         ${EMBEDDED_THEMES_DIR}
-        ${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/ui
+        ${CMAKE_SOURCE_DIR}/resources/icons
+        ${CMAKE_SOURCE_DIR}/src/ui
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
         ${stb_SOURCE_DIR}
@@ -165,9 +170,9 @@ endif()
 
 
 if(WIN32)
-    if(EXISTS "${CMAKE_SOURCE_DIR}/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/app.manifest")
+    if(EXISTS "${CMAKE_SOURCE_DIR}/resources/icons/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/resources/windows/app.manifest")
         configure_file(
-                "${CMAKE_SOURCE_DIR}/app.rc.in"
+                "${CMAKE_SOURCE_DIR}/resources/windows/app.rc.in"
                 "${CMAKE_BINARY_DIR}/generated_app.rc"
                 @ONLY
         )
@@ -196,17 +201,19 @@ endif()
 option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
 if(DOTAMANAGER_BUILD_TESTS)
     enable_testing()
-    add_executable(update_checks tests/update_checks.cpp release_info.cpp checksum.cpp)
-    add_executable(update_service_checks tests/update_service_checks.cpp updates.cpp release_info.cpp checksum.cpp)
+    add_executable(update_checks tests/update_checks.cpp src/core/release_info.cpp src/core/checksum.cpp)
+    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp)
     add_executable(avatar_checks tests/avatar_checks.cpp)
     target_link_libraries(avatar_checks PRIVATE dotamanager_core)
-    add_executable(update_ui_checks tests/update_ui_checks.cpp ui/update_popup.cpp
+    add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp
         ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
     target_include_directories(update_ui_checks PRIVATE ${imgui_SOURCE_DIR})
     target_link_libraries(update_ui_checks PRIVATE dotamanager_core)
     foreach(test_target update_checks update_service_checks avatar_checks update_ui_checks)
-        target_include_directories(${test_target} PRIVATE ${CMAKE_SOURCE_DIR})
+        target_include_directories(${test_target} PRIVATE
+            ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
+            ${CMAKE_SOURCE_DIR}/src/network ${CMAKE_SOURCE_DIR}/src/platform)
         target_link_libraries(${test_target} PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
         if(WIN32)
             target_link_libraries(${test_target} PRIVATE bcrypt)
@@ -219,7 +226,7 @@ if(DOTAMANAGER_BUILD_TESTS)
             target_compile_options(${test_target} PRIVATE -UNDEBUG)
         endif()
         if(test_target STREQUAL "avatar_checks")
-            add_test(NAME ${test_target} COMMAND ${test_target} "${CMAKE_SOURCE_DIR}/themes/bg_crimson.png")
+            add_test(NAME ${test_target} COMMAND ${test_target} "${CMAKE_SOURCE_DIR}/resources/themes/bg_crimson.png")
         else()
             add_test(NAME ${test_target} COMMAND ${test_target})
         endif()

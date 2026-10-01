@@ -9,7 +9,7 @@ root = Path(__file__).resolve().parents[1]
 json_include = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "build/_deps/json-src/include"
 if not (json_include / "nlohmann/json.hpp").exists():
     raise SystemExit("Usage: python3 tests/core_checks.py <nlohmann-json-include-directory>")
-locales = [json.loads((root / "locales" / (code + ".json")).read_text()) for code in ("en", "ru", "uk")]
+locales = [json.loads((root / "resources/locales" / (code + ".json")).read_text()) for code in ("en", "ru", "uk")]
 for locale in locales:
     assert set(locale) == set(locales[0])
     assert all(isinstance(value, str) and value for value in locale.values())
@@ -17,7 +17,7 @@ for locale in locales:
         assert value.count("{value}") == locales[0][key].count("{value}")
 with tempfile.TemporaryDirectory(prefix="dotamanager-core-") as directory:
     temp = Path(directory)
-    subprocess.run(["cmake", "-DLOCALES_DIR=" + str(root / "locales"), "-DOUTPUT_DIR=" + str(temp), "-P", str(root / "cmake/EmbedLocales.cmake")], check=True)
+    subprocess.run(["cmake", "-DLOCALES_DIR=" + str(root / "resources/locales"), "-DOUTPUT_DIR=" + str(temp), "-P", str(root / "cmake/EmbedLocales.cmake")], check=True)
     (temp / "faults.h").write_text(r"""
 #include <filesystem>
 #include <system_error>
@@ -26,7 +26,7 @@ void test_rename(const std::filesystem::path&, const std::filesystem::path&, std
 std::uintmax_t test_remove(const std::filesystem::path&, std::error_code&);
 void test_copy(const std::filesystem::path&, const std::filesystem::path&, std::filesystem::copy_options);
 """)
-    source = (root / "file_ops.cpp").read_text()
+    source = (root / "src/core/file_ops.cpp").read_text()
     source = '#include "faults.h"\n' + source.replace("fs::rename(", "test_rename(").replace("fs::remove_all(", "test_remove(").replace("fs::copy(", "test_copy(")
     (temp / "file_ops_test.cpp").write_text(source)
     (temp / "checks.cpp").write_text(r"""
@@ -125,10 +125,10 @@ int main(int argc, char** argv) {
 """)
     compiler = os.environ.get("CXX", "c++")
     executable = temp / "checks"
-    subprocess.run([compiler, "-std=c++17", "-I" + str(root), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "localization.cpp"), "-o", str(executable)], check=True)
+    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
     env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
     subprocess.run([str(executable), str(temp)], env=env, check=True)
-    app = (root / "app.cpp").read_text()
+    app = (root / "src/core/app.cpp").read_text()
     functions = app[app.index("static void set_status("):app.index("static void fetch_profile_info")]
     settings_source = r"""
 #include "app.h"
@@ -170,5 +170,5 @@ int main(int argc, char** argv) {
 """
     (temp / "settings.cpp").write_text(settings_source)
     settings_executable = temp / "settings_checks"
-    subprocess.run([compiler, "-std=c++17", "-I" + str(root), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "file_ops.cpp"), str(root / "localization.cpp"), "-o", str(settings_executable)], check=True)
+    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
     subprocess.run([str(settings_executable), str(temp)], env=env, check=True)
