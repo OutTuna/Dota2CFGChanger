@@ -1,6 +1,10 @@
 #include "ui_internal.h"
 #include "app.h"
 #include "stb_image.h"
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 #include <GL/gl.h>
 #include <fstream>
 #include <unordered_map>
@@ -545,4 +549,3 @@ void ui_apply_theme(AppTheme t) {
         ui_get_theme_palette(t, g_crimson_child_bg, g_crimson_selected_bg, g_crimson_hovered_bg, g_crimson_text);
     }
 }
-
