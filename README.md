@@ -2,7 +2,7 @@
 
 Copy your Dota 2 settings from one Steam account to another. Pick the account with the setup you want, choose the destination, and confirm the copy.
 
-[Download](https://github.com/OutTuna/Dota2CFGChanger/releases) · [Issues](https://github.com/OutTuna/Dota2CFGChanger/issues) · [Roadmap](TODO.md) · [Русский](#русский)
+[Download](https://github.com/OutTuna/Dota2CFGChanger/releases) · [Issues](https://github.com/OutTuna/Dota2CFGChanger/issues) · [Roadmap](docs/TODO.md) · [Русский](#русский)
 
 ## Getting started
 
@@ -70,7 +70,22 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## How the code fits together
 
-`main.cpp` runs the window. `ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `avatar.cpp` uploads the images from `avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
+`main.cpp` runs the window. `src/ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `src/ui/avatar.cpp` uploads the images from `src/core/avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
+
+```text
+main.cpp              application entry point
+src/core/             settings, scanning, config files, caches and updates
+src/network/          Steam and release HTTP requests
+src/platform/         native paths, dialogs, fonts and external links
+src/ui/               windows, panels, themes and OpenGL avatars
+resources/            icons, themes, translations and Windows metadata
+cmake/                resource embedding
+scripts/              development and CI checks
+tests/                regression checks
+docs/                 roadmap
+```
+
+The AppImage uses the checked-in PNG icon. CI does not need an image converter.
 
 [Open the full diagram in GitDiagram](https://gitdiagram.com/outtuna/dota2cfgchanger).
 
@@ -79,24 +94,24 @@ ctest --test-dir build -C Release --output-on-failure
 
 ```mermaid
 flowchart TB
-    node_main_window["Main window<br/>main_window.cpp"]
-    node_panels["Settings and confirmation<br/>panels.cpp"]
-    node_success_popup["Copy success popup<br/>success_popup.cpp"]
-    node_update_popup["Update popup<br/>update_popup.cpp"]
+    node_main_window["Main window<br/>src/ui/main_window.cpp"]
+    node_panels["Settings and confirmation<br/>src/ui/panels.cpp"]
+    node_success_popup["Copy success popup<br/>src/ui/success_popup.cpp"]
+    node_update_popup["Update popup<br/>src/ui/update_popup.cpp"]
     node_main["Application entry<br/>main.cpp"]
-    node_app["App coordinator<br/>app.cpp"]
-    node_file_ops["Config replacement<br/>file_ops.cpp"]
-    node_platform["Platform services<br/>platform.cpp"]
-    node_steam_api["Profile lookup<br/>steam_api.cpp"]
-    node_avatar_data["Avatar downloads<br/>avatar_data.cpp"]
-    node_avatar["Avatar rendering<br/>avatar.cpp"]
-    node_theme["Theme system<br/>theme.cpp"]
+    node_app["App coordinator<br/>src/core/app.cpp"]
+    node_file_ops["Config replacement<br/>src/core/file_ops.cpp"]
+    node_platform["Platform services<br/>src/platform/platform.cpp"]
+    node_steam_api["Profile lookup<br/>src/network/steam_api.cpp"]
+    node_avatar_data["Avatar downloads<br/>src/core/avatar_data.cpp"]
+    node_avatar["Avatar rendering<br/>src/ui/avatar.cpp"]
+    node_theme["Theme system<br/>src/ui/theme.cpp"]
     node_theme_resources["Theme resources"]
-    node_localization["Localization<br/>localization.cpp"]
-    node_settings_cache["Settings and caches<br/>app.cpp"]
-    node_updates["Release updates<br/>updates.cpp"]
+    node_localization["Localization<br/>src/core/localization.cpp"]
+    node_settings_cache["Settings and caches<br/>src/core/app.cpp"]
+    node_updates["Release updates<br/>src/core/updates.cpp"]
     node_update_transport["Update transport"]
-    node_release_info["Release metadata<br/>release_info.cpp"]
+    node_release_info["Release metadata<br/>src/core/release_info.cpp"]
     node_user["User"]
     node_steam_data["Steam userdata"]
     node_steam_community["Steam Community"]

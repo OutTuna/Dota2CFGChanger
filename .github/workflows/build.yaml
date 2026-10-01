@@ -7,7 +7,7 @@ on:
       - "README.md"
       - "LICENSE"
       - ".gitignore"
-      - "TODO.md"
+      - "docs/**"
       - "diagram.png"
   workflow_dispatch:
     inputs:
@@ -89,11 +89,10 @@ jobs:
       - name: Install Linux Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             build-essential cmake ccache \
             libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libssl-dev \
-            imagemagick
+            libxcursor-dev libxi-dev libssl-dev
 
       - name: Identify Linux toolchain
         id: toolchain
@@ -149,9 +148,7 @@ jobs:
           Categories=Utility;
           EOF
 
-          # Real app icon; solid-colour fallback so packaging never fails on this.
-          convert "Icon.ico[0]" -resize 256x256 dotamanager.png 2>/dev/null \
-            || convert -size 256x256 xc:blue dotamanager.png
+          cp resources/icons/dotamanager.png dotamanager.png
 
           mkdir -p AppDir/usr/bin
           cp build/DotaManager AppDir/usr/bin/
