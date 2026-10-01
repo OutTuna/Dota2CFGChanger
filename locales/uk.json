@@ -47,5 +47,20 @@
   "theme_description_1": "Синя тема Indigo з рамками",
   "theme_description_2": "Червона тема Vermillion",
   "theme_description_3": "Класична зелена тема Steam",
-  "theme_description_4": "Тема Crimson з тлом і редактором палітри"
+  "theme_description_4": "Тема Crimson з тлом і редактором палітри",
+  "updates": "Оновлення",
+  "current_version": "Поточна версія",
+  "update_check": "Перевірити оновлення",
+  "update_checking": "Перевірка оновлень...",
+  "update_current": "У вас актуальна версія.",
+  "update_available": "Доступна нова версія: {value}",
+  "update_downloading": "Завантаження... Можна далі користуватися програмою.",
+  "update_downloaded": "Завантаження завершено. Закрийте програму й запустіть новий файл. Поточний виконуваний файл не замінено.",
+  "update_open_folder": "Відкрити папку завантаження",
+  "update_download": "Завантажити",
+  "update_release": "Відкрити реліз GitHub",
+  "update_retry": "Перевірити знову",
+  "update_close": "Закрити",
+  "update_check_failed": "Не вдалося перевірити оновлення: {value}",
+  "update_download_failed": "Не вдалося завантажити: {value}. Можна завантажити вручну з GitHub."
 }

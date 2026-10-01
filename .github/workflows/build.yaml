@@ -46,10 +46,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup MSVC & Resource Compiler
         uses: ilammy/msvc-dev-cmd@v1
+      - name: Identify Windows toolchain
+        id: toolchain
+        shell: pwsh
+        run: |
+          $identity = "$env:VCToolsVersion|$env:ImageOS|$(cmake --version | Select-Object -First 1)"
+          $hash = [System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($identity))
+          $key = [System.BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
+          "id=$key" >> $env:GITHUB_OUTPUT
+      - name: Cache dependency sources and builds
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
+        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
+      - name: Regression tests
+        run: ctest --test-dir build --build-config Release --output-on-failure
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -65,6 +80,9 @@ jobs:
       # FUSE, so run them by self-extraction instead of mounting.
       APPIMAGE_EXTRACT_AND_RUN: "1"
       ARCH: x86_64
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v4
 
@@ -72,16 +90,40 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake \
+            build-essential cmake ccache \
             libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libssl-dev \
             imagemagick
 
+      - name: Identify Linux toolchain
+        id: toolchain
+        run: |
+          id=$({ gcc --version; cmake --version; dpkg-query -W libssl-dev libgl1-mesa-dev; } | sha256sum | cut -d' ' -f1)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: Cache dependency sources and builds
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
+          restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
+        run: cmake -S . -B build -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON -DAPP_VERSION=${{ needs.compute-version.outputs.version }}
 
       - name: Build
         run: cmake --build build --config Release -j"$(nproc)"
+
+      - name: Regression tests
+        run: |
+          ctest --test-dir build --output-on-failure
+          python3 tests/core_checks.py build/_deps/json-src/include
+
+      - name: Compiler cache statistics
+        run: ccache --show-stats
 
       - name: Download linuxdeploy + AppImage plugin
         run: |
