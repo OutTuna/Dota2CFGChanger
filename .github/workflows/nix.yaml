@@ -1,0 +1,51 @@
+name: Nix package checks
+
+on:
+  push:
+    branches: [main, nix-packaging]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'packaging/nix/**'
+      - '.github/workflows/nix.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'packaging/nix/**'
+      - '.github/workflows/nix.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nix-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: cachix/install-nix-action@v31.11.1
+        with:
+          extra_nix_config: |
+            sandbox = true
+      - name: Lock inputs
+        run: nix flake lock
+      - name: Format Nix expressions
+        run: nix fmt -- flake.nix packaging/nix/
+      - name: Build and test package in sandbox
+        run: nix build .#dota2cfgchanger --print-build-logs
+      - name: Check NixOS graphical startup
+        run: nix build .#checks.x86_64-linux.nixos --print-build-logs --out-link nixos-result
+      - name: Save lock file and NixOS test output
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dota2cfgchanger-nix-validation
+          path: |
+            flake.lock
+            flake.nix
+            packaging/nix/
+            nixos-result/
+          if-no-files-found: warn
