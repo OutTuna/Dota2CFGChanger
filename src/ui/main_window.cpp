@@ -311,8 +311,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::BeginDisabled(g_scanning.load() || selected_dst.load() < 0);
     if (ImGui::Button(tr("backups"), {0.f, 32.f})) ui_open_backups();
     ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::TextDisabled("v%s", app_version());
 
     ImGui::End();
     ImGui::PopStyleVar(3);
