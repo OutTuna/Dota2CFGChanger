@@ -69,3 +69,5 @@ __pycache__/
 /packaging/aur/pkg/
 /packaging/aur/*.tar.gz
 /packaging/aur/*.pkg.tar.zst
+
+/docs/NIXPKGS_PR.md
