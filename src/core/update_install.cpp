@@ -109,6 +109,7 @@ int update_helper_dispatch(const std::vector<std::string>& arguments) {
     try {
         std::ifstream input(job);
         nlohmann::json data; input >> data;
+        input.close();
         target = fs::u8path(data.at("target").get<std::string>());
         auto staged = fs::u8path(data.at("staged").get<std::string>());
         auto expected = target; expected += ".update-new";
