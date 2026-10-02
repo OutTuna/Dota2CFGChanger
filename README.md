@@ -110,7 +110,7 @@ environment.systemPackages = [
 
 Apply your configuration with `sudo nixos-rebuild switch --flake /path/to/your/config#your-host`. Update the `dotamanager` input and rebuild to receive a newer package recipe. Profile installations update through Nix; the app does not replace files in `/nix/store`. Settings and backups remain in your user directory.
 
-CI verifies a sandboxed build, application tests, installation and graphical startup in a NixOS VM. The package is not in nixpkgs yet: use the GitHub reference above rather than `nixpkgs#dota2cfgchanger`. On other Linux distributions, graphics drivers may require additional configuration. See [the Nix guide](docs/NIX.md).
+CI verifies a sandboxed build, application tests, installation and graphical startup in a NixOS VM. The package is not in nixpkgs yet: use the GitHub reference above rather than `nixpkgs#dota2cfgchanger`. On other Linux distributions, graphics drivers may require additional configuration. The installation steps are listed above.
 
 ## Building
 
