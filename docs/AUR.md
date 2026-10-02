@@ -1,6 +1,6 @@
 # Arch Linux / AUR
 
-Рецепт находится в `packaging/aur`. Пока это подготовка к публикации: команды `yay -S dota2cfgchanger` и `paru -S dota2cfgchanger` заработают после появления пакета в AUR.
+Рецепт находится в `packaging/aur`. [Arch CI для 15b10fb](https://github.com/OutTuna/Dota2CFGChanger/actions/runs/36986507539) прошёл сборку, тесты, установку, запуск окна и удаление пакета. Пакет ещё не опубликован: команды `yay -S dota2cfgchanger` и `paru -S dota2cfgchanger` заработают после появления пакета в AUR.
 
 ## Что собирается
 
