@@ -79,7 +79,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
 
-With the Visual Studio generator, the result is `build/Release/DotaManager.exe`. On Linux it is `build/DotaManager`; the GitHub Actions workflow handles AppImage packaging. CI publishes the Windows `.exe` and Linux `.AppImage` as a stable Latest release, checks the compiled version and caches dependencies between builds. Linux jobs use Ubuntu 24.04; official Actions use Node.js 24.
+With the Visual Studio generator, the result is `build/Release/DotaManager.exe`. On Linux it is `build/DotaManager`; the GitHub Actions workflow handles AppImage packaging. CI publishes the Windows `.exe` and Linux `.AppImage` as a stable Latest release, checks the compiled version and caches dependencies between builds. The AppImage is built on Ubuntu 22.04 with GCC 11, checked for Ubuntu 22.04 ABI compatibility and launched under a virtual display on Ubuntu 22.04 and 24.04 before publication. Official Actions use Node.js 24.
 
 For a versioned local build, pass `-DAPP_VERSION=x.y` when configuring. The default `0.0` development build skips the startup update check.
 
