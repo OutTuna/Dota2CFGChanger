@@ -1,11 +1,11 @@
 pkgname=dota2cfgchanger
 pkgver=1.22
-pkgrel=1
+pkgrel=2
 pkgdesc='Copy Dota 2 settings between Steam accounts'
 arch=('x86_64')
 url='https://github.com/OutTuna/Dota2CFGChanger'
 license=('MIT')
-depends=('glibc' 'gcc-libs' 'curl' 'glfw' 'libglvnd' 'openssl' 'ttf-dejavu')
+depends=('glibc' 'libgcc' 'libstdc++' 'curl' 'glfw' 'libglvnd' 'openssl' 'ttf-dejavu' 'hicolor-icon-theme')
 makedepends=('cmake' 'ninja' 'nlohmann-json')
 checkdepends=('python')
 optdepends=('zenity: graphical folder picker' 'kdialog: alternative graphical folder picker')
@@ -22,13 +22,15 @@ sha256sums=('c14f0702dbaac396d21a467e2a15d9bc9bb4d241e22401bd587c55f42cb80307'
             'e84b8ef348f41072609f53aab05bdaab24bf5916c62d99651dfbeaf282a8e0a2'
             'c5fbc5dcab1d46064001c3b84d7a88812985cde7e0e9ced03f5677bec1ba502a'
             '9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515'
-            '8e9966f6d90ed37ea7a01bc5aaf1665980790f6bfe83f225fbe0939472d4a664')
+            '9c1d0e93194e93aa12cc91f38740889302488e53151796d39b1491f1a5bcd8d4')
 
 prepare() {
     patch -d "Dota2CFGChanger-${pkgver}" -p1 < "${srcdir}/packaging-support.patch"
 }
 
 build() {
+    export CFLAGS="${CFLAGS} -ffile-prefix-map=${srcdir}=/usr/src/debug/${pkgname}"
+    export CXXFLAGS="${CXXFLAGS} -ffile-prefix-map=${srcdir}=/usr/src/debug/${pkgname}"
     cmake -S "Dota2CFGChanger-${pkgver}" -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=None \
         -DCMAKE_INSTALL_PREFIX=/usr \
