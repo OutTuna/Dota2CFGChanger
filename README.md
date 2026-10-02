@@ -90,7 +90,7 @@ To update the recipe and rebuild later, run `git pull --ff-only` and `makepkg -s
 sudo pacman -Rns dota2cfgchanger
 ```
 
-Settings and backups remain in your user directory. Package installations update through the package manager. `yay -S dota2cfgchanger` / `paru -S dota2cfgchanger` will be available after AUR publication; they do not work for this package yet. See [the AUR guide](docs/AUR.md) for validation and publishing details.
+Settings and backups remain in your user directory. Package installations update through the package manager. `yay -S dota2cfgchanger` / `paru -S dota2cfgchanger` will be available after AUR publication; they do not work for this package yet. The installation steps are listed above.
 
 ## Building
 
