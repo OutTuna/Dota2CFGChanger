@@ -1,0 +1,63 @@
+name: Arch package checks
+
+on:
+  push:
+    branches: [main, aur-packaging]
+    paths:
+      - '.github/workflows/aur.yaml'
+      - 'packaging/aur/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'main.cpp'
+      - 'src/**'
+      - 'resources/**'
+      - 'scripts/check-aur*'
+      - 'scripts/check-installed-package.sh'
+      - 'tests/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/aur.yaml'
+      - 'packaging/aur/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'main.cpp'
+      - 'src/**'
+      - 'resources/**'
+      - 'scripts/check-aur*'
+      - 'scripts/check-installed-package.sh'
+      - 'tests/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arch-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Prepare clean Arch environment and verify sources
+        run: |
+          mkdir -p "$RUNNER_TEMP/aur-work"
+          docker run --name dota-aur-prepare \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$RUNNER_TEMP/aur-work:/work" \
+            archlinux:base bash /workspace/scripts/check-aur.sh prepare
+          docker commit dota-aur-prepare dota-aur-ready
+      - name: Build, test, install and launch without network
+        run: |
+          docker run --rm --network none \
+            -v "$RUNNER_TEMP/aur-work:/work" \
+            dota-aur-ready bash /work/project/scripts/check-aur.sh build
+      - name: Upload package, recipe and validation logs
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dota2cfgchanger-arch
+          path: ${{ runner.temp }}/aur-work/artifacts/
+          if-no-files-found: warn
+      - name: Remove preparation container
+        if: always()
+        run: docker rm -f dota-aur-prepare || true

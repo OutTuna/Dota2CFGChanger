@@ -48,11 +48,12 @@ void ui_render_update_popup() {
         if (update.phase == UpdatePhase::Failed)
             ImGui::TextWrapped("%s", tr_value(update.error_key.c_str(), update.detail).c_str());
         ImGui::Spacing();
+        if (!updates_self_install_enabled()) ImGui::TextWrapped("%s", tr("update_package_managed"));
         if (update.phase != UpdatePhase::Checking && update.phase != UpdatePhase::Downloading && update.phase != UpdatePhase::Installing) {
-            if (update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
+            if (updates_self_install_enabled() && update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
                 if (button("update_install")) updates_install();
             }
-            if (!update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
+            if (updates_self_install_enabled() && !update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
                 if (button("update_download")) updates_download();
             }
             if (button("update_release")) open_external(RELEASE_URL);
