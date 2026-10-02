@@ -48,7 +48,9 @@ Both platforms need a working OpenGL driver. The Linux folder picker uses `zenit
 
 The folders should follow Steam's layout: `<root>/<account_id>/570/`. You can use the same `userdata` root for both lists, or a saved copy as the source. Only the selected account's `570` directory is replaced.
 
-**Keep a separate backup of any settings you want to keep.** The app prepares the new files before replacing the destination and attempts to restore the old directory if the replacement fails. After a successful copy, the temporary backup is removed. If interrupted files remain, resolve them before trying again; the app will show the affected paths.
+Before replacing an existing destination config, the app saves a verified backup with the account ID and UTC date. It keeps the last **5 backups per account** under `%APPDATA%\DotaManager\backups` on Windows or `$XDG_CONFIG_HOME/DotaManager/backups` / `~/.config/DotaManager/backups` on Linux. If saving the backup fails, the config is left unchanged. Select a destination account and click **Backups** at the bottom to restore a copy after confirmation; restoration also backs up the current config first. The initial copy to a destination without a config has nothing to back up.
+
+The app also prepares new files before replacing the destination and attempts rollback if replacement fails. Interrupted transaction files are preserved when recovery fails; resolve them before retrying. Keep a separate copy of settings you want to retain beyond the five-backup history.
 
 ## A few details
 
@@ -124,11 +126,13 @@ subgraph group_ui["User interface"]
   node_panels["Dialogs and panels<br/>[panels.cpp]"]
   node_success["Copy result<br/>[success_popup.cpp]"]
   node_updateui["Update dialog<br/>[update_popup.cpp]"]
+  node_backupui["Backup list and restore confirmation<br/>[backups_popup.cpp]"]
 end
 
 subgraph group_core["Application core"]
   node_app["App coordination<br/>[app.cpp]"]
   node_files["Config replacement<br/>[file_ops.cpp]"]
+  node_backups["Verified backups and retention<br/>[backups.cpp]"]
   node_settings[("Settings and caches<br/>[app.cpp]")]
   node_localization["Translations<br/>[localization.cpp]"]
   node_avatar_data[("Avatar cache<br/>[avatar_data.cpp]")]
@@ -167,7 +171,11 @@ node_window -->|"requests avatars"| node_avatars
 node_window -->|"uses themes"| node_themes
 node_window -->|"translates labels"| node_localization
 node_window -->|"requests checks"| node_updates
-node_app -->|"replaces config"| node_files
+node_app -->|"backs up and replaces config"| node_backups
+node_window -->|"opens backup list"| node_backupui
+node_backupui -->|"restores selected copy"| node_backups
+node_backups -->|"replaces config"| node_files
+node_backups -->|"checks file hashes"| node_checksum
 node_app -->|"fetches profiles"| node_steam
 node_app -->|"reads and writes"| node_settings
 node_app -->|"scans and copies"| node_configdirs
@@ -196,6 +204,8 @@ click node_panels "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/p
 click node_success "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/success_popup.cpp"
 click node_updateui "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/update_popup.cpp"
 click node_app "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
+click node_backups "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/backups.cpp"
+click node_backupui "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/backups_popup.cpp"
 click node_files "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/file_ops.cpp"
 click node_settings "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
 click node_localization "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/localization.cpp"
@@ -219,8 +229,8 @@ classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
 classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
 classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
 classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-class node_entry,node_window,node_panels,node_success,node_updateui,node_user toneBlue
-class node_app,node_files,node_settings,node_localization,node_avatar_data,node_updates,node_installer,node_release,node_checksum,node_configdirs,node_local_settings toneAmber
+class node_entry,node_window,node_panels,node_success,node_updateui,node_backupui,node_user toneBlue
+class node_app,node_files,node_backups,node_settings,node_localization,node_avatar_data,node_updates,node_installer,node_release,node_checksum,node_configdirs,node_local_settings toneAmber
 class node_steam,node_transport toneMint
 class node_platform_api,node_process,node_avatars,node_themes,node_resources toneRose
 class node_steamcommunity,node_release_service toneIndigo
@@ -234,7 +244,7 @@ class node_steamcommunity,node_release_service toneIndigo
 
 Закройте Dota 2 и Steam, проверьте пути к `userdata` и запустите сканирование. Слева выберите аккаунт с нужными настройками, справа — тот, куда их перенести. Нажмите кнопку копирования и подтвердите замену.
 
-Копируется папка `<account_id>/570` целиком. Если старые настройки нужны, сохраните их отдельно: после успешной замены временная резервная копия удаляется.
+Копируется папка `<account_id>/570` целиком. Перед заменой сохраняется проверенный бэкап; хранятся последние 5 копий на аккаунт. Выберите аккаунт назначения и нажмите «Бэкапы» внизу окна, чтобы восстановить копию после подтверждения. Перед восстановлением текущий конфиг тоже сохраняется. Если создать бэкап не удалось, замена не начнётся. Бэкапы находятся в пользовательской папке DotaManager, отдельно от файла приложения.
 
 Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После проверки загрузки программа сама закроется, заменит свой файл по текущему пути и запустится снова. При ошибке замены или запуска помощник попытается восстановить предыдущую версию. Если папка недоступна для записи, используйте скачанный файл вручную. Старые сборки без этой функции нужно один раз заменить вручную.
 
