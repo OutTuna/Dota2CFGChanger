@@ -72,6 +72,12 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace src/platform/platform.cpp \
       --replace-fail /usr/share/fonts/truetype/dejavu ${dejavu_fonts}/share/fonts/truetype \
       --replace-fail 'roots.push_back("/usr/share/fonts");' 'roots.push_back("/run/current-system/sw/share/fonts");'
+    substituteInPlace resources/locales/en.json \
+      --replace-fail 'there; on Arch with yay or paru, run yay -Syu or paru -Syu.' 'through your NixOS configuration or Nix profile.'
+    substituteInPlace resources/locales/ru.json \
+      --replace-fail 'там; на Arch с yay или paru выполните yay -Syu или paru -Syu.' 'через конфигурацию NixOS или профиль Nix.'
+    substituteInPlace resources/locales/uk.json \
+      --replace-fail 'там; на Arch із yay або paru виконайте yay -Syu або paru -Syu.' 'через конфігурацію NixOS або профіль Nix.'
   '';
 
   cmakeFlags = [
