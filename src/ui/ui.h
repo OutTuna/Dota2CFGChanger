@@ -26,3 +26,6 @@ bool ui_theme_has_palette_editor(AppTheme theme);
 const char* ui_theme_background_image(AppTheme theme);
 
 void ui_render_update_popup();
+
+void ui_open_backups();
+void ui_render_backups_popup();

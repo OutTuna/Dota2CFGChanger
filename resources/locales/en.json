@@ -17,7 +17,7 @@
   "text": "Text",
   "reset": "Reset",
   "confirmation": "Confirm replacement",
-  "copy_warning": "The destination account’s Dota 2 config will be replaced. After a successful copy, undo requires your own backup.",
+  "copy_warning": "The destination account’s Dota 2 config will be replaced. Its current config will be backed up first. Close Dota 2 and Steam before continuing.",
   "from": "From:",
   "to": "To:",
   "source_path": "Source path:",
@@ -66,5 +66,15 @@
   "author": "Author",
   "update_install": "Install and restart",
   "update_installing": "Preparing update. The application will close and restart automatically.",
-  "update_install_failed": "Could not install the update: {value}. You can use the downloaded file or GitHub release."
+  "update_install_failed": "Could not install the update: {value}. You can use the downloaded file or GitHub release.",
+  "backups": "Backups",
+  "backup_account": "Account: {value}",
+  "backup_retention": "The last 5 backups per account are kept. Backups are created before copying and restoring.",
+  "backup_empty": "No backups for this destination yet.",
+  "backup_restore": "Restore selected backup",
+  "backup_restore_warning": "Restore backup from {value}? The destination config will be replaced. Its current contents will be backed up first. Close Dota 2 and Steam before continuing.",
+  "backup_restored": "Backup restored for account {value}.",
+  "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
+  "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
+  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}"
 }
