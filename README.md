@@ -38,7 +38,7 @@ chmod +x Dota2_CFG_Changer-x86_64.AppImage
 ./Dota2_CFG_Changer-x86_64.AppImage
 ```
 
-Both platforms need a working OpenGL driver. The Linux folder picker uses `zenity` or `kdialog`, and the interface needs a system font such as DejaVu, Liberation or Noto. macOS is not supported.
+Both platforms need a working OpenGL driver. The Linux folder picker uses `zenity` or `kdialog`, and the interface automatically uses installed JetBrains Mono (including NL and Nerd Font variants), falling back to DejaVu, Liberation or Noto. User font folders and system font folders are searched; there is no font selector or mandatory JetBrains Mono dependency. macOS is not supported.
 
 1. Close Dota 2 and Steam before copying.
 2. Check the source and destination folders. The app tries to find Steam's `userdata` directory, including Linux Flatpak installations. You can choose another folder manually.

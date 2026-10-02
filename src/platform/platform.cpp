@@ -112,8 +112,45 @@ static std::string find_first_existing(const std::vector<fs::path>& paths) {
     return {};
 }
 
+#ifdef __linux__
+static FontPaths find_jetbrains_mono() {
+    std::vector<fs::path> roots;
+    const char* home = std::getenv("HOME");
+    const char* data = std::getenv("XDG_DATA_HOME");
+    if (data && *data && fs::u8path(data).is_absolute()) roots.push_back(fs::u8path(data) / "fonts");
+    else if (home && *home) roots.push_back(fs::u8path(home) / ".local/share/fonts");
+    if (home && *home) roots.push_back(fs::u8path(home) / ".fonts");
+    roots.push_back("/usr/local/share/fonts");
+    roots.push_back("/usr/share/fonts");
+    for (const auto& root : roots) {
+        std::vector<fs::path> fonts;
+        std::error_code ec;
+        fs::recursive_directory_iterator iterator(root, fs::directory_options::skip_permission_denied, ec), end;
+        while (!ec && iterator != end) {
+            if (iterator->is_regular_file(ec)) fonts.push_back(iterator->path());
+            iterator.increment(ec);
+        }
+        for (const char* name : {"JetBrainsMono-Regular.ttf", "JetBrainsMonoNL-Regular.ttf",
+            "JetBrainsMonoNerdFontMono-Regular.ttf", "JetBrainsMonoNerdFont-Regular.ttf"}) {
+            for (const auto& font : fonts) {
+                if (font.filename() != name) continue;
+                auto bold_name = std::string(name);
+                bold_name.replace(bold_name.find("-Regular.ttf"), 12, "-Bold.ttf");
+                auto bold = find_first_existing({font.parent_path() / bold_name});
+                return {font.u8string(), bold.empty() ? font.u8string() : bold};
+            }
+        }
+    }
+    return {};
+}
+#endif
+
 FontPaths find_font_paths() {
     FontPaths result;
+#ifdef __linux__
+    result = find_jetbrains_mono();
+    if (!result.regular.empty()) return result;
+#endif
 
 #ifdef _WIN32
     const std::vector<fs::path> regular_candidates = {
