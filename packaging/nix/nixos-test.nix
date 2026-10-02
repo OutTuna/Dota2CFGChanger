@@ -14,7 +14,10 @@ pkgs.testers.runNixOSTest {
       password = "";
     };
     hardware.graphics.enable = true;
-    environment.systemPackages = [ dota2cfgchanger pkgs.xorg.xwininfo ];
+    environment.systemPackages = [
+      dota2cfgchanger
+      pkgs.xorg.xwininfo
+    ];
     virtualisation.memorySize = 2048;
   };
   testScript = ''
@@ -23,7 +26,7 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_file("/home/alice/.Xauthority")
     machine.succeed("test -f /run/current-system/sw/share/applications/dota2cfgchanger.desktop")
     machine.succeed("su - alice -c 'DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1 DotaManager > /tmp/dotamanager.log 2>&1 &' ")
-    machine.wait_for_window("Dota 2 CFG Changer")
+    machine.wait_until_succeeds("su - alice -c 'DISPLAY=:0 xwininfo -root -tree' | grep -F 'Dota 2 CFG Changer'")
     machine.sleep(3)
     machine.succeed("pgrep -u alice -f DotaManager")
     machine.screenshot("dota2cfgchanger")

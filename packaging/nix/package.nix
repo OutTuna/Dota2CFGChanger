@@ -45,8 +45,19 @@ stdenv.mkDerivation (finalAttrs: {
     sha256 = "b47dbd04997468675e2bb43af9537bf9beddae67f0cb3172cb011eec5d7d253b";
   };
 
-  nativeBuildInputs = [ cmake ninja pkg-config makeWrapper ];
-  buildInputs = [ curl glfw libglvnd openssl nlohmann_json ];
+  nativeBuildInputs = [
+    cmake
+    ninja
+    pkg-config
+    makeWrapper
+  ];
+  buildInputs = [
+    curl
+    glfw
+    libglvnd
+    openssl
+    nlohmann_json
+  ];
   nativeCheckInputs = [ python3 ];
   nativeInstallCheckInputs = [ desktop-file-utils ];
 
