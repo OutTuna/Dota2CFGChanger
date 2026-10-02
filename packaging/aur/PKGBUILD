@@ -1,0 +1,56 @@
+pkgname=dota2cfgchanger
+pkgver=1.22
+pkgrel=1
+pkgdesc='Copy Dota 2 settings between Steam accounts'
+arch=('x86_64')
+url='https://github.com/OutTuna/Dota2CFGChanger'
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'curl' 'glfw' 'libglvnd' 'openssl' 'ttf-dejavu')
+makedepends=('cmake' 'ninja' 'nlohmann-json')
+checkdepends=('python')
+optdepends=('zenity: graphical folder picker' 'kdialog: alternative graphical folder picker')
+options=('!debug')
+_cprver=1.11.1
+_imguiver=1.91.6
+_stbrev=2c980bb59875b0d32144a71867fbdebb2f77cd20
+source=("${pkgname}-${pkgver}.tar.gz::https://codeload.github.com/OutTuna/Dota2CFGChanger/tar.gz/refs/tags/v${pkgver}"
+        "cpr-${_cprver}.tar.gz::https://codeload.github.com/libcpr/cpr/tar.gz/refs/tags/${_cprver}"
+        "imgui-${_imguiver}.tar.gz::https://codeload.github.com/ocornut/imgui/tar.gz/refs/tags/v${_imguiver}"
+        "stb-${_stbrev}.tar.gz::https://codeload.github.com/nothings/stb/tar.gz/${_stbrev}"
+        'packaging-support.patch')
+sha256sums=('c14f0702dbaac396d21a467e2a15d9bc9bb4d241e22401bd587c55f42cb80307'
+            'e84b8ef348f41072609f53aab05bdaab24bf5916c62d99651dfbeaf282a8e0a2'
+            'c5fbc5dcab1d46064001c3b84d7a88812985cde7e0e9ced03f5677bec1ba502a'
+            '9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515'
+            '8e9966f6d90ed37ea7a01bc5aaf1665980790f6bfe83f225fbe0939472d4a664')
+
+prepare() {
+    patch -d "Dota2CFGChanger-${pkgver}" -p1 < "${srcdir}/packaging-support.patch"
+}
+
+build() {
+    cmake -S "Dota2CFGChanger-${pkgver}" -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=None \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DAPP_VERSION="${pkgver}" \
+        -DDOTAMANAGER_SYSTEM_LIBS=ON \
+        -DDOTAMANAGER_PACKAGE_MANAGED=ON \
+        -DDOTAMANAGER_BUILD_TESTS=ON \
+        -DFETCHCONTENT_FULLY_DISCONNECTED=ON \
+        -DFETCHCONTENT_SOURCE_DIR_CPR="${srcdir}/cpr-${_cprver}" \
+        -DFETCHCONTENT_SOURCE_DIR_IMGUI="${srcdir}/imgui-${_imguiver}" \
+        -DFETCHCONTENT_SOURCE_DIR_STB="${srcdir}/stb-${_stbrev}"
+    cmake --build build
+}
+
+check() {
+    ctest --test-dir build --output-on-failure
+    python "Dota2CFGChanger-${pkgver}/tests/core_checks.py" /usr/include
+}
+
+package() {
+    DESTDIR="${pkgdir}" cmake --install build --component Runtime
+    install -Dm644 "${srcdir}/cpr-${_cprver}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/cpr.LICENSE"
+    install -Dm644 "${srcdir}/imgui-${_imguiver}/LICENSE.txt" "${pkgdir}/usr/share/licenses/${pkgname}/imgui.LICENSE"
+    install -Dm644 "${srcdir}/stb-${_stbrev}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/stb.LICENSE"
+}

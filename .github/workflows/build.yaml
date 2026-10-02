@@ -2,7 +2,7 @@ name: Build & Release (Windows + Linux)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "aur-packaging" ]
     paths-ignore:
       - "README.md"
       - "LICENSE"
@@ -222,6 +222,7 @@ jobs:
           bash scripts/check-appimage.sh "${images[0]}"
 
   release:
+    if: github.ref == 'refs/heads/main'
     needs: [compute-version, build-windows, build-linux, check-appimage]
     runs-on: ubuntu-24.04
     env:

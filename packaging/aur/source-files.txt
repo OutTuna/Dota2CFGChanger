@@ -1,0 +1,13 @@
+CMakeLists.txt
+cmake/PackageMode.h.in
+main.cpp
+resources/linux/dota2cfgchanger.desktop
+resources/locales/en.json
+resources/locales/ru.json
+resources/locales/uk.json
+src/core/updates.cpp
+src/core/updates.h
+src/ui/update_popup.cpp
+tests/package_update_checks.cpp
+tests/update_ui_checks.cpp
+tests/version_build_checks.cpp

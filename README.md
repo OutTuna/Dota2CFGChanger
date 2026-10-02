@@ -93,6 +93,8 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+An Arch Linux package recipe is being tested in a separate CI workflow. See [the AUR guide](docs/AUR.md) for building and publishing it. The package has not been published to AUR yet. Package builds use system libraries and update through the package manager; standalone `.exe` and `.AppImage` builds keep their existing updater.
+
 ## How the code fits together
 
 `main.cpp` runs the window. `src/ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `src/ui/avatar.cpp` uploads the images from `src/core/avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
@@ -107,7 +109,8 @@ resources/            icons, themes, translations and Windows metadata
 cmake/                resource embedding
 scripts/              development and CI checks
 tests/                regression checks
-docs/                 roadmap
+packaging/aur/        Arch package recipe and release compatibility patch
+docs/                 roadmap and packaging guide
 ```
 
 The AppImage uses the checked-in PNG icon. CI does not need an image converter.

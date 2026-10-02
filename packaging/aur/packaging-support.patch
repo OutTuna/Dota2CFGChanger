@@ -1,0 +1,307 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -26,6 +26,11 @@
+ endif()
+ 
+ 
++option(DOTAMANAGER_SYSTEM_LIBS "Use system curl, GLFW and JSON with predownloaded cpr, ImGui and stb sources" OFF)
++option(DOTAMANAGER_PACKAGE_MANAGED "Update this installation through its package manager" OFF)
++configure_file("${CMAKE_SOURCE_DIR}/cmake/PackageMode.h.in"
++    "${CMAKE_BINARY_DIR}/generated/package_mode.h" @ONLY)
++
+ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+ 
+ if(MSVC)
+@@ -46,22 +51,34 @@
+ set(BUILD_MISC_DOCS          OFF CACHE BOOL "" FORCE)
+ 
+ set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
+-set(CPR_USE_SYSTEM_CURL      OFF CACHE BOOL "" FORCE)
++set(CPR_USE_SYSTEM_CURL      ${DOTAMANAGER_SYSTEM_LIBS} CACHE BOOL "" FORCE)
+ set(CPR_BUILD_TESTS          OFF CACHE BOOL "" FORCE)
+ set(GLFW_BUILD_DOCS          OFF CACHE BOOL "" FORCE)
+ set(GLFW_BUILD_EXAMPLES      OFF CACHE BOOL "" FORCE)
+ set(GLFW_BUILD_TESTS         OFF CACHE BOOL "" FORCE)
+ 
+ include(FetchContent)
++if(DOTAMANAGER_SYSTEM_LIBS)
++    foreach(dependency CPR IMGUI STB)
++        if(NOT IS_DIRECTORY "${FETCHCONTENT_SOURCE_DIR_${dependency}}")
++            message(FATAL_ERROR "System-library builds require FETCHCONTENT_SOURCE_DIR_${dependency} to point to predownloaded sources")
++        endif()
++    endforeach()
++    set(FETCHCONTENT_FULLY_DISCONNECTED ON)
++endif()
+ 
+ FetchContent_Declare(cpr   GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1 GIT_SHALLOW TRUE)
+ FetchContent_MakeAvailable(cpr)
+ 
+-FetchContent_Declare(json  GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3 GIT_SHALLOW TRUE)
+-FetchContent_MakeAvailable(json)
+-
+-FetchContent_Declare(glfw  GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8 GIT_SHALLOW TRUE)
+-FetchContent_MakeAvailable(glfw)
++if(DOTAMANAGER_SYSTEM_LIBS)
++    find_package(nlohmann_json 3.11 REQUIRED)
++    find_package(glfw3 3.3 REQUIRED)
++else()
++    FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3 GIT_SHALLOW TRUE)
++    FetchContent_MakeAvailable(json)
++    FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8 GIT_SHALLOW TRUE)
++    FetchContent_MakeAvailable(glfw)
++endif()
+ 
+ FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
+ FetchContent_MakeAvailable(imgui)
+@@ -208,6 +225,15 @@
+         target_compile_options(DotaManager PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+     endif()
+ endif()
++
++include(GNUInstallDirs)
++install(TARGETS DotaManager RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime)
++install(FILES resources/linux/dota2cfgchanger.desktop
++    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications COMPONENT Runtime)
++install(FILES resources/icons/dotamanager.png
++    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps
++    RENAME dota2cfgchanger.png COMPONENT Runtime)
++install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/dota2cfgchanger COMPONENT Runtime)
+ 
+ option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
+ if(DOTAMANAGER_BUILD_TESTS)
+@@ -263,5 +289,23 @@
+             add_test(NAME ${test_target} COMMAND ${test_target})
+         endif()
+     endforeach()
+-    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9")
+-endif()
++    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
++    add_executable(package_update_checks tests/package_update_checks.cpp src/core/updates.cpp
++        src/core/release_info.cpp src/core/checksum.cpp)
++    target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
++        ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
++    target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
++    target_compile_definitions(package_update_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=1)
++    if(MSVC)
++        target_compile_options(package_update_checks PRIVATE /UNDEBUG /utf-8)
++        target_link_libraries(package_update_checks PRIVATE bcrypt)
++    else()
++        target_compile_options(package_update_checks PRIVATE -UNDEBUG)
++        if(WIN32)
++            target_link_libraries(package_update_checks PRIVATE bcrypt)
++        else()
++            target_link_libraries(package_update_checks PRIVATE OpenSSL::Crypto)
++        endif()
++    endif()
++    add_test(NAME package_update_checks COMMAND package_update_checks)
++endif()
+--- /dev/null
++++ b/cmake/PackageMode.h.in
+@@ -0,0 +1,4 @@
++#pragma once
++#ifndef DOTAMANAGER_PACKAGE_MANAGED
++#cmakedefine01 DOTAMANAGER_PACKAGE_MANAGED
++#endif
+--- a/main.cpp
++++ b/main.cpp
+@@ -29,6 +29,9 @@
+ 
+     if (!glfwInit()) return 1;
+     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
++#ifdef __linux__
++    glfwWindowHintString(GLFW_X11_CLASS_NAME, "DotaManager");
++#endif
+     const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
+     GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
+     if (!window) return 1;
+--- /dev/null
++++ b/resources/linux/dota2cfgchanger.desktop
+@@ -0,0 +1,11 @@
++[Desktop Entry]
++Type=Application
++Name=Dota 2 Config Manager
++Comment=Copy Dota 2 settings between Steam accounts
++Comment[ru]=Перенос настроек Dota 2 между Steam-аккаунтами
++Comment[uk]=Перенесення налаштувань Dota 2 між Steam-акаунтами
++Exec=DotaManager
++Icon=dota2cfgchanger
++Terminal=false
++Categories=Utility;Game;
++StartupWMClass=DotaManager
+--- a/resources/locales/en.json
++++ b/resources/locales/en.json
+@@ -76,5 +76,6 @@
+   "backup_restored": "Backup restored for account {value}.",
+   "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
+   "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
+-  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}"
++  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}",
++  "update_package_managed": "This installation is managed by your package manager. Update the package there; on Arch with yay or paru, run yay -Syu or paru -Syu."
+ }
+--- a/resources/locales/ru.json
++++ b/resources/locales/ru.json
+@@ -76,5 +76,6 @@
+   "backup_restored": "Бэкап восстановлен для аккаунта {value}.",
+   "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
+   "backup_invalid": "Бэкап повреждён или его файлы изменены. Восстановление не выполнено.",
+-  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}"
++  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}",
++  "update_package_managed": "Эта установка обновляется через пакетный менеджер. Обновите пакет там; на Arch с yay или paru выполните yay -Syu или paru -Syu."
+ }
+--- a/resources/locales/uk.json
++++ b/resources/locales/uk.json
+@@ -76,5 +76,6 @@
+   "backup_restored": "Бекап відновлено для акаунта {value}.",
+   "backup_create_failed": "Не вдалося створити бекап. Заміну конфіга скасовано: {value}",
+   "backup_invalid": "Бекап пошкоджено або його файли змінено. Відновлення не виконано.",
+-  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}"
++  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}",
++  "update_package_managed": "Ця установка оновлюється через пакетний менеджер. Оновіть пакет там; на Arch із yay або paru виконайте yay -Syu або paru -Syu."
+ }
+--- a/src/core/updates.cpp
++++ b/src/core/updates.cpp
+@@ -11,6 +11,7 @@
+ #include <stdexcept>
+ 
+ #include "app_version.h"
++#include "package_mode.h"
+ 
+ namespace fs = std::filesystem;
+ namespace {
+@@ -28,6 +29,7 @@
+ }
+ }
+ 
++bool updates_self_install_enabled() { return !DOTAMANAGER_PACKAGE_MANAGED; }
+ const char* app_version() { return DOTA_APP_VERSION; }
+ UpdateSnapshot updates_snapshot() { std::lock_guard<std::mutex> lock(mutex); return state; }
+ void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; }
+@@ -65,6 +67,7 @@
+ }
+ 
+ void updates_download() {
++    if (!updates_self_install_enabled()) return;
+     ReleaseInfo release;
+     {
+         std::lock_guard<std::mutex> lock(mutex);
+@@ -120,6 +123,7 @@
+ }
+ 
+ void updates_install() {
++    if (!updates_self_install_enabled()) return;
+     UpdateSnapshot update;
+     {
+         std::lock_guard<std::mutex> lock(mutex);
+--- a/src/core/updates.h
++++ b/src/core/updates.h
+@@ -22,3 +22,5 @@
+ void updates_install();
+ bool updates_should_exit();
+ void updates_install_error(const std::string& detail);
++
++bool updates_self_install_enabled();
+--- a/src/ui/update_popup.cpp
++++ b/src/ui/update_popup.cpp
+@@ -48,11 +48,12 @@
+         if (update.phase == UpdatePhase::Failed)
+             ImGui::TextWrapped("%s", tr_value(update.error_key.c_str(), update.detail).c_str());
+         ImGui::Spacing();
++        if (!updates_self_install_enabled()) ImGui::TextWrapped("%s", tr("update_package_managed"));
+         if (update.phase != UpdatePhase::Checking && update.phase != UpdatePhase::Downloading && update.phase != UpdatePhase::Installing) {
+-            if (update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
++            if (updates_self_install_enabled() && update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
+                 if (button("update_install")) updates_install();
+             }
+-            if (!update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
++            if (updates_self_install_enabled() && !update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
+                 if (button("update_download")) updates_download();
+             }
+             if (button("update_release")) open_external(RELEASE_URL);
+--- /dev/null
++++ b/tests/package_update_checks.cpp
+@@ -0,0 +1,50 @@
++#include "updates.h"
++#include "update_install.h"
++#include "update_transport.h"
++#include <nlohmann/json.hpp>
++#include <cassert>
++#include <thread>
++#include <chrono>
++#include <atomic>
++#include <iostream>
++
++std::string release_body;
++std::atomic<int> downloads{0}, installs{0};
++std::string config_dir() { assert(false); return {}; }
++std::string fetch_update_release(const std::function<bool()>&) { return release_body; }
++void download_update_asset(const ReleaseInfo&, const std::filesystem::path&,
++    const std::function<bool(std::uint64_t)>&) { ++downloads; }
++void prepare_update_install(const std::filesystem::path&, const ReleaseInfo&,
++    const std::function<bool()>&) { ++installs; }
++
++UpdateSnapshot wait_checked() {
++    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (updates_snapshot().phase == UpdatePhase::Checking) {
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(5));
++    }
++    return updates_snapshot();
++}
++
++int main() {
++    using json = nlohmann::json;
++    json assets = json::array();
++    for (const char* name : {"DotaManager.exe", "Dota2_CFG_Changer-x86_64.AppImage"})
++        assets.push_back({{"name",name},{"state","uploaded"},{"size",3},
++            {"digest","sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
++            {"browser_download_url", std::string(REPOSITORY_URL)+"/releases/download/latest/"+name}});
++    json release = {{"draft",false},{"tag_name","latest"},{"name","Latest Build (v1.10)"},{"assets",assets}};
++    release_body = release.dump();
++    assert(!updates_self_install_enabled());
++    updates_check(true);
++    auto snapshot = wait_checked();
++    assert(snapshot.phase == UpdatePhase::Available && snapshot.popup && !snapshot.release.download_url.empty());
++    updates_download(); updates_install();
++    assert(updates_snapshot().phase == UpdatePhase::Available);
++    assert(downloads == 0 && installs == 0 && !updates_should_exit());
++    release["name"] = "Latest Build (v1.9)"; release_body=release.dump();
++    updates_check(false); snapshot=wait_checked();
++    assert(snapshot.phase == UpdatePhase::Current && !snapshot.popup);
++    updates_shutdown();
++    std::cout << "Package-managed updates report versions without downloading or replacing files\n";
++}
+--- a/tests/update_ui_checks.cpp
++++ b/tests/update_ui_checks.cpp
+@@ -14,6 +14,8 @@
+ #include <cmath>
+ 
+ UpdateSnapshot snapshot;
++bool self_updates = true;
++bool updates_self_install_enabled() { return self_updates; }
+ UpdateSnapshot updates_snapshot() { return snapshot; }
+ void updates_dismiss() { snapshot.popup = false; }
+ void updates_download() {}
+@@ -24,8 +26,10 @@
+ int main() {
+     for (const char* language : {"en", "ru", "uk"}) {
+         set_language(language);
++        for (bool managed : {false, true})
+         for (auto phase : {UpdatePhase::Checking, UpdatePhase::Available, UpdatePhase::Current,
+             UpdatePhase::Downloading, UpdatePhase::Downloaded, UpdatePhase::Installing, UpdatePhase::Failed}) {
++            self_updates = !managed;
+             ImGui::CreateContext();
+             auto& io = ImGui::GetIO();
+             io.DisplaySize = {720, 560}; io.DeltaTime = 1.f / 60.f; io.IniFilename = nullptr;
+--- a/tests/version_build_checks.cpp
++++ b/tests/version_build_checks.cpp
+@@ -1,8 +1,10 @@
+ #include "updates.h"
++#include "package_mode.h"
+ #include <iostream>
+ #include <string>
+ 
+ int main(int argc, char** argv) {
++    if (updates_self_install_enabled() != !DOTAMANAGER_PACKAGE_MANAGED) return 1;
+     if (argc != 2 || std::string(app_version()) != argv[1]) {
+         std::cerr << "Compiled application version differs from the release version: "
+                   << app_version() << '\n';

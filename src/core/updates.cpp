@@ -11,6 +11,7 @@
 #include <stdexcept>
 
 #include "app_version.h"
+#include "package_mode.h"
 
 namespace fs = std::filesystem;
 namespace {
@@ -28,6 +29,7 @@ void fail(const char* key, const std::string& detail) {
 }
 }
 
+bool updates_self_install_enabled() { return !DOTAMANAGER_PACKAGE_MANAGED; }
 const char* app_version() { return DOTA_APP_VERSION; }
 UpdateSnapshot updates_snapshot() { std::lock_guard<std::mutex> lock(mutex); return state; }
 void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; }
@@ -65,6 +67,7 @@ void updates_check(bool manual) {
 }
 
 void updates_download() {
+    if (!updates_self_install_enabled()) return;
     ReleaseInfo release;
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -120,6 +123,7 @@ void updates_shutdown() {
 }
 
 void updates_install() {
+    if (!updates_self_install_enabled()) return;
     UpdateSnapshot update;
     {
         std::lock_guard<std::mutex> lock(mutex);

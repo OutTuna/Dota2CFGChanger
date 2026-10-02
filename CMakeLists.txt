@@ -26,6 +26,11 @@ else()
 endif()
 
 
+option(DOTAMANAGER_SYSTEM_LIBS "Use system curl, GLFW and JSON with predownloaded cpr, ImGui and stb sources" OFF)
+option(DOTAMANAGER_PACKAGE_MANAGED "Update this installation through its package manager" OFF)
+configure_file("${CMAKE_SOURCE_DIR}/cmake/PackageMode.h.in"
+    "${CMAKE_BINARY_DIR}/generated/package_mode.h" @ONLY)
+
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
 if(MSVC)
@@ -46,22 +51,34 @@ set(BUILD_LIBCURL_DOCS       OFF CACHE BOOL "" FORCE)
 set(BUILD_MISC_DOCS          OFF CACHE BOOL "" FORCE)
 
 set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
-set(CPR_USE_SYSTEM_CURL      OFF CACHE BOOL "" FORCE)
+set(CPR_USE_SYSTEM_CURL      ${DOTAMANAGER_SYSTEM_LIBS} CACHE BOOL "" FORCE)
 set(CPR_BUILD_TESTS          OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_DOCS          OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES      OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS         OFF CACHE BOOL "" FORCE)
 
 include(FetchContent)
+if(DOTAMANAGER_SYSTEM_LIBS)
+    foreach(dependency CPR IMGUI STB)
+        if(NOT IS_DIRECTORY "${FETCHCONTENT_SOURCE_DIR_${dependency}}")
+            message(FATAL_ERROR "System-library builds require FETCHCONTENT_SOURCE_DIR_${dependency} to point to predownloaded sources")
+        endif()
+    endforeach()
+    set(FETCHCONTENT_FULLY_DISCONNECTED ON)
+endif()
 
 FetchContent_Declare(cpr   GIT_REPOSITORY https://github.com/libcpr/cpr.git GIT_TAG 1.11.1 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(cpr)
 
-FetchContent_Declare(json  GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3 GIT_SHALLOW TRUE)
-FetchContent_MakeAvailable(json)
-
-FetchContent_Declare(glfw  GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8 GIT_SHALLOW TRUE)
-FetchContent_MakeAvailable(glfw)
+if(DOTAMANAGER_SYSTEM_LIBS)
+    find_package(nlohmann_json 3.11 REQUIRED)
+    find_package(glfw3 3.3 REQUIRED)
+else()
+    FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json GIT_TAG v3.11.3 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(json)
+    FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.3.8 GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(glfw)
+endif()
 
 FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(imgui)
@@ -209,6 +226,15 @@ if(WIN32)
     endif()
 endif()
 
+include(GNUInstallDirs)
+install(TARGETS DotaManager RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime)
+install(FILES resources/linux/dota2cfgchanger.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications COMPONENT Runtime)
+install(FILES resources/icons/dotamanager.png
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps
+    RENAME dota2cfgchanger.png COMPONENT Runtime)
+install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/dota2cfgchanger COMPONENT Runtime)
+
 option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
 if(DOTAMANAGER_BUILD_TESTS)
     enable_testing()
@@ -263,5 +289,23 @@ if(DOTAMANAGER_BUILD_TESTS)
             add_test(NAME ${test_target} COMMAND ${test_target})
         endif()
     endforeach()
-    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9")
+    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
+    add_executable(package_update_checks tests/package_update_checks.cpp src/core/updates.cpp
+        src/core/release_info.cpp src/core/checksum.cpp)
+    target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
+        ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
+    target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
+    target_compile_definitions(package_update_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=1)
+    if(MSVC)
+        target_compile_options(package_update_checks PRIVATE /UNDEBUG /utf-8)
+        target_link_libraries(package_update_checks PRIVATE bcrypt)
+    else()
+        target_compile_options(package_update_checks PRIVATE -UNDEBUG)
+        if(WIN32)
+            target_link_libraries(package_update_checks PRIVATE bcrypt)
+        else()
+            target_link_libraries(package_update_checks PRIVATE OpenSSL::Crypto)
+        endif()
+    endif()
+    add_test(NAME package_update_checks COMMAND package_update_checks)
 endif()

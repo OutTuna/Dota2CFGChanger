@@ -1,0 +1,4 @@
+#pragma once
+#ifndef DOTAMANAGER_PACKAGE_MANAGED
+#cmakedefine01 DOTAMANAGER_PACKAGE_MANAGED
+#endif

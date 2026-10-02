@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Dota 2 Config Manager
+Comment=Copy Dota 2 settings between Steam accounts
+Comment[ru]=Перенос настроек Dota 2 между Steam-аккаунтами
+Comment[uk]=Перенесення налаштувань Dota 2 між Steam-акаунтами
+Exec=DotaManager
+Icon=dota2cfgchanger
+Terminal=false
+Categories=Utility;Game;
+StartupWMClass=DotaManager
