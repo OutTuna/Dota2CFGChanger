@@ -29,7 +29,8 @@ int main(int argc, char** argv) {
 
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    GLFWwindow* window = glfwCreateWindow(720, 600, "Dota 2 CFG Changer", NULL, NULL);
+    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
+    GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
     if (!window) return 1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
