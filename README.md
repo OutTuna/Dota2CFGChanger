@@ -61,6 +61,37 @@ The app also prepares new files before replacing the destination and attempts ro
 
 On Windows, paths, theme and language are saved under `HKEY_CURRENT_USER\Software\OutTuna\Dota2CFGChanger`, in the `Settings` value. An existing `settings.json` is migrated and removed only after a successful registry write. Profile caches, avatars and updates still use `%APPDATA%\DotaManager`. On Linux, settings and caches use `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager`.
 
+## Linux packages
+
+| Distribution | Branch | Installation guide |
+| --- | --- | --- |
+| Arch Linux / AUR | [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) | [Build and install with makepkg](https://github.com/OutTuna/Dota2CFGChanger/blob/aur-packaging/README.md#arch-linux-installation) |
+| NixOS / Nix | [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging) | [Run or install with Nix](https://github.com/OutTuna/Dota2CFGChanger/blob/nix-packaging/README.md#nixos-installation) |
+
+Both package recipes have passed CI. AUR publication is waiting for new account registration to reopen; the nixpkgs submission is being prepared. Neither package is listed in its official catalog yet. The standalone Windows `.exe` and Linux AppImage remain available from [releases](https://github.com/OutTuna/Dota2CFGChanger/releases/latest).
+
+## Arch Linux installation
+
+This branch contains the tested `dota2cfgchanger` package recipe for x86_64 Arch Linux. Install the build tools, clone this branch and build as your normal user:
+
+```sh
+sudo pacman -S --needed git base-devel cmake ninja nlohmann-json python
+git clone --branch aur-packaging --single-branch https://github.com/OutTuna/Dota2CFGChanger.git
+cd Dota2CFGChanger/packaging/aur
+makepkg -si
+DotaManager
+```
+
+`makepkg -s` installs missing dependencies and `-i` installs the built package. The application also appears in the desktop menu. Never run `makepkg` as root. The recipe builds the pinned v1.22 source release with its packaging patch; cloning a newer branch does not silently change that release.
+
+To update the recipe and rebuild later, run `git pull --ff-only` and `makepkg -si` from the same folder. To remove the package:
+
+```sh
+sudo pacman -Rns dota2cfgchanger
+```
+
+Settings and backups remain in your user directory. Package installations update through the package manager. `yay -S dota2cfgchanger` / `paru -S dota2cfgchanger` will be available after AUR publication; they do not work for this package yet. See [the AUR guide](docs/AUR.md) for validation and publishing details.
+
 ## Building
 
 You need Git, CMake 3.14+, a C++17 compiler and internet access for the first configuration. CMake fetches the pinned dependencies: Dear ImGui, GLFW, cpr/libcurl, nlohmann/json and stb.
@@ -93,8 +124,6 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-An Arch Linux package recipe is being tested in a separate CI workflow. See [the AUR guide](docs/AUR.md) for building and publishing it. The package has not been published to AUR yet. Package builds use system libraries and update through the package manager; standalone `.exe` and `.AppImage` builds keep their existing updater.
-
 ## How the code fits together
 
 `main.cpp` runs the window. `src/ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `src/ui/avatar.cpp` uploads the images from `src/core/avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
@@ -110,6 +139,7 @@ cmake/                resource embedding
 scripts/              development and CI checks
 tests/                regression checks
 packaging/aur/        Arch package recipe and release compatibility patch
+packaging/nix/        Nix recipe and VM test (nix-packaging branch)
 docs/                 roadmap and packaging guide
 ```
 
@@ -158,6 +188,24 @@ subgraph group_platform["Platform and presentation resources"]
   node_resources["Theme and locale data"]
 end
 
+subgraph group_packages["Distribution and validation"]
+  node_sources["Pinned source release"]
+  node_portable["Windows EXE / Linux AppImage"]
+  node_arch["Arch package<br/>[aur-packaging]"]
+  node_nix["Nix package and NixOS VM test<br/>[nix-packaging]"]
+  node_package_manager["Package manager updates"]
+end
+
+node_sources --> node_portable
+node_sources --> node_arch
+node_sources --> node_nix
+node_arch --> node_package_manager
+node_nix --> node_package_manager
+node_updateui -->|"package installation guidance"| node_package_manager
+click node_arch "https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging"
+click node_nix "https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging"
+class node_sources,node_portable,node_arch,node_nix,node_package_manager toneTeal
+
 node_user(("User"))
 node_steamcommunity(("Steam Community"))
 node_release_service(("GitHub releases"))
@@ -187,7 +235,7 @@ node_app -->|"uses path services"| node_platform_api
 node_steam -->|"looks up profiles"| node_steamcommunity
 node_avatar_data -->|"downloads images"| node_steamcommunity
 node_avatars -->|"uploads cached images"| node_avatar_data
-node_updates -->|"installs verified download"| node_installer
+node_updates -->|"standalone builds: install verified download"| node_installer
 node_installer -->|"verifies staged file"| node_checksum
 node_installer -->|"waits, replaces and restarts"| node_process
 node_entry -->|"confirms new window startup"| node_installer
@@ -250,6 +298,8 @@ class node_steamcommunity,node_release_service toneIndigo
 Копируется папка `<account_id>/570` целиком. Перед заменой сохраняется проверенный бэкап; хранятся последние 5 копий на аккаунт. Выберите аккаунт назначения и нажмите «Бэкапы» внизу окна, чтобы восстановить копию после подтверждения. Перед восстановлением текущий конфиг тоже сохраняется. Если создать бэкап не удалось, замена не начнётся. Бэкапы находятся в пользовательской папке DotaManager, отдельно от файла приложения.
 
 Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После проверки загрузки программа сама закроется, заменит свой файл по текущему пути и запустится снова. При ошибке замены или запуска помощник попытается восстановить предыдущую версию. Если папка недоступна для записи, используйте скачанный файл вручную. Старые сборки без этой функции нужно один раз заменить вручную.
+
+Для Arch используйте ветку [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) и её инструкцию установки через `makepkg -si`. Для NixOS — ветку [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging) с командами запуска и установки через Nix. Оба пакета проверены CI; публикация в AUR и включение в nixpkgs ещё ожидаются.
 
 ## License
 
