@@ -104,6 +104,8 @@ makepkg -si
 
 Run `makepkg` as your normal user. See [the AUR guide](docs/AUR.md) for details. Package builds use system libraries and update through the package manager; standalone `.exe` and `.AppImage` builds keep their existing updater. Installation through `yay` or `paru` will become available after publication.
 
+A Nix/NixOS recipe and flake are available in the `nix-packaging` branch and have passed [sandboxed build and NixOS VM checks](https://github.com/OutTuna/Dota2CFGChanger/actions/runs/37028495095). They build the pinned v1.23 release and use package-manager updates. See [the Nix guide](docs/NIX.md) for validation and the steps to propose the package to nixpkgs. Inclusion in the official package search is pending review and acceptance.
+
 ## How the code fits together
 
 `main.cpp` runs the window. `src/ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `src/ui/avatar.cpp` uploads the images from `src/core/avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
