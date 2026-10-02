@@ -55,13 +55,16 @@
   "update_current": "You are up to date.",
   "update_available": "A new version is available: {value}",
   "update_downloading": "Downloading... You can keep using the app.",
-  "update_downloaded": "Download complete. Close this app and run the new file. The running executable has not been replaced.",
+  "update_downloaded": "Download verified. Preparing to replace this application and restart.",
   "update_open_folder": "Open download folder",
-  "update_download": "Download",
+  "update_download": "Download and update",
   "update_release": "Open GitHub release",
   "update_retry": "Check again",
   "update_close": "Close",
   "update_check_failed": "Could not check updates: {value}",
   "update_download_failed": "Download failed: {value}. You can download manually from GitHub.",
-  "author": "Author"
+  "author": "Author",
+  "update_install": "Install and restart",
+  "update_installing": "Preparing update. The application will close and restart automatically.",
+  "update_install_failed": "Could not install the update: {value}. You can use the downloaded file or GitHub release."
 }

@@ -11,6 +11,7 @@ UpdateSnapshot snapshot;
 UpdateSnapshot updates_snapshot() { return snapshot; }
 void updates_dismiss() { snapshot.popup = false; }
 void updates_download() {}
+void updates_install() {}
 void updates_check(bool) {}
 const char* app_version() { return "1.9"; }
 
@@ -18,7 +19,7 @@ int main() {
     for (const char* language : {"en", "ru", "uk"}) {
         set_language(language);
         for (auto phase : {UpdatePhase::Checking, UpdatePhase::Available, UpdatePhase::Current,
-            UpdatePhase::Downloading, UpdatePhase::Downloaded, UpdatePhase::Failed}) {
+            UpdatePhase::Downloading, UpdatePhase::Downloaded, UpdatePhase::Installing, UpdatePhase::Failed}) {
             ImGui::CreateContext();
             auto& io = ImGui::GetIO();
             io.DisplaySize = {720, 560}; io.DeltaTime = 1.f / 60.f; io.IniFilename = nullptr;

@@ -7,6 +7,8 @@
 #include "ui.h"
 #include "app_icon.h"
 #include "updates.h"
+#include "update_install.h"
+#include "platform/update_process.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -15,7 +17,10 @@
 #pragma comment(lib, "ole32.lib")
 #endif
 
-int main(int, char**) {
+int main(int argc, char** argv) {
+    auto arguments = update_arguments(argc, argv);
+    int helper_result = update_helper_dispatch(arguments);
+    if (helper_result >= 0) return helper_result;
     load_settings();
 
 #ifdef _WIN32
@@ -62,9 +67,12 @@ int main(int, char**) {
     if (!font_big)     font_big     = font_default;
     (void)font_default;
 
-    updates_check(false);
+    auto install_error = update_install_startup_error(arguments);
+    if (install_error.empty()) updates_check(false);
+    else updates_install_error(install_error);
+    bool startup_confirmed = false;
 
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(window) && !updates_should_exit()) {
         glfwPollEvents();
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -84,6 +92,11 @@ int main(int, char**) {
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
+        if (!startup_confirmed) {
+            update_install_confirm_started(arguments);
+            startup_confirmed = true;
+        }
+        if (updates_snapshot().phase == UpdatePhase::Downloaded) updates_install();
     }
 
     updates_shutdown();

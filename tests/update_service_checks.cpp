@@ -1,5 +1,6 @@
 #include "updates.h"
 #include "update_transport.h"
+#include "update_install.h"
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +14,7 @@ std::string release_body, folder, download_bytes = "abc";
 std::atomic<bool> fetch_failure{false}, slow_download{false};
 std::atomic<int> downloads{0};
 std::string config_dir() { return folder; }
+void prepare_update_install(const fs::path&, const ReleaseInfo&, const std::function<bool()>&) { throw std::runtime_error("Simulated installer failure"); }
 std::string fetch_update_release(const std::function<bool()>& active) {
     if (!active() || fetch_failure) throw std::runtime_error("Simulated network failure");
     return release_body;
@@ -53,6 +55,10 @@ int main() {
     updates_download(); value = wait();
     assert(value.phase == UpdatePhase::Downloaded && fs::exists(fs::u8path(value.downloaded_path)));
     assert(downloads == 1);
+    updates_install(); value = wait();
+    while (value.phase == UpdatePhase::Installing) { std::this_thread::sleep_for(std::chrono::milliseconds(5)); value = updates_snapshot(); }
+    assert(value.phase == UpdatePhase::Failed && value.error_key == "update_install_failed");
+    assert(!updates_should_exit());
     auto target = fs::u8path(value.downloaded_path);
     auto partial = fs::u8path(target.u8string() + ".part");
     updates_check(true); wait(); updates_download(); value = wait();
