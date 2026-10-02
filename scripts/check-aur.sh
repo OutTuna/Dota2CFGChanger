@@ -3,7 +3,7 @@ set -euo pipefail
 case "${1:?Use prepare or build}" in
 prepare)
     pacman -Syu --noconfirm --needed base-devel cmake ninja nlohmann-json curl glfw \
-        libglvnd openssl ttf-dejavu python desktop-file-utils namcap \
+        libglvnd openssl ttf-dejavu hicolor-icon-theme python desktop-file-utils namcap \
         xorg-server-xvfb xorg-xauth xorg-xwininfo mesa
     useradd --create-home builder
     mkdir -p /work/project /work/package /work/artifacts
@@ -22,8 +22,8 @@ build)
     runuser -u builder -- env CMAKE_BUILD_PARALLEL_LEVEL=4 MAKEFLAGS=-j4 makepkg --cleanbuild --noconfirm
     packages=(dota2cfgchanger-[0-9]*-x86_64.pkg.tar.zst)
     [[ ${#packages[@]} -eq 1 && -f "${packages[0]}" ]]
-    namcap "${packages[0]}" | tee /work/artifacts/namcap.log
-    if grep -E ': E:' /work/artifacts/namcap.log; then exit 1; fi
+    namcap "${packages[0]}" 2>&1 | tee /work/artifacts/namcap.log
+    if grep -E '(^|[[:space:]])E:' /work/artifacts/namcap.log; then exit 1; fi
     pacman -U --noconfirm "${packages[0]}"
     for file in /usr/bin/DotaManager /usr/share/applications/dota2cfgchanger.desktop \
         /usr/share/icons/hicolor/32x32/apps/dota2cfgchanger.png \
