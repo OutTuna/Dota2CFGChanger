@@ -126,7 +126,7 @@
 +Exec=DotaManager
 +Icon=dota2cfgchanger
 +Terminal=false
-+Categories=Utility;Game;
++Categories=Utility;
 +StartupWMClass=DotaManager
 --- a/resources/locales/en.json
 +++ b/resources/locales/en.json

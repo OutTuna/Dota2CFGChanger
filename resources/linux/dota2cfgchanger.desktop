@@ -7,5 +7,5 @@ Comment[uk]=Перенесення налаштувань Dota 2 між Steam-а
 Exec=DotaManager
 Icon=dota2cfgchanger
 Terminal=false
-Categories=Utility;Game;
+Categories=Utility;
 StartupWMClass=DotaManager

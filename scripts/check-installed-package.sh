@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $(command -v DotaManager) == /usr/bin/DotaManager ]]
+if [[ ! -x /usr/bin/DotaManager ]]; then
+    echo "Installed executable is missing: /usr/bin/DotaManager" >&2
+    exit 1
+fi
 check_dir=$(mktemp -d)
 trap 'rm -rf "$check_dir"' EXIT
 export XDG_CONFIG_HOME="$check_dir/config"
@@ -8,7 +11,7 @@ export LIBGL_ALWAYS_SOFTWARE=1
 cd "$check_dir"
 xvfb-run -a -s '-screen 0 1024x768x24' bash <<'RUN'
 set -euo pipefail
-DotaManager > application.log 2>&1 &
+/usr/bin/DotaManager > application.log 2>&1 &
 app_pid=$!
 cleanup() {
     kill "$app_pid" 2>/dev/null || true
