@@ -83,6 +83,7 @@ int main(int argc, char** argv) {
         ui_render_main(font_big, ds);
         ui_render_success_popup(font_big, ds, io.DeltaTime);
         ui_render_update_popup();
+        ui_render_backups_popup();
 
         ImGui::Render();
         int dw, dh;

@@ -1,4 +1,5 @@
 #include "app.h"
+#include "backups.h"
 #include "file_ops.h"
 #include "localization.h"
 #include <nlohmann/json.hpp>
@@ -249,9 +250,10 @@ void copy_config() {
             return;
         }
 
-        auto retained_backup = replace_config_directory(src, dst);
-        if (retained_backup.empty()) set_status("copy_success", d_id);
-        else set_status("backup_retained", retained_backup.u8string());
+        auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
+        if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
+        else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
+        else set_status("copy_success", d_id);
 
         g_success = {};
         g_success.src_id = s_id;

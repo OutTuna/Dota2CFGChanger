@@ -104,6 +104,7 @@ add_custom_command(
 find_package(Threads REQUIRED)
 add_library(dotamanager_core STATIC
     src/core/app.cpp
+    src/core/backups.cpp
     src/core/file_ops.cpp
     src/core/localization.cpp
     src/platform/platform.cpp
@@ -148,6 +149,7 @@ add_executable(DotaManager
         src/ui/ui.h
         src/ui/ui_internal.h
         src/ui/theme.cpp
+        src/ui/backups_popup.cpp
         src/ui/panels.cpp
         src/ui/main_window.cpp
         src/ui/success_popup.cpp
@@ -210,6 +212,14 @@ endif()
 option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
 if(DOTAMANAGER_BUILD_TESTS)
     enable_testing()
+    add_executable(backup_checks tests/backup_checks.cpp)
+    target_link_libraries(backup_checks PRIVATE dotamanager_core)
+    if(MSVC)
+        target_compile_options(backup_checks PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(backup_checks PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME backup_checks COMMAND backup_checks)
     add_executable(update_install_checks tests/update_install_checks.cpp)
     target_link_libraries(update_install_checks PRIVATE dotamanager_core)
     if(MSVC)
@@ -226,7 +236,7 @@ if(DOTAMANAGER_BUILD_TESTS)
     add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp)
     add_executable(avatar_checks tests/avatar_checks.cpp)
     target_link_libraries(avatar_checks PRIVATE dotamanager_core)
-    add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp
+    add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp src/ui/backups_popup.cpp
         ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
     target_include_directories(update_ui_checks PRIVATE ${imgui_SOURCE_DIR})
