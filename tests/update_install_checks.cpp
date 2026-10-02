@@ -77,7 +77,14 @@ int main(int argc, char** argv) {
     release_update_process(parent);
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     while (!fs::exists(target.parent_path() / "child-opened") || fs::exists(backup) || fs::exists(target.parent_path() / "job.json")) {
-        assert(std::chrono::steady_clock::now() < deadline);
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::cerr << "Updater timed out: child-opened=" << fs::exists(target.parent_path() / "child-opened")
+                << ", backup=" << fs::exists(backup)
+                << ", job=" << fs::exists(target.parent_path() / "job.json") << "\n";
+            auto log = target.parent_path() / "error.txt";
+            if (fs::exists(log)) std::cerr << read(log) << "\n";
+            return 1;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     assert(file_sha256(target) == file_sha256(executable));
