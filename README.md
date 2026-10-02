@@ -93,7 +93,16 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-An Arch Linux package recipe is being tested in a separate CI workflow. See [the AUR guide](docs/AUR.md) for building and publishing it. The package has not been published to AUR yet. Package builds use system libraries and update through the package manager; standalone `.exe` and `.AppImage` builds keep their existing updater.
+The Arch Linux package recipe has passed CI: an offline build, tests, installation, window launch and removal while retaining user data. AUR publication is pending because new account registration is temporarily closed (October 2026). Until then, build and install the package locally on Arch:
+
+```sh
+git clone https://github.com/OutTuna/Dota2CFGChanger.git
+cd Dota2CFGChanger/packaging/aur
+sudo pacman -S --needed base-devel cmake ninja nlohmann-json python
+makepkg -si
+```
+
+Run `makepkg` as your normal user. See [the AUR guide](docs/AUR.md) for details. Package builds use system libraries and update through the package manager; standalone `.exe` and `.AppImage` builds keep their existing updater. Installation through `yay` or `paru` will become available after publication.
 
 ## How the code fits together
 
@@ -250,6 +259,8 @@ class node_steamcommunity,node_release_service toneIndigo
 Копируется папка `<account_id>/570` целиком. Перед заменой сохраняется проверенный бэкап; хранятся последние 5 копий на аккаунт. Выберите аккаунт назначения и нажмите «Бэкапы» внизу окна, чтобы восстановить копию после подтверждения. Перед восстановлением текущий конфиг тоже сохраняется. Если создать бэкап не удалось, замена не начнётся. Бэкапы находятся в пользовательской папке DotaManager, отдельно от файла приложения.
 
 Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После проверки загрузки программа сама закроется, заменит свой файл по текущему пути и запустится снова. При ошибке замены или запуска помощник попытается восстановить предыдущую версию. Если папка недоступна для записи, используйте скачанный файл вручную. Старые сборки без этой функции нужно один раз заменить вручную.
+
+Рецепт пакета для Arch прошёл CI: сборку без сети, тесты, установку, запуск окна и удаление с сохранением данных. Публикация в AUR ждёт открытия регистрации новых аккаунтов; пока пакет можно собрать командой `makepkg -si` из `packaging/aur`. Подробности — в [гайде](docs/AUR.md).
 
 ## License
 
