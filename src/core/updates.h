@@ -2,7 +2,7 @@
 #include "release_info.h"
 #include <string>
 
-enum class UpdatePhase { Idle, Checking, Available, Current, Downloading, Downloaded, Failed };
+enum class UpdatePhase { Idle, Checking, Available, Current, Downloading, Downloaded, Installing, Failed };
 struct UpdateSnapshot {
     UpdatePhase phase = UpdatePhase::Idle;
     ReleaseInfo release;
@@ -18,3 +18,7 @@ void updates_download();
 void updates_dismiss();
 UpdateSnapshot updates_snapshot();
 void updates_shutdown();
+
+void updates_install();
+bool updates_should_exit();
+void updates_install_error(const std::string& detail);
