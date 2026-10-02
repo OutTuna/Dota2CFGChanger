@@ -29,6 +29,9 @@ int main(int argc, char** argv) {
 
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+#ifdef __linux__
+    glfwWindowHintString(GLFW_X11_CLASS_NAME, "DotaManager");
+#endif
     const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
     GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
     if (!window) return 1;

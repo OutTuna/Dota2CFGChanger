@@ -1,8 +1,10 @@
 #include "updates.h"
+#include "package_mode.h"
 #include <iostream>
 #include <string>
 
 int main(int argc, char** argv) {
+    if (updates_self_install_enabled() != !DOTAMANAGER_PACKAGE_MANAGED) return 1;
     if (argc != 2 || std::string(app_version()) != argv[1]) {
         std::cerr << "Compiled application version differs from the release version: "
                   << app_version() << '\n';
