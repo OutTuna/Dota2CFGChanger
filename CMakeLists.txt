@@ -170,6 +170,7 @@ target_include_directories(DotaManager PRIVATE
 
 target_link_libraries(DotaManager PRIVATE dotamanager_core glfw)
 if(NOT WIN32)
+    set(OpenGL_GL_PREFERENCE LEGACY)
     find_package(OpenGL REQUIRED)
     target_link_libraries(DotaManager PRIVATE OpenGL::GL)
 endif()
