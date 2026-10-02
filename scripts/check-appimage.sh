@@ -46,3 +46,5 @@ done
 echo 'AppImage did not open its window within 20 seconds' >&2
 exit 1
 RUN
+
+xvfb-run -a -s '-screen 0 1024x768x24' python3 "$script_dir/../tests/appimage_update_checks.py" "$appimage"

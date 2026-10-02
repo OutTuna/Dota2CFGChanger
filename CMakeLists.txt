@@ -112,6 +112,8 @@ add_library(dotamanager_core STATIC
     src/core/release_info.cpp
     src/core/checksum.cpp
     src/core/updates.cpp
+    src/core/update_install.cpp
+    src/platform/update_process.cpp
     src/network/update_transport.cpp
     ${EMBEDDED_THEMES_DIR}/embedded_locales.h
 )
@@ -125,7 +127,7 @@ target_include_directories(dotamanager_core PUBLIC
 target_link_libraries(dotamanager_core PUBLIC cpr::cpr nlohmann_json::nlohmann_json Threads::Threads)
 
 if(WIN32)
-    target_link_libraries(dotamanager_core PUBLIC shell32 ole32 advapi32 bcrypt)
+    target_link_libraries(dotamanager_core PUBLIC shell32 ole32 advapi32 bcrypt user32)
     if(MSVC)
         target_compile_options(dotamanager_core PRIVATE /utf-8)
     else()
@@ -208,6 +210,15 @@ endif()
 option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
 if(DOTAMANAGER_BUILD_TESTS)
     enable_testing()
+    add_executable(update_install_checks tests/update_install_checks.cpp)
+    target_link_libraries(update_install_checks PRIVATE dotamanager_core)
+    if(MSVC)
+        target_compile_options(update_install_checks PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(update_install_checks PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME update_install_checks COMMAND update_install_checks)
+    set_tests_properties(update_install_checks PROPERTIES TIMEOUT 60)
     add_executable(version_build_checks tests/version_build_checks.cpp)
     target_link_libraries(version_build_checks PRIVATE dotamanager_core)
     add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}")

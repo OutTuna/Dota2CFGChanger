@@ -55,7 +55,7 @@ The folders should follow Steam's layout: `<root>/<account_id>/570/`. You can us
 - English is the default language. Switch between **RU / UA / EN** at the top right, immediately beside the theme selector. Language and theme are saved automatically.
 - Dark is the default theme; five themes are included. The Crimson theme also has a palette editor. A local `themes/` folder can override the built-in themes; missing or invalid resources fall back to the embedded ones.
 - Account names and avatars come from public Steam Community profiles and are cached locally. This needs an internet connection, but no Steam login or API key. If a profile lookup fails, the account ID still appears in the list.
-- Release builds check for updates at startup. You can also check using the button at the bottom of the window. Downloading starts only when you click **Download**; the app checks the file size and SHA-256 before keeping it. If a verified download is unavailable, use **Open release**. Launch the new file yourself after closing the old version.
+- Release builds check for updates at startup. You can also check using the button at the bottom of the window. Downloading starts only when you click **Download and update**; the app checks the file size and SHA-256 before keeping it. If a verified download is unavailable, use **Open release**. After verification, a helper waits for the application to close, replaces the running `.exe` or original AppImage at its existing path, and starts it again. The previous file is kept until the new window confirms startup; replacement or startup failure triggers recovery. If the application folder is not writable, use the downloaded file or GitHub release manually. Older builds without the installer must be replaced manually once.
 
 On Windows, paths, theme and language are saved under `HKEY_CURRENT_USER\Software\OutTuna\Dota2CFGChanger`, in the `Settings` value. An existing `settings.json` is migrated and removed only after a successful registry write. Profile caches, avatars and updates still use `%APPDATA%\DotaManager`. On Linux, settings and caches use `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager`.
 
@@ -133,6 +133,7 @@ subgraph group_core["Application core"]
   node_localization["Translations<br/>[localization.cpp]"]
   node_avatar_data[("Avatar cache<br/>[avatar_data.cpp]")]
   node_updates["Update service<br/>[updates.cpp]"]
+  node_installer["Install and restart<br/>[update_install.cpp]"]
   node_release["Release metadata<br/>[release_info.cpp]"]
   node_checksum["Download verification<br/>[checksum.cpp]"]
 end
@@ -144,6 +145,7 @@ end
 
 subgraph group_platform["Platform and presentation resources"]
   node_platform_api["Platform services<br/>[platform.cpp]"]
+  node_process["Executable path and helper<br/>[update_process.cpp]"]
   node_avatars["Avatar textures<br/>[avatar.cpp]"]
   node_themes["Themes<br/>[theme.cpp]"]
   node_resources["Theme and locale data"]
@@ -174,6 +176,10 @@ node_app -->|"uses path services"| node_platform_api
 node_steam -->|"looks up profiles"| node_steamcommunity
 node_avatar_data -->|"downloads images"| node_steamcommunity
 node_avatars -->|"uploads cached images"| node_avatar_data
+node_updates -->|"installs verified download"| node_installer
+node_installer -->|"verifies staged file"| node_checksum
+node_installer -->|"waits, replaces and restarts"| node_process
+node_entry -->|"confirms new window startup"| node_installer
 node_updates -->|"fetches and downloads"| node_transport
 node_updates -->|"verifies download"| node_checksum
 node_updates -->|"opens release"| node_platform_api
@@ -194,6 +200,8 @@ click node_files "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/
 click node_settings "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
 click node_localization "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/localization.cpp"
 click node_avatar_data "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/avatar_data.cpp"
+click node_installer "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/update_install.cpp"
+click node_process "https://github.com/outtuna/dota2cfgchanger/blob/main/src/platform/update_process.cpp"
 click node_updates "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/updates.cpp"
 click node_release "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/release_info.cpp"
 click node_checksum "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/checksum.cpp"
@@ -212,9 +220,9 @@ classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
 classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
 classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
 class node_entry,node_window,node_panels,node_success,node_updateui,node_user toneBlue
-class node_app,node_files,node_settings,node_localization,node_avatar_data,node_updates,node_release,node_checksum,node_configdirs,node_local_settings toneAmber
+class node_app,node_files,node_settings,node_localization,node_avatar_data,node_updates,node_installer,node_release,node_checksum,node_configdirs,node_local_settings toneAmber
 class node_steam,node_transport toneMint
-class node_platform_api,node_avatars,node_themes,node_resources toneRose
+class node_platform_api,node_process,node_avatars,node_themes,node_resources toneRose
 class node_steamcommunity,node_release_service toneIndigo
 ```
 
@@ -228,7 +236,7 @@ class node_steamcommunity,node_release_service toneIndigo
 
 Копируется папка `<account_id>/570` целиком. Если старые настройки нужны, сохраните их отдельно: после успешной замены временная резервная копия удаляется.
 
-Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После загрузки закройте старую версию и запустите новую.
+Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После проверки загрузки программа сама закроется, заменит свой файл по текущему пути и запустится снова. При ошибке замены или запуска помощник попытается восстановить предыдущую версию. Если папка недоступна для записи, используйте скачанный файл вручную. Старые сборки без этой функции нужно один раз заменить вручную.
 
 ## License
 
