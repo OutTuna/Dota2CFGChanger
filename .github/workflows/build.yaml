@@ -75,7 +75,7 @@ jobs:
 
   build-linux:
     needs: compute-version
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     env:
       # linuxdeploy and its plugin are themselves AppImages; runners have no
       # FUSE, so run them by self-extraction instead of mounting.
@@ -95,16 +95,22 @@ jobs:
           if [ -f /etc/apt/apt-mirrors-security.txt ]; then
             printf '%s\n' 'https://security.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors-security.txt > /dev/null
           fi
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i \
+              -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+              -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+              /etc/apt/sources.list
+          fi
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ccache \
+            build-essential gcc-11 g++-11 cmake ccache \
             libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libssl-dev
 
       - name: Identify Linux toolchain
         id: toolchain
         run: |
-          id=$({ gcc --version; cmake --version; dpkg-query -W libssl-dev libgl1-mesa-dev; } | sha256sum | cut -d' ' -f1)
+          id=$({ gcc-11 --version; cmake --version; dpkg-query -W libssl-dev libgl1-mesa-dev; } | sha256sum | cut -d' ' -f1)
           echo "id=$id" >> "$GITHUB_OUTPUT"
       - name: Cache dependency sources and builds
         uses: actions/cache@v6.1.0
@@ -118,7 +124,7 @@ jobs:
           key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
           restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
+        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
 
       - name: Build
         run: cmake --build build --config Release -j"$(nproc)"
@@ -178,8 +184,45 @@ jobs:
           path: linux-artifact/*.AppImage
           if-no-files-found: error
 
+  check-appimage:
+    needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: DotaManager-Linux
+          path: linux-artifact
+      - name: Install runtime check dependencies
+        run: |
+          if [ -f /etc/apt/sources.list ]; then
+            sudo sed -i \
+              -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+              -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+              /etc/apt/sources.list
+          fi
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils python3 xvfb xauth x11-utils libgl1 libglx-mesa0 libgl1-mesa-dri fonts-dejavu-core
+      - name: Check ABI and launch AppImage
+        run: |
+          python3 tests/appimage_checks.py
+          shopt -s nullglob
+          images=(linux-artifact/*.AppImage)
+          if [ "${#images[@]}" -ne 1 ]; then
+            echo "Expected exactly one AppImage, found ${#images[@]}" >&2
+            exit 1
+          fi
+          bash scripts/check-appimage.sh "${images[0]}"
+
   release:
-    needs: [compute-version, build-windows, build-linux]
+    needs: [compute-version, build-windows, build-linux, check-appimage]
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
