@@ -74,7 +74,7 @@ Both package recipes have passed CI. AUR publication is waiting for new account 
 
 You need Git, CMake 3.14+, a C++17 compiler and internet access for the first configuration. CMake fetches the pinned dependencies: Dear ImGui, GLFW, cpr/libcurl, nlohmann/json and stb.
 
-On Debian or Ubuntu, install the development packages first:
+On Debian or Ubuntu, install the **development packages first**:
 
 ```sh
 sudo apt install build-essential cmake git libgl1-mesa-dev libx11-dev \
