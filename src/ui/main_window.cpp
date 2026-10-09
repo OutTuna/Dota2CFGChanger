@@ -3,6 +3,7 @@
 #include "localization.h"
 #include "updates.h"
 #include "avatar.h"
+#include <sstream>
 
 void ui_render_main(ImFont* font_big, ImVec2 ds) {
     avatar_flush_pending();
@@ -302,6 +303,35 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::TextDisabled("Release v%s", app_version());
         ImGui::Spacing();
         if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        std::istringstream notice(tr("info_download_warning"));
+        std::string word;
+        const float left = ImGui::GetCursorPosX();
+        const float right = left + ImGui::GetContentRegionAvail().x;
+        const float gap = ImGui::CalcTextSize(" ").x;
+        bool first = true;
+        while (notice >> word) {
+            const bool link = word == "{source}";
+            const char* label = link ? tr("info_download_source") : word.c_str();
+            const float width = ImGui::CalcTextSize(label).x;
+            if (!first && ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + gap + width <= right)
+                ImGui::SameLine(0.f, gap);
+            if (link) {
+                ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered), "%s", label);
+                const auto min = ImGui::GetItemRectMin();
+                const auto max = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddLine({min.x, max.y}, max,
+                    ImGui::GetColorU32(ImGuiCol_ButtonHovered));
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    ImGui::SetTooltip("%s", REPOSITORY_URL);
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) open_external(REPOSITORY_URL);
+                }
+            } else ImGui::TextUnformatted(label);
+            first = false;
+        }
         ImGui::EndPopup();
     }
     ImGui::PopStyleVar();
