@@ -77,5 +77,7 @@
   "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
   "backup_invalid": "Бэкап повреждён или его файлы изменены. Восстановление не выполнено.",
   "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}",
-  "update_package_managed": "Эта установка обновляется через пакетный менеджер. Обновите пакет там; на Arch с yay или paru выполните yay -Syu или paru -Syu."
+  "update_package_managed": "Эта установка обновляется через пакетный менеджер. Обновите пакет там; на Arch с yay или paru выполните yay -Syu или paru -Syu.",
+  "info_download_warning": "Если вы скачали это не {source} — вас обманули.",
+  "info_download_source": "отсюда"
 }
