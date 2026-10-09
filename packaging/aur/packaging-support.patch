@@ -130,33 +130,39 @@
 +StartupWMClass=DotaManager
 --- a/resources/locales/en.json
 +++ b/resources/locales/en.json
-@@ -76,5 +76,6 @@
+@@ -76,5 +76,8 @@
    "backup_restored": "Backup restored for account {value}.",
    "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
    "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
 -  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}"
 +  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}",
-+  "update_package_managed": "This installation is managed by your package manager. Update the package there; on Arch with yay or paru, run yay -Syu or paru -Syu."
++  "update_package_managed": "This installation is managed by your package manager. Update the package there; on Arch with yay or paru, run yay -Syu or paru -Syu.",
++  "info_download_warning": "If you downloaded this anywhere other than {source} — you were deceived.",
++  "info_download_source": "here"
  }
 --- a/resources/locales/ru.json
 +++ b/resources/locales/ru.json
-@@ -76,5 +76,6 @@
+@@ -76,5 +76,8 @@
    "backup_restored": "Бэкап восстановлен для аккаунта {value}.",
    "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
    "backup_invalid": "Бэкап повреждён или его файлы изменены. Восстановление не выполнено.",
 -  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}"
 +  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}",
-+  "update_package_managed": "Эта установка обновляется через пакетный менеджер. Обновите пакет там; на Arch с yay или paru выполните yay -Syu или paru -Syu."
++  "update_package_managed": "Эта установка обновляется через пакетный менеджер. Обновите пакет там; на Arch с yay или paru выполните yay -Syu или paru -Syu.",
++  "info_download_warning": "Если вы скачали это не {source} — вас обманули.",
++  "info_download_source": "отсюда"
  }
 --- a/resources/locales/uk.json
 +++ b/resources/locales/uk.json
-@@ -76,5 +76,6 @@
+@@ -76,5 +76,8 @@
    "backup_restored": "Бекап відновлено для акаунта {value}.",
    "backup_create_failed": "Не вдалося створити бекап. Заміну конфіга скасовано: {value}",
    "backup_invalid": "Бекап пошкоджено або його файли змінено. Відновлення не виконано.",
 -  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}"
 +  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}",
-+  "update_package_managed": "Ця установка оновлюється через пакетний менеджер. Оновіть пакет там; на Arch із yay або paru виконайте yay -Syu або paru -Syu."
++  "update_package_managed": "Ця установка оновлюється через пакетний менеджер. Оновіть пакет там; на Arch із yay або paru виконайте yay -Syu або paru -Syu.",
++  "info_download_warning": "Якщо ви завантажили це не {source} — вас обманули.",
++  "info_download_source": "звідси"
  }
 --- a/src/core/updates.cpp
 +++ b/src/core/updates.cpp
@@ -305,3 +311,49 @@
      if (argc != 2 || std::string(app_version()) != argv[1]) {
          std::cerr << "Compiled application version differs from the release version: "
                    << app_version() << '\n';
+--- a/src/ui/main_window.cpp
++++ b/src/ui/main_window.cpp
+@@ -3,6 +3,7 @@
+ #include "localization.h"
+ #include "updates.h"
+ #include "avatar.h"
++#include <sstream>
+ 
+ void ui_render_main(ImFont* font_big, ImVec2 ds) {
+     avatar_flush_pending();
+@@ -302,6 +303,35 @@
+         ImGui::TextDisabled("Release v%s", app_version());
+         ImGui::Spacing();
+         if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
++        ImGui::Spacing();
++        ImGui::Separator();
++        ImGui::Spacing();
++        std::istringstream notice(tr("info_download_warning"));
++        std::string word;
++        const float left = ImGui::GetCursorPosX();
++        const float right = left + ImGui::GetContentRegionAvail().x;
++        const float gap = ImGui::CalcTextSize(" ").x;
++        bool first = true;
++        while (notice >> word) {
++            const bool link = word == "{source}";
++            const char* label = link ? tr("info_download_source") : word.c_str();
++            const float width = ImGui::CalcTextSize(label).x;
++            if (!first && ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x + gap + width <= right)
++                ImGui::SameLine(0.f, gap);
++            if (link) {
++                ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered), "%s", label);
++                const auto min = ImGui::GetItemRectMin();
++                const auto max = ImGui::GetItemRectMax();
++                ImGui::GetWindowDrawList()->AddLine({min.x, max.y}, max,
++                    ImGui::GetColorU32(ImGuiCol_ButtonHovered));
++                if (ImGui::IsItemHovered()) {
++                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
++                    ImGui::SetTooltip("%s", REPOSITORY_URL);
++                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) open_external(REPOSITORY_URL);
++                }
++            } else ImGui::TextUnformatted(label);
++            first = false;
++        }
+         ImGui::EndPopup();
+     }
+     ImGui::PopStyleVar();
