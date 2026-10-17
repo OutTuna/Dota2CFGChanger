@@ -2,6 +2,7 @@
 #include "updates.h"
 #include "platform.h"
 #include "localization.h"
+#include "app.h"
 #include <filesystem>
 #include <algorithm>
 
@@ -57,7 +58,9 @@ void ui_render_update_popup() {
         if (!updates_self_install_enabled()) ImGui::TextWrapped("%s", tr("update_package_managed"));
         if (update.phase != UpdatePhase::Checking && update.phase != UpdatePhase::Downloading && update.phase != UpdatePhase::Installing) {
             if (updates_self_install_enabled() && update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
+                ImGui::BeginDisabled(file_tasks_busy() || g_scanning.load());
                 if (button("update_install")) updates_install();
+                ImGui::EndDisabled();
             }
             if (updates_self_install_enabled() && !update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
                 if (button("update_download")) updates_download();

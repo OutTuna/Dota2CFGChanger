@@ -5,6 +5,7 @@
 
 std::string normalize_user_path(const std::string& path);
 std::string default_steam_userdata();
+void write_file_atomic(const std::filesystem::path& path, const std::string& bytes);
 std::filesystem::path replace_config_directory(const std::filesystem::path& source,
     const std::filesystem::path& destination);
 

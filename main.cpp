@@ -123,7 +123,8 @@ int main(int argc, char** argv) {
     while (!glfwWindowShouldClose(window) && !updates_should_exit()) {
         glfwPollEvents();
         if (glfwWindowShouldClose(window) || updates_should_exit()) break;
-        if (updates_phase() == UpdatePhase::Downloaded) updates_install();
+        file_tasks_poll();
+        if (!file_tasks_busy() && !g_scanning.load() && updates_phase() == UpdatePhase::Downloaded) updates_install();
         int dw, dh;
         glfwGetFramebufferSize(window, &dw, &dh);
         if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) || dw == 0 || dh == 0) {
@@ -180,9 +181,12 @@ int main(int argc, char** argv) {
     }
 
     frame_timer.set_active(false);
+    app_request_stop();
+    avatar_request_stop();
+    updates_request_stop();
     updates_shutdown();
-    app_shutdown();
     avatar_shutdown();
+    app_shutdown();
     ui_events::set_wake(nullptr);
     ui_shutdown_theme();
     ImGui_ImplOpenGL3_Shutdown();

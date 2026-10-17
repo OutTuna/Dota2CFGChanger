@@ -1,6 +1,7 @@
 #include "ui_internal.h"
 #include "app.h"
 #include "localization.h"
+#include "updates.h"
 
 bool g_palette_open = false;
 bool g_confirm_copy_open = false;
@@ -104,10 +105,12 @@ void render_confirm_copy_popup(ImVec2 ds) {
     ImGui::PushStyleColor(ImGuiCol_Button, { 0.75f, 0.20f, 0.20f, 1.00f });
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.85f, 0.25f, 0.25f, 1.00f });
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.60f, 0.14f, 0.14f, 1.00f });
+    ImGui::BeginDisabled(g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing);
     if (ImGui::Button(tr("replace"), { -1, 0 })) {
         copy_config();
         g_confirm_copy_open = false;
     }
+    ImGui::EndDisabled();
     ImGui::PopStyleColor(3);
 
     ImGui::End();

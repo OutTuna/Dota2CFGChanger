@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
     subprocess.run([str(executable), str(temp)], env=env, check=True)
     app = (root / "src/core/app.cpp").read_text()
-    functions = app[app.index("static void set_status("):app.index("static void fetch_profile_info")]
+    functions = app[app.index("static void set_status("):app.index("bool ensure_profile_info")]
     settings_source = r"""
 #include "app.h"
 #include "file_ops.h"

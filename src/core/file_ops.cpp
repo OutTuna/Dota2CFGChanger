@@ -2,12 +2,46 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <vector>
+#include <fstream>
+#include <atomic>
+#include <chrono>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace fs = std::filesystem;
+
+void write_file_atomic(const fs::path& path, const std::string& bytes) {
+    static std::atomic<unsigned long long> serial{0};
+#ifdef _WIN32
+    auto process = GetCurrentProcessId();
+#else
+    auto process = getpid();
+#endif
+    auto temporary = path;
+    temporary += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+        "-" + std::to_string(process) + "-" + std::to_string(++serial);
+    try {
+        std::ofstream output;
+        output.exceptions(std::ios::failbit | std::ios::badbit);
+        output.open(temporary, std::ios::binary | std::ios::trunc);
+        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        output.close();
+#ifdef _WIN32
+        if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            throw std::system_error(static_cast<int>(GetLastError()), std::system_category(), "Cannot replace saved file");
+#else
+        fs::rename(temporary, path);
+#endif
+    } catch (...) {
+        std::error_code ignored;
+        fs::remove(temporary, ignored);
+        throw;
+    }
+}
 
 std::string normalize_user_path(const std::string& path) {
     if (path.empty()) return {};

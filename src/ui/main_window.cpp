@@ -100,7 +100,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::Separator();
 
-    bool scanning = g_scanning.load();
+    bool scanning = g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing;
     if (scanning) ImGui::BeginDisabled();
     static bool open_src = false;
     static bool open_dst = false;
@@ -138,7 +138,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     if (scanning) ImGui::EndDisabled();
     if (scanning) ImGui::BeginDisabled();
-    if (ImGui::Button(scanning ? tr("scanning") : tr("scan"), { -1, 32 }))
+    if (ImGui::Button(g_scanning.load() ? tr("scanning") : tr("scan"), { -1, 32 }))
         start_scan();
     if (scanning) ImGui::EndDisabled();
 
@@ -340,7 +340,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::SameLine();
     if (ImGui::Button(tr("update_check"), {0.f, 32.f})) updates_check(true);
     ImGui::SameLine();
-    ImGui::BeginDisabled(g_scanning.load() || selected_dst.load() < 0);
+    ImGui::BeginDisabled(scanning || selected_dst.load() < 0);
     if (ImGui::Button(tr("backups"), {0.f, 32.f})) ui_open_backups();
     ImGui::EndDisabled();
 

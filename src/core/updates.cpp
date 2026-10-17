@@ -132,8 +132,10 @@ void updates_download() {
     });
 }
 
+void updates_request_stop() { stopping = true; }
+
 void updates_shutdown() {
-    stopping = true;
+    updates_request_stop();
     if (worker.joinable()) worker.join();
 }
 

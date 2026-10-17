@@ -11,3 +11,4 @@ struct AvatarPixels {
 void avatar_data_request(const std::string& id);
 std::vector<AvatarPixels> avatar_data_take_ready();
 void avatar_data_shutdown();
+void avatar_data_request_stop();

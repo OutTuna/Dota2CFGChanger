@@ -1,7 +1,8 @@
 #include "avatar_data.h"
 #include "app.h"
 #include "ui_events.h"
-#include <cpr/cpr.h>
+#include "avatar_transport.h"
+#include "file_ops.h"
 
 #include <string>
 #include <vector>
@@ -23,10 +24,6 @@
 namespace fs = std::filesystem;
 
 namespace {
-
-const char* USER_AGENT =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 const auto RETRY_DELAY = std::chrono::seconds(30);
 
@@ -54,10 +51,11 @@ static std::condition_variable g_work;
 static std::deque<std::string> g_queue;
 static std::vector<std::thread> g_threads;
 static bool g_stopping = false;
+static std::atomic<bool> g_cancelled{false};
 
 static void launch_fetch(const std::string& steam3_id) {
     std::lock_guard<std::mutex> lock(g_threads_mutex);
-    if (g_stopping) return;
+    if (g_stopping || g_cancelled.load()) return;
     if (g_threads.size() < 8) {
         g_threads.emplace_back([] {
             for (;;) {
@@ -101,7 +99,8 @@ static fs::path disk_cache_path(const std::string& id) {
 
 static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) {
     fs::path p = disk_cache_path(id);
-    if (!fs::exists(p)) return false;
+    std::error_code error;
+    if (!fs::exists(p, error) || error) return false;
     std::ifstream f(p, std::ios::binary);
     if (!f) return false;
     raw_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
@@ -111,33 +110,30 @@ static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) 
 static void save_to_disk_cache(const std::string& id, const std::string& raw_bytes) {
     try {
         fs::create_directories(fs::u8path(config_dir()) / AVATAR_DISK_DIR);
-        std::ofstream f(disk_cache_path(id), std::ios::binary);
-        if (f) f.write(raw_bytes.data(), (std::streamsize)raw_bytes.size());
+        write_file_atomic(disk_cache_path(id), raw_bytes);
     } catch (...) {}
 }
 
-static void decode_and_store(const std::string& id, const std::string& raw_bytes) {
+static bool decode_and_store(const std::string& id, const std::string& raw_bytes) {
     int w = 0, h = 0, ch = 0;
-    auto* data = stbi_load_from_memory(
+    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> data(stbi_load_from_memory(
         reinterpret_cast<const unsigned char*>(raw_bytes.data()),
-        (int)raw_bytes.size(), &w, &h, &ch, 4);
+        (int)raw_bytes.size(), &w, &h, &ch, 4), stbi_image_free);
 
     if (!data) {
-        mark_failed(id);
-        return;
+        return false;
     }
 
-    std::vector<unsigned char> pixels(data, data + (size_t)w * h * 4);
-    stbi_image_free(data);
+    std::vector<unsigned char> pixels(data.get(), data.get() + (size_t)w * h * 4);
     mark_ready(id, std::move(pixels), w, h);
+    return true;
 }
 
 static void fetch_thread(const std::string steam3_id) {
     std::string raw;
-    if (load_from_disk_cache(steam3_id, raw)) {
-        decode_and_store(steam3_id, raw);
-        return;
-    }
+    if (g_cancelled.load()) return;
+    if (load_from_disk_cache(steam3_id, raw) && decode_and_store(steam3_id, raw)) return;
+    if (g_cancelled.load()) return;
 
     std::string avatar_url;
     {
@@ -147,17 +143,10 @@ static void fetch_thread(const std::string steam3_id) {
     }
 
     if (avatar_url.empty()) {
-        long long steam64 = steam_api::steam3_to_64(steam3_id);
-        std::string xml = steam_api::fetch_profile_xml(steam64, 6000);
-        if (!xml.empty()) {
-            avatar_url = steam_api::extract_tag(xml, "avatarMedium");
-            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
-            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
-            if (!avatar_url.empty()) {
-                std::lock_guard<std::mutex> lock(g_data_mutex);
-                avatar_url_cache[steam3_id] = avatar_url;
-            }
-        }
+        ensure_profile_info(steam3_id);
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        auto it = avatar_url_cache.find(steam3_id);
+        if (it != avatar_url_cache.end()) avatar_url = it->second;
     }
 
     if (avatar_url.empty()) {
@@ -165,22 +154,19 @@ static void fetch_thread(const std::string steam3_id) {
         return;
     }
 
-    auto img = cpr::Get(
-        cpr::Url{ avatar_url },
-        cpr::Header{{"User-Agent", USER_AGENT}},
-        cpr::Timeout{ 8000 },
-        cpr::Redirect{ cpr::PostRedirectFlags::POST_ALL });
+    auto bytes = download_avatar(avatar_url, [] { return !g_cancelled.load(); });
 
-    if (img.status_code != 200 || img.text.empty()) {
+    if (g_cancelled.load()) return;
+    if (bytes.empty() || !decode_and_store(steam3_id, bytes)) {
         mark_failed(steam3_id);
         return;
     }
 
-    save_to_disk_cache(steam3_id, img.text);
-    decode_and_store(steam3_id, img.text);
+    save_to_disk_cache(steam3_id, bytes);
 }
 
 void avatar_data_request(const std::string& steam3_id) {
+    if (g_cancelled.load()) return;
     std::lock_guard<std::mutex> lock(g_mutex);
 
     auto it = g_avatars.find(steam3_id);
@@ -216,13 +202,18 @@ std::vector<AvatarPixels> avatar_data_take_ready() {
     return result;
 }
 
-void avatar_data_shutdown() {
+void avatar_data_request_stop() {
+    g_cancelled = true;
     {
         std::lock_guard<std::mutex> lock(g_threads_mutex);
         g_stopping = true;
         g_queue.clear();
     }
     g_work.notify_all();
+}
+
+void avatar_data_shutdown() {
+    avatar_data_request_stop();
     for (auto& t : g_threads) if (t.joinable()) t.join();
     g_threads.clear();
 

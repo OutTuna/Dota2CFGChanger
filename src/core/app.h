@@ -8,6 +8,7 @@
 #include <mutex>
 #include <atomic>
 #include "ui_events.h"
+#include "file_tasks.h"
 
 constexpr int PATH_BUF_SIZE = 4096;
 
@@ -37,9 +38,15 @@ inline std::atomic<int> selected_dst{ -1 };
 inline std::atomic<bool> g_scanning{ false };
 
 inline std::atomic<unsigned long long> g_ui_generation{1};
-inline void app_ui_changed() {
+inline std::atomic<unsigned long long> g_account_generation{1};
+inline std::atomic<unsigned long long> g_cache_generation{1};
+inline void app_status_changed() {
     ++g_ui_generation;
     ui_events::request_redraw();
+}
+inline void app_ui_changed() {
+    ++g_account_generation;
+    app_status_changed();
 }
 
 struct AccountView {
@@ -48,6 +55,7 @@ struct AccountView {
 };
 struct UiSnapshot {
     unsigned long long generation = 0;
+    unsigned long long account_generation = 0;
     std::vector<AccountView> source;
     std::vector<AccountView> destination;
     std::string status;
@@ -74,8 +82,11 @@ inline SuccessPopupState g_success;
 
 void load_settings();
 void save_settings();
+bool save_profile_caches();
+bool ensure_profile_info(const std::string& id);
 void copy_config();
 std::string browse_for_folder(const char* title);
 
 void start_scan();
 void app_shutdown();
+void app_request_stop();

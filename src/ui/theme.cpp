@@ -563,7 +563,6 @@ void ui_apply_theme(AppTheme t) {
     ImGui::StyleColorsDark();
     g_current_theme = t;
     g_theme = static_cast<int>(t);
-    save_settings();
 
     if (!ui_load_theme_from_file(t, themes_dir())) {
         ImGuiStyle& st = ImGui::GetStyle();
