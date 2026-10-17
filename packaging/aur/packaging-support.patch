@@ -53,7 +53,20 @@
  
  FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
  FetchContent_MakeAvailable(imgui)
-@@ -190,7 +207,7 @@
+@@ -106,9 +123,12 @@
+     src/core/app.cpp
+     src/core/backups.cpp
+     src/core/file_ops.cpp
++    src/core/file_tasks.cpp
+     src/core/localization.cpp
+     src/platform/platform.cpp
+     src/network/steam_api.cpp
++    src/network/avatar_transport.cpp
++    src/network/profile_transport.cpp
+     src/core/avatar_data.cpp
+     src/core/release_info.cpp
+     src/core/checksum.cpp
+@@ -190,7 +210,7 @@
          target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated_app.rc")
      endif()
  
@@ -62,7 +75,7 @@
      set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
  
      if(MINGW)
-@@ -209,9 +226,27 @@
+@@ -209,9 +229,36 @@
      endif()
  endif()
  
@@ -87,10 +100,19 @@
 +    endif()
 +    add_test(NAME ui_state_checks COMMAND ui_state_checks)
 +    set_tests_properties(ui_state_checks PROPERTIES TIMEOUT 10)
++    add_executable(file_tasks_checks tests/file_tasks_checks.cpp)
++    target_link_libraries(file_tasks_checks PRIVATE dotamanager_core)
++    if(MSVC)
++        target_compile_options(file_tasks_checks PRIVATE /UNDEBUG /utf-8)
++    else()
++        target_compile_options(file_tasks_checks PRIVATE -UNDEBUG)
++    endif()
++    add_test(NAME file_tasks_checks COMMAND file_tasks_checks)
++    set_tests_properties(file_tasks_checks PROPERTIES TIMEOUT 10)
      add_executable(backup_checks tests/backup_checks.cpp)
      target_link_libraries(backup_checks PRIVATE dotamanager_core)
      if(MSVC)
-@@ -263,5 +298,23 @@
+@@ -263,5 +310,23 @@
              add_test(NAME ${test_target} COMMAND ${test_target})
          endif()
      endforeach()
@@ -205,7 +227,7 @@
  
      GLFWimage icon;
      icon.width  = APP_ICON_WIDTH;
-@@ -72,11 +115,47 @@
+@@ -72,11 +115,48 @@
      if (install_error.empty()) updates_check(false);
      else updates_install_error(install_error);
      bool startup_confirmed = false;
@@ -217,7 +239,8 @@
      while (!glfwWindowShouldClose(window) && !updates_should_exit()) {
          glfwPollEvents();
 +        if (glfwWindowShouldClose(window) || updates_should_exit()) break;
-+        if (updates_phase() == UpdatePhase::Downloaded) updates_install();
++        file_tasks_poll();
++        if (!file_tasks_busy() && !g_scanning.load() && updates_phase() == UpdatePhase::Downloaded) updates_install();
 +        int dw, dh;
 +        glfwGetFramebufferSize(window, &dw, &dh);
 +        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) || dw == 0 || dh == 0) {
@@ -253,7 +276,7 @@
          ImGui::NewFrame();
  
          ImVec2 ds = io.DisplaySize;
-@@ -87,8 +166,8 @@
+@@ -87,8 +167,8 @@
          ui_render_backups_popup();
  
          ImGui::Render();
@@ -263,7 +286,7 @@
          glViewport(0, 0, dw, dh);
          glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
          glClear(GL_COLOR_BUFFER_BIT);
-@@ -98,12 +177,14 @@
+@@ -98,12 +178,17 @@
              update_install_confirm_started(arguments);
              startup_confirmed = true;
          }
@@ -273,15 +296,19 @@
 +    }
 +
 +    frame_timer.set_active(false);
++    app_request_stop();
++    avatar_request_stop();
++    updates_request_stop();
      updates_shutdown();
++    avatar_shutdown();
      app_shutdown();
-     avatar_shutdown();
+-    avatar_shutdown();
 +    ui_events::set_wake(nullptr);
 +    ui_shutdown_theme();
      ImGui_ImplOpenGL3_Shutdown();
      ImGui_ImplGlfw_Shutdown();
      ImGui::DestroyContext();
-@@ -118,4 +199,4 @@
+@@ -118,4 +203,4 @@
  
  #ifdef _WIN32
  int APIENTRY WinMain(HINSTANCE, HINSTANCE, PSTR, int) { return main(__argc, __argv); }
@@ -304,7 +331,15 @@
 +StartupWMClass=DotaManager
 --- a/resources/locales/en.json
 +++ b/resources/locales/en.json
-@@ -76,5 +76,8 @@
+@@ -1,4 +1,7 @@
+ {
++  "settings_save_failed": "Could not save settings/cache: {value}",
++  "scan_profile_warnings": "Scan completed; failed profiles: {value}",
++  "working": "Working...",
+   "ready": "Ready",
+   "source": "Source config folder",
+   "destination": "Destination account folder",
+@@ -76,5 +79,8 @@
    "backup_restored": "Backup restored for account {value}.",
    "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
    "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
@@ -316,7 +351,15 @@
  }
 --- a/resources/locales/ru.json
 +++ b/resources/locales/ru.json
-@@ -76,5 +76,8 @@
+@@ -1,4 +1,7 @@
+ {
++  "settings_save_failed": "Не удалось сохранить настройки/кэш: {value}",
++  "scan_profile_warnings": "Сканирование завершено; ошибки профилей: {value}",
++  "working": "Выполняется операция...",
+   "ready": "Готово",
+   "source": "Папка исходного конфига",
+   "destination": "Папка целевого аккаунта",
+@@ -76,5 +79,8 @@
    "backup_restored": "Бэкап восстановлен для аккаунта {value}.",
    "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
    "backup_invalid": "Бэкап повреждён или его файлы изменены. Восстановление не выполнено.",
@@ -328,7 +371,15 @@
  }
 --- a/resources/locales/uk.json
 +++ b/resources/locales/uk.json
-@@ -76,5 +76,8 @@
+@@ -1,4 +1,7 @@
+ {
++  "settings_save_failed": "Не вдалося зберегти налаштування/кеш: {value}",
++  "scan_profile_warnings": "Сканування завершено; помилки профілів: {value}",
++  "working": "Виконується операція...",
+   "ready": "Готово",
+   "source": "Папка вихідного конфігу",
+   "destination": "Папка цільового акаунта",
+@@ -76,5 +79,8 @@
    "backup_restored": "Бекап відновлено для акаунта {value}.",
    "backup_create_failed": "Не вдалося створити бекап. Заміну конфіга скасовано: {value}",
    "backup_invalid": "Бекап пошкоджено або його файли змінено. Відновлення не виконано.",
@@ -438,7 +489,16 @@
          } catch (const std::exception& e) {
              std::error_code ec;
              if (!partial.empty()) fs::remove(partial, ec);
-@@ -120,6 +138,7 @@
+@@ -114,12 +132,15 @@
+     });
+ }
+ 
++void updates_request_stop() { stopping = true; }
++
+ void updates_shutdown() {
+-    stopping = true;
++    updates_request_stop();
+     if (worker.joinable()) worker.join();
  }
  
  void updates_install() {
@@ -446,7 +506,7 @@
      UpdateSnapshot update;
      {
          std::lock_guard<std::mutex> lock(mutex);
-@@ -129,6 +148,7 @@
+@@ -129,6 +150,7 @@
          state.phase = UpdatePhase::Installing;
          state.error_key.clear();
          state.popup = true;
@@ -454,7 +514,7 @@
      }
      if (worker.joinable()) worker.join();
      stopping = false;
-@@ -137,6 +157,7 @@
+@@ -137,6 +159,7 @@
              prepare_update_install(fs::u8path(update.downloaded_path), update.release,
                  [] { return !stopping.load(); });
              restart_ready = true;
@@ -462,7 +522,7 @@
          } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
      });
  }
-@@ -146,4 +167,5 @@
+@@ -146,4 +169,5 @@
      fail("update_install_failed", detail);
      std::lock_guard<std::mutex> lock(mutex);
      state.popup = true;
@@ -470,12 +530,13 @@
  }
 --- a/src/core/updates.h
 +++ b/src/core/updates.h
-@@ -17,8 +17,11 @@
+@@ -17,8 +17,12 @@
  void updates_download();
  void updates_dismiss();
  UpdateSnapshot updates_snapshot();
 +UpdatePhase updates_phase();
  void updates_shutdown();
++void updates_request_stop();
  
  void updates_install();
  bool updates_should_exit();
@@ -484,7 +545,14 @@
 +bool updates_self_install_enabled();
 --- a/src/ui/update_popup.cpp
 +++ b/src/ui/update_popup.cpp
-@@ -8,6 +8,7 @@
+@@ -2,12 +2,14 @@
+ #include "updates.h"
+ #include "platform.h"
+ #include "localization.h"
++#include "app.h"
+ #include <filesystem>
+ #include <algorithm>
+ 
  void ui_render_update_popup() {
      auto update = updates_snapshot();
      const char* id = "###update_popup";
@@ -492,7 +560,7 @@
      if (update.popup && !ImGui::IsPopupOpen(id)) ImGui::OpenPopup(id);
      const auto display = ImGui::GetIO().DisplaySize;
      ImGui::SetNextWindowPos({display.x * 0.5f, display.y * 0.5f},
-@@ -17,7 +18,12 @@
+@@ -17,7 +19,12 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
      bool open = update.popup;
@@ -506,7 +574,7 @@
      if (ImGui::BeginPopupModal(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
          float button_width = 170.f;
          for (const char* key : {"update_release", "update_retry", "update_close", "update_download", "update_open_folder", "update_install"})
-@@ -48,11 +54,12 @@
+@@ -48,11 +55,14 @@
          if (update.phase == UpdatePhase::Failed)
              ImGui::TextWrapped("%s", tr_value(update.error_key.c_str(), update.detail).c_str());
          ImGui::Spacing();
@@ -514,7 +582,9 @@
          if (update.phase != UpdatePhase::Checking && update.phase != UpdatePhase::Downloading && update.phase != UpdatePhase::Installing) {
 -            if (update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
 +            if (updates_self_install_enabled() && update.phase == UpdatePhase::Failed && !update.downloaded_path.empty()) {
++                ImGui::BeginDisabled(file_tasks_busy() || g_scanning.load());
                  if (button("update_install")) updates_install();
++                ImGui::EndDisabled();
              }
 -            if (!update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
 +            if (updates_self_install_enabled() && !update.release.download_url.empty() && update.phase != UpdatePhase::Current && update.phase != UpdatePhase::Downloaded) {
@@ -576,16 +646,26 @@
 +}
 --- a/tests/update_ui_checks.cpp
 +++ b/tests/update_ui_checks.cpp
-@@ -14,6 +14,8 @@
+@@ -6,6 +6,7 @@
+ #include "backups.h"
+ #include <filesystem>
+ #include <chrono>
++#include <thread>
+ #include <fstream>
+ #include <cstdlib>
+ #include <imgui_internal.h>
+@@ -14,7 +15,10 @@
  #include <cmath>
  
  UpdateSnapshot snapshot;
 +bool self_updates = true;
 +bool updates_self_install_enabled() { return self_updates; }
  UpdateSnapshot updates_snapshot() { return snapshot; }
++UpdatePhase updates_phase() { return snapshot.phase; }
  void updates_dismiss() { snapshot.popup = false; }
  void updates_download() {}
-@@ -24,8 +26,10 @@
+ void updates_install() {}
+@@ -24,8 +28,10 @@
  int main() {
      for (const char* language : {"en", "ru", "uk"}) {
          set_language(language);
@@ -596,6 +676,27 @@
              ImGui::CreateContext();
              auto& io = ImGui::GetIO();
              io.DisplaySize = {720, 560}; io.DeltaTime = 1.f / 60.f; io.IniFilename = nullptr;
+@@ -80,6 +86,12 @@
+             else io.Fonts->AddFontDefault();
+             unsigned char* pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h);
+             ui_open_backups();
++            auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++            while (file_tasks_busy()) {
++                file_tasks_poll();
++                assert(std::chrono::steady_clock::now() < deadline);
++                std::this_thread::sleep_for(std::chrono::milliseconds(1));
++            }
+             for (int frame=0; frame<5; ++frame) { ImGui::NewFrame(); ui_render_backups_popup(); ImGui::Render(); }
+             auto window = ImGui::FindWindowByName("Backups###backups_popup");
+             assert(window && window->Active && window->Size.x <= 720 && window->Size.y <= 568);
+@@ -89,6 +101,7 @@
+             ImGui::DestroyContext();
+         }
+     }
++    file_tasks_shutdown();
+     fs::remove_all(root);
+     std::cout << "Update dialog fits all phases in English, Russian and Ukrainian\n";
+ }
 --- a/tests/version_build_checks.cpp
 +++ b/tests/version_build_checks.cpp
 @@ -1,8 +1,10 @@
@@ -619,6 +720,24 @@
  
  void ui_render_main(ImFont* font_big, ImVec2 ds) {
      avatar_flush_pending();
+@@ -99,7 +100,7 @@
+ 
+     ImGui::Separator();
+ 
+-    bool scanning = g_scanning.load();
++    bool scanning = g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing;
+     if (scanning) ImGui::BeginDisabled();
+     static bool open_src = false;
+     static bool open_dst = false;
+@@ -137,7 +138,7 @@
+ 
+     if (scanning) ImGui::EndDisabled();
+     if (scanning) ImGui::BeginDisabled();
+-    if (ImGui::Button(scanning ? tr("scanning") : tr("scan"), { -1, 32 }))
++    if (ImGui::Button(g_scanning.load() ? tr("scanning") : tr("scan"), { -1, 32 }))
+         start_scan();
+     if (scanning) ImGui::EndDisabled();
+ 
 @@ -149,22 +150,23 @@
          + ImGui::GetStyle().WindowPadding.y;
      const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
@@ -688,7 +807,7 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
      ImGui::BeginChild("##status", {0, 32.f},
-@@ -302,6 +298,42 @@
+@@ -302,13 +298,49 @@
          ImGui::TextDisabled("Release v%s", app_version());
          ImGui::Spacing();
          if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
@@ -731,6 +850,14 @@
          ImGui::EndPopup();
      }
      ImGui::PopStyleVar();
+     ImGui::SameLine();
+     if (ImGui::Button(tr("update_check"), {0.f, 32.f})) updates_check(true);
+     ImGui::SameLine();
+-    ImGui::BeginDisabled(g_scanning.load() || selected_dst.load() < 0);
++    ImGui::BeginDisabled(scanning || selected_dst.load() < 0);
+     if (ImGui::Button(tr("backups"), {0.f, 32.f})) ui_open_backups();
+     ImGui::EndDisabled();
+ 
 --- a/src/core/app.cpp
 +++ b/src/core/app.cpp
 @@ -2,6 +2,7 @@
@@ -741,15 +868,37 @@
  #include <nlohmann/json.hpp>
  #include <filesystem>
  #include <fstream>
-@@ -24,6 +25,7 @@
+@@ -11,10 +12,21 @@
+ #include <cstring>
+ #include <cstdlib>
+ #include <thread>
++#include <condition_variable>
++#include <chrono>
+ 
+ namespace {
+ std::thread scan_worker;
+ std::atomic<bool> stop_scan{false};
++std::atomic<bool> stopping_app{false};
++struct ProfileRequest {
++    bool fetching = false;
++    bool success = false;
++    std::chrono::steady_clock::time_point failed_at{};
++};
++std::map<std::string, ProfileRequest> profiles;
++std::mutex profiles_mutex;
++std::condition_variable profiles_ready;
+ }
+ 
+ namespace fs = std::filesystem;
+@@ -24,6 +36,7 @@
      std::lock_guard<std::mutex> lock(g_data_mutex);
      status_msg = s;
      status_detail = detail;
-+    app_ui_changed();
++    app_status_changed();
  }
  
  bool set_config_path(char* target, const std::string& path) {
-@@ -39,6 +41,7 @@
+@@ -39,6 +52,7 @@
              if (target == dst_path) { dst_list.clear(); selected_dst = -1; }
          }
          std::memcpy(target, normalized.c_str(), normalized.size() + 1);
@@ -757,59 +906,244 @@
          return true;
      } catch (const ConfigFileError& e) {
          set_status(e.key, e.detail);
-@@ -107,6 +110,7 @@
+@@ -107,84 +121,175 @@
              for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
          } catch (...) {}
      }
++    ++g_cache_generation;
 +    app_ui_changed();
  }
  
  void save_settings() {
-@@ -137,6 +141,35 @@
-     } catch (...) {}
- }
- 
+     static std::mutex save_mutex;
++    static std::string saved;
+     std::lock_guard<std::mutex> save_lock(save_mutex);
+     std::string source_path, destination_path;
+-    std::map<std::string, std::string> nick_copy;
+-    std::map<std::string, std::string> avatar_copy;
+     {
+         std::lock_guard<std::mutex> lock(g_data_mutex);
+         source_path = src_path;
+         destination_path = dst_path;
+-        nick_copy = nick_cache;
+-        avatar_copy = avatar_url_cache;
+     }
+     try {
+-        json settings = {{"src", source_path},{"dst", destination_path},{"theme", g_theme.load()},{"language", language_code()}};
++        auto settings = json{{"src", source_path}, {"dst", destination_path},
++            {"theme", g_theme.load()}, {"language", language_code()}}.dump();
++        if (settings == saved) return;
+ #ifdef _WIN32
+-        if (write_registry_settings(settings.dump())) {
++        if (write_registry_settings(settings)) {
+             std::error_code cleanup_error;
+             fs::remove(settings_path(), cleanup_error);
+-        }
++        } else throw std::runtime_error("Cannot save registry settings");
+ #else
+-        { std::ofstream f(settings_path()); f << settings; }
++        write_file_atomic(settings_path(), settings);
+ #endif
+-        { std::ofstream fc(nick_cache_path()); json jc(nick_copy); fc << jc; }
+-        { std::ofstream fa(avatar_url_cache_path()); json ja(avatar_copy); fa << ja; }
++        saved = std::move(settings);
++    } catch (const std::exception& error) { set_status("settings_save_failed", error.what()); }
++}
++
++bool save_profile_caches() {
++    static std::mutex save_mutex;
++    static unsigned long long saved_generation = 0;
++    static std::string saved_names, saved_avatars;
++    std::lock_guard<std::mutex> save_lock(save_mutex);
++    if (saved_generation == g_cache_generation.load()) return true;
++    std::map<std::string, std::string> names, avatars;
++    unsigned long long generation;
++    {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        generation = g_cache_generation.load();
++        names = nick_cache;
++        avatars = avatar_url_cache;
++    }
++    try {
++        auto names_json = json(names).dump();
++        auto avatars_json = json(avatars).dump();
++        if (names_json != saved_names) {
++            write_file_atomic(nick_cache_path(), names_json);
++            saved_names = std::move(names_json);
++        }
++        if (avatars_json != saved_avatars) {
++            write_file_atomic(avatar_url_cache_path(), avatars_json);
++            saved_avatars = std::move(avatars_json);
++        }
++        saved_generation = generation;
++        return true;
++    } catch (const std::exception& error) { set_status("settings_save_failed", error.what()); return false; }
++}
++
 +const UiSnapshot& app_ui_snapshot() {
 +    static UiSnapshot cached;
 +    if (cached.generation == g_ui_generation.load()) return cached;
-+    UiSnapshot next;
 +    std::vector<std::string> source, destination;
 +    std::map<std::string, std::string> names;
++    std::string status, detail;
++    unsigned long long generation, account_generation;
 +    {
 +        std::lock_guard<std::mutex> lock(g_data_mutex);
-+        next.generation = g_ui_generation.load();
-+        source = src_list;
-+        destination = dst_list;
-+        names = nick_cache;
-+        next.status = status_msg;
-+        next.detail = status_detail;
++        generation = g_ui_generation.load();
++        account_generation = g_account_generation.load();
++        if (account_generation != cached.account_generation) {
++            source = src_list;
++            destination = dst_list;
++            names = nick_cache;
++        }
++        status = status_msg;
++        detail = status_detail;
 +    }
-+    auto prepare = [&](const std::vector<std::string>& ids, std::vector<AccountView>& views) {
++    auto prepare = [&](const std::vector<std::string>& ids) {
++        std::vector<AccountView> views;
 +        views.reserve(ids.size());
 +        for (const auto& id : ids) {
 +            const auto found = names.find(id);
 +            const auto& nickname = found == names.end() ? id : found->second;
 +            views.push_back({id, nickname + " (" + id + ")"});
 +        }
++        return views;
 +    };
-+    prepare(source, next.source);
-+    prepare(destination, next.destination);
-+    cached = std::move(next);
++    if (account_generation != cached.account_generation) {
++        cached.source = prepare(source);
++        cached.destination = prepare(destination);
++        cached.account_generation = account_generation;
++    }
++    cached.status = std::move(status);
++    cached.detail = std::move(detail);
++    cached.generation = generation;
 +    return cached;
 +}
 +
- static void fetch_profile_info(const std::string& id) {
-     {
-         std::lock_guard<std::mutex> lock(g_data_mutex);
-@@ -158,6 +191,7 @@
-     std::lock_guard<std::mutex> lock(g_data_mutex);
-     if (!nick.empty())       nick_cache[id] = nick;
-     if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
-+    app_ui_changed();
++bool ensure_profile_info(const std::string& id) {
++    if (stopping_app.load()) return false;
++    std::unique_lock<std::mutex> lock(profiles_mutex);
++    auto& request = profiles[id];
++    if (request.fetching) {
++        profiles_ready.wait(lock, [&] { return !request.fetching || stopping_app.load(); });
++        return !stopping_app.load() && request.success;
++    }
++    {
++        std::lock_guard<std::mutex> data_lock(g_data_mutex);
++        if (nick_cache.count(id) && avatar_url_cache.count(id)) return true;
++    }
++    if (request.failed_at != std::chrono::steady_clock::time_point{} &&
++        std::chrono::steady_clock::now() - request.failed_at < std::chrono::seconds(30)) return false;
++    request.fetching = true;
++    lock.unlock();
++    bool success = false;
++    try {
++        auto xml = steam_api::fetch_profile_xml(steam_api::steam3_to_64(id), 6000);
++        if (!xml.empty() && !stopping_app.load()) {
++            auto nick = steam_api::extract_tag(xml, "steamID");
++            auto avatar_url = steam_api::extract_tag(xml, "avatarMedium");
++            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
++            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
++            success = !nick.empty() || !avatar_url.empty();
++            std::lock_guard<std::mutex> data_lock(g_data_mutex);
++            bool names_changed = !nick.empty() && nick_cache[id] != nick;
++            bool avatar_changed = !avatar_url.empty() && avatar_url_cache[id] != avatar_url;
++            if (names_changed) nick_cache[id] = std::move(nick);
++            if (avatar_changed) avatar_url_cache[id] = std::move(avatar_url);
++            if (names_changed || avatar_changed) ++g_cache_generation;
++            if (names_changed) app_ui_changed();
++        }
+     } catch (...) {}
+-}
+-
+-static void fetch_profile_info(const std::string& id) {
+-    {
+-        std::lock_guard<std::mutex> lock(g_data_mutex);
+-        if (nick_cache.count(id) && avatar_url_cache.count(id)) return;
+-    }
+-
+-    long long steam64 = steam_api::steam3_to_64(id);
+-    std::string xml = steam_api::fetch_profile_xml(steam64, 6000);
+-    if (xml.empty()) {
+-        set_status("profile_failed", id);
+-        return;
+-    }
+-
+-    std::string nick = steam_api::extract_tag(xml, "steamID");
+-    std::string avatar_url = steam_api::extract_tag(xml, "avatarMedium");
+-    if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
+-    if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
+-
+-    std::lock_guard<std::mutex> lock(g_data_mutex);
+-    if (!nick.empty())       nick_cache[id] = nick;
+-    if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
++    lock.lock();
++    request.success = success;
++    request.fetching = false;
++    request.failed_at = success ? std::chrono::steady_clock::time_point{} : std::chrono::steady_clock::now();
++    lock.unlock();
++    profiles_ready.notify_all();
++    return success;
  }
  
  static void scan_thread() {
-@@ -207,8 +241,9 @@
+     g_scanning = true;
+     set_status("scanning");
+-    save_settings();
+ 
+     std::vector<std::string> all_ids;
+     std::vector<std::string> new_src, new_dst;
+ 
+-    bool scan_failed = false;
++    std::string scan_error;
++    int profile_errors = 0;
+     auto scan_dir = [&](const std::string& path, std::vector<std::string>& list) {
+         std::error_code ec;
+         if (path.empty() || !fs::is_directory(fs::u8path(path), ec) || ec) {
+-            scan_failed = true;
+-            set_status("folder_unreadable", path);
++            if (scan_error.empty()) scan_error = path;
+             return;
+         }
+ 
+-        fs::directory_iterator it(fs::u8path(path), fs::directory_options::skip_permission_denied, ec);
++        fs::directory_iterator it(fs::u8path(path), ec);
+         fs::directory_iterator end;
+-        if (ec) { scan_failed = true; set_status("folder_unreadable", path); return; }
++        if (ec) { if (scan_error.empty()) scan_error = path; return; }
+ 
+         for (; it != end; it.increment(ec)) {
+-            if (ec) break; // stop scanning this folder, keep what we found so far
++            if (ec) { if (scan_error.empty()) scan_error = path; break; }
+             bool is_dir = it->is_directory(ec);
+-            if (ec || !is_dir) continue;
++            if (ec) { if (scan_error.empty()) scan_error = path; ec.clear(); continue; }
++            if (stop_scan.load()) break;
++            if (!is_dir) continue;
+             std::string fname = it->path().filename().u8string();
+             if (!fname.empty() &&
+                 std::all_of(fname.begin(), fname.end(), [](unsigned char c) { return ::isdigit(c); })) {
+@@ -192,6 +297,7 @@
+                 list.push_back(fname);
+             }
+         }
++        if (ec && scan_error.empty()) scan_error = path;
+     };
+ 
+     std::string source_path, destination_path;
+@@ -201,34 +307,45 @@
+         destination_path = dst_path;
+     }
+     scan_dir(source_path, new_src);
+-    scan_dir(destination_path, new_dst);
++    std::error_code equivalent_error;
++    bool same_path = source_path == destination_path || fs::equivalent(fs::u8path(source_path), fs::u8path(destination_path), equivalent_error);
++    if (same_path) new_dst = new_src;
++    else scan_dir(destination_path, new_dst);
++    std::sort(all_ids.begin(), all_ids.end());
++    all_ids.erase(std::unique(all_ids.begin(), all_ids.end()), all_ids.end());
+ 
+     {
          std::lock_guard<std::mutex> lock(g_data_mutex);
          selected_src = -1;
          selected_dst = -1;
@@ -821,49 +1155,184 @@
      }
  
      for (const auto& id : all_ids) {
-@@ -219,6 +254,7 @@
-     save_settings();
-     if (!scan_failed) set_status("scan_complete");
+         if (stop_scan.load()) break;
+-        fetch_profile_info(id);
+-    }
+-
+-    save_settings();
+-    if (!scan_failed) set_status("scan_complete");
++        if (!ensure_profile_info(id)) ++profile_errors;
++    }
++
++    bool caches_saved = save_profile_caches();
++    if (!stop_scan.load() && caches_saved) {
++        if (!scan_error.empty()) set_status("folder_unreadable", scan_error);
++        else if (profile_errors) set_status("scan_profile_warnings", std::to_string(profile_errors));
++        else set_status("scan_complete");
++    }
      g_scanning = false;
 +    ui_events::request_redraw();
  }
  
  void copy_config() {
-@@ -260,6 +296,8 @@
-         g_success.dst_id = d_id;
-         g_success.src_nick = s_nick;
-         g_success.dst_nick = d_nick;
-+        g_success.src_label = s_nick + " (ID: " + s_id + ")";
-+        g_success.dst_label = d_nick + " (ID: " + d_id + ")";
-         g_success.src_folder = src.u8string();
-         g_success.dst_folder = dst.u8string();
-         g_success.show = true;
-@@ -278,6 +316,7 @@
-         try { scan_thread(); }
-         catch (const std::exception& e) { set_status("error", e.what()); }
-         g_scanning = false;
-+        ui_events::request_redraw();
-     });
+-    if (g_scanning.load()) return;
++    if (g_scanning.load() || file_tasks_busy()) return;
+     int s_idx = selected_src.load();
+     int d_idx = selected_dst.load();
+ 
+     if (s_idx < 0 || d_idx < 0) { set_status("select_first"); return; }
+ 
+-    std::string s_id, d_id, s_nick, d_nick;
++    std::string s_id, d_id, s_nick, d_nick, source_path, destination_path;
+     {
+         std::lock_guard<std::mutex> lock(g_data_mutex);
+         if (s_idx >= (int)src_list.size() || d_idx >= (int)dst_list.size()) return;
+@@ -236,53 +353,81 @@
+         d_id = dst_list[d_idx];
+         s_nick = nick_cache.count(s_id) ? nick_cache[s_id] : ("ID: " + s_id);
+         d_nick = nick_cache.count(d_id) ? nick_cache[d_id] : ("ID: " + d_id);
+-    }
+-
+-    try {
+-        fs::path src = fs::u8path(src_path) / s_id / DOTA_ID;
+-        fs::path dst = fs::u8path(dst_path) / d_id / DOTA_ID;
+-
+-        if (!fs::exists(src)) { set_status("no_config"); return; }
+-
+-        std::error_code eq_ec;
+-        if (fs::exists(dst) && fs::equivalent(src, dst, eq_ec) && !eq_ec) {
+-            set_status("same_folder");
+-            return;
+-        }
+-
+-        auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
+-        if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
+-        else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
+-        else set_status("copy_success", d_id);
+-
+-        g_success = {};
+-        g_success.src_id = s_id;
+-        g_success.dst_id = d_id;
+-        g_success.src_nick = s_nick;
+-        g_success.dst_nick = d_nick;
+-        g_success.src_folder = src.u8string();
+-        g_success.dst_folder = dst.u8string();
+-        g_success.show = true;
+-    } catch (const ConfigFileError& e) {
+-        set_status(e.key, e.detail);
+-    } catch (const std::exception& e) {
+-        set_status("error", e.what());
+-    }
++        source_path = src_path;
++        destination_path = dst_path;
++    }
++
++    if (!file_tasks_start([s_id, d_id, s_nick, d_nick, source_path, destination_path]() -> FileTaskCompletion {
++        set_status("working");
++        try {
++            fs::path src = fs::u8path(source_path) / s_id / DOTA_ID;
++            fs::path dst = fs::u8path(destination_path) / d_id / DOTA_ID;
++
++            if (!fs::exists(src)) { set_status("no_config"); return {}; }
++
++            std::error_code eq_ec;
++            if (fs::exists(dst) && fs::equivalent(src, dst, eq_ec) && !eq_ec) {
++                set_status("same_folder");
++                return {};
++            }
++
++            auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
++            if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
++            else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
++            else set_status("copy_success", d_id);
++
++            SuccessPopupState success;
++            success.src_id = s_id;
++            success.dst_id = d_id;
++            success.src_nick = s_nick;
++            success.dst_nick = d_nick;
++            success.src_label = s_nick + " (ID: " + s_id + ")";
++            success.dst_label = d_nick + " (ID: " + d_id + ")";
++            success.src_folder = src.u8string();
++            success.dst_folder = dst.u8string();
++            success.show = true;
++            return [success = std::move(success)] { g_success = success; };
++        } catch (const ConfigFileError& e) {
++            set_status(e.key, e.detail);
++        } catch (const std::exception& e) {
++            set_status("error", e.what());
++        }
++        return {};
++    })) return;
  }
  
+ void start_scan() {
+-    if (g_scanning.exchange(true)) return;
++    if (stopping_app.load() || file_tasks_busy() || g_scanning.exchange(true)) return;
+     if (scan_worker.joinable()) scan_worker.join();
+     stop_scan = false;
+-    scan_worker = std::thread([] {
+-        try { scan_thread(); }
+-        catch (const std::exception& e) { set_status("error", e.what()); }
++    try {
++        scan_worker = std::thread([] {
++            try { scan_thread(); }
++            catch (const std::exception& e) { set_status("error", e.what()); }
++            g_scanning = false;
++            ui_events::request_redraw();
++        });
++    } catch (const std::exception& error) {
+         g_scanning = false;
+-    });
++        set_status("error", error.what());
++    }
++}
++
++void app_request_stop() {
++    {
++        std::lock_guard<std::mutex> lock(profiles_mutex);
++        stopping_app = true;
++    }
++    stop_scan = true;
++    profiles_ready.notify_all();
++    steam_api::cancel_requests();
++    file_tasks_request_stop();
+ }
+ 
+ void app_shutdown() {
+-    stop_scan = true;
++    app_request_stop();
+     if (scan_worker.joinable()) scan_worker.join();
++    file_tasks_shutdown();
+     save_settings();
+-}
++    save_profile_caches();
++}
 --- a/src/core/app.h
 +++ b/src/core/app.h
-@@ -7,6 +7,7 @@
+@@ -7,6 +7,8 @@
  #include <map>
  #include <mutex>
  #include <atomic>
 +#include "ui_events.h"
++#include "file_tasks.h"
  
  constexpr int PATH_BUF_SIZE = 4096;
  
-@@ -35,6 +36,25 @@
+@@ -35,6 +37,32 @@
  inline std::atomic<int> selected_dst{ -1 };
  inline std::atomic<bool> g_scanning{ false };
  
 +inline std::atomic<unsigned long long> g_ui_generation{1};
-+inline void app_ui_changed() {
++inline std::atomic<unsigned long long> g_account_generation{1};
++inline std::atomic<unsigned long long> g_cache_generation{1};
++inline void app_status_changed() {
 +    ++g_ui_generation;
 +    ui_events::request_redraw();
++}
++inline void app_ui_changed() {
++    ++g_account_generation;
++    app_status_changed();
 +}
 +
 +struct AccountView {
@@ -872,6 +1341,7 @@
 +};
 +struct UiSnapshot {
 +    unsigned long long generation = 0;
++    unsigned long long account_generation = 0;
 +    std::vector<AccountView> source;
 +    std::vector<AccountView> destination;
 +    std::string status;
@@ -882,7 +1352,7 @@
  struct SuccessPopupState {
      bool show = false;
      bool closing = false;
-@@ -44,6 +64,8 @@
+@@ -44,6 +72,8 @@
      std::string dst_id;
      std::string src_nick;
      std::string dst_nick;
@@ -891,16 +1361,31 @@
      std::string src_folder;
      std::string dst_folder;
  };
+@@ -52,8 +82,11 @@
+ 
+ void load_settings();
+ void save_settings();
++bool save_profile_caches();
++bool ensure_profile_info(const std::string& id);
+ void copy_config();
+ std::string browse_for_folder(const char* title);
+ 
+ void start_scan();
+ void app_shutdown();
++void app_request_stop();
 --- a/src/core/avatar_data.cpp
 +++ b/src/core/avatar_data.cpp
-@@ -1,5 +1,6 @@
+@@ -1,6 +1,8 @@
  #include "avatar_data.h"
  #include "app.h"
+-#include <cpr/cpr.h>
 +#include "ui_events.h"
- #include <cpr/cpr.h>
++#include "avatar_transport.h"
++#include "file_ops.h"
  
  #include <string>
-@@ -14,6 +15,7 @@
+ #include <vector>
+@@ -14,6 +16,7 @@
  #include <algorithm>
  #include <memory>
  #include <atomic>
@@ -908,7 +1393,7 @@
  
  #define STB_IMAGE_IMPLEMENTATION
  #include "stb_image.h"
-@@ -21,27 +23,6 @@
+@@ -21,31 +24,6 @@
  namespace fs = std::filesystem;
  
  namespace {
@@ -933,10 +1418,14 @@
 -};
 -
 -Semaphore g_fetch_slots(8);
+-
+-const char* USER_AGENT =
+-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
  
- const char* USER_AGENT =
-     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-@@ -63,33 +44,37 @@
+ const auto RETRY_DELAY = std::chrono::seconds(30);
+ 
+@@ -63,33 +41,38 @@
  
  static std::map<std::string, AvatarEntry> g_avatars;
  static std::mutex g_mutex;
@@ -955,6 +1444,7 @@
 +static std::deque<std::string> g_queue;
 +static std::vector<std::thread> g_threads;
 +static bool g_stopping = false;
++static std::atomic<bool> g_cancelled{false};
  
  static void launch_fetch(const std::string& steam3_id) {
 -    auto done = std::make_shared<std::atomic<bool>>(false);
@@ -972,7 +1462,7 @@
 -            }),
 -        g_threads.end());
 -    g_threads.push_back({ std::move(th), std::move(done) });
-+    if (g_stopping) return;
++    if (g_stopping || g_cancelled.load()) return;
 +    if (g_threads.size() < 8) {
 +        g_threads.emplace_back([] {
 +            for (;;) {
@@ -993,7 +1483,7 @@
  }
  
  static void mark_failed(const std::string& id) {
-@@ -106,6 +91,8 @@
+@@ -106,6 +89,8 @@
      entry.width = w;
      entry.height = h;
      entry.state = AvatarState::Ready;
@@ -1002,17 +1492,117 @@
  }
  
  static fs::path disk_cache_path(const std::string& id) {
-@@ -151,9 +138,6 @@
-         decode_and_store(steam3_id, raw);
-         return;
-     }
+@@ -114,7 +99,8 @@
+ 
+ static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) {
+     fs::path p = disk_cache_path(id);
+-    if (!fs::exists(p)) return false;
++    std::error_code error;
++    if (!fs::exists(p, error) || error) return false;
+     std::ifstream f(p, std::ios::binary);
+     if (!f) return false;
+     raw_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+@@ -124,36 +110,30 @@
+ static void save_to_disk_cache(const std::string& id, const std::string& raw_bytes) {
+     try {
+         fs::create_directories(fs::u8path(config_dir()) / AVATAR_DISK_DIR);
+-        std::ofstream f(disk_cache_path(id), std::ios::binary);
+-        if (f) f.write(raw_bytes.data(), (std::streamsize)raw_bytes.size());
++        write_file_atomic(disk_cache_path(id), raw_bytes);
+     } catch (...) {}
+ }
+ 
+-static void decode_and_store(const std::string& id, const std::string& raw_bytes) {
++static bool decode_and_store(const std::string& id, const std::string& raw_bytes) {
+     int w = 0, h = 0, ch = 0;
+-    auto* data = stbi_load_from_memory(
++    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> data(stbi_load_from_memory(
+         reinterpret_cast<const unsigned char*>(raw_bytes.data()),
+-        (int)raw_bytes.size(), &w, &h, &ch, 4);
++        (int)raw_bytes.size(), &w, &h, &ch, 4), stbi_image_free);
+ 
+     if (!data) {
+-        mark_failed(id);
+-        return;
+-    }
+-
+-    std::vector<unsigned char> pixels(data, data + (size_t)w * h * 4);
+-    stbi_image_free(data);
++        return false;
++    }
++
++    std::vector<unsigned char> pixels(data.get(), data.get() + (size_t)w * h * 4);
+     mark_ready(id, std::move(pixels), w, h);
++    return true;
+ }
+ 
+ static void fetch_thread(const std::string steam3_id) {
+     std::string raw;
+-    if (load_from_disk_cache(steam3_id, raw)) {
+-        decode_and_store(steam3_id, raw);
+-        return;
+-    }
 -
 -    g_fetch_slots.acquire();
 -    struct SlotGuard { ~SlotGuard() { g_fetch_slots.release(); } } slot_guard;
++    if (g_cancelled.load()) return;
++    if (load_from_disk_cache(steam3_id, raw) && decode_and_store(steam3_id, raw)) return;
++    if (g_cancelled.load()) return;
  
      std::string avatar_url;
      {
-@@ -221,6 +205,7 @@
+@@ -163,17 +143,10 @@
+     }
+ 
+     if (avatar_url.empty()) {
+-        long long steam64 = steam_api::steam3_to_64(steam3_id);
+-        std::string xml = steam_api::fetch_profile_xml(steam64, 6000);
+-        if (!xml.empty()) {
+-            avatar_url = steam_api::extract_tag(xml, "avatarMedium");
+-            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
+-            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
+-            if (!avatar_url.empty()) {
+-                std::lock_guard<std::mutex> lock(g_data_mutex);
+-                avatar_url_cache[steam3_id] = avatar_url;
+-            }
+-        }
++        ensure_profile_info(steam3_id);
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        auto it = avatar_url_cache.find(steam3_id);
++        if (it != avatar_url_cache.end()) avatar_url = it->second;
+     }
+ 
+     if (avatar_url.empty()) {
+@@ -181,22 +154,19 @@
+         return;
+     }
+ 
+-    auto img = cpr::Get(
+-        cpr::Url{ avatar_url },
+-        cpr::Header{{"User-Agent", USER_AGENT}},
+-        cpr::Timeout{ 8000 },
+-        cpr::Redirect{ cpr::PostRedirectFlags::POST_ALL });
+-
+-    if (img.status_code != 200 || img.text.empty()) {
++    auto bytes = download_avatar(avatar_url, [] { return !g_cancelled.load(); });
++
++    if (g_cancelled.load()) return;
++    if (bytes.empty() || !decode_and_store(steam3_id, bytes)) {
+         mark_failed(steam3_id);
+         return;
+     }
+ 
+-    save_to_disk_cache(steam3_id, img.text);
+-    decode_and_store(steam3_id, img.text);
++    save_to_disk_cache(steam3_id, bytes);
+ }
+ 
+ void avatar_data_request(const std::string& steam3_id) {
++    if (g_cancelled.load()) return;
+     std::lock_guard<std::mutex> lock(g_mutex);
+ 
+     auto it = g_avatars.find(steam3_id);
+@@ -221,6 +191,7 @@
  
  std::vector<AvatarPixels> avatar_data_take_ready() {
      std::vector<AvatarPixels> result;
@@ -1020,8 +1610,13 @@
      std::lock_guard<std::mutex> lock(g_mutex);
      for (auto& [id, entry] : g_avatars) {
          if (entry.state == AvatarState::Ready && !entry.pixels.empty()) {
-@@ -234,12 +219,18 @@
- void avatar_data_shutdown() {
+@@ -231,15 +202,26 @@
+     return result;
+ }
+ 
+-void avatar_data_shutdown() {
++void avatar_data_request_stop() {
++    g_cancelled = true;
      {
          std::lock_guard<std::mutex> lock(g_threads_mutex);
 -        for (auto& t : g_threads) {
@@ -1033,6 +1628,10 @@
 +        g_queue.clear();
 +    }
 +    g_work.notify_all();
++}
++
++void avatar_data_shutdown() {
++    avatar_data_request_stop();
 +    for (auto& t : g_threads) if (t.joinable()) t.join();
 +    g_threads.clear();
  
@@ -1085,7 +1684,15 @@
 +}
 --- a/src/ui/backups_popup.cpp
 +++ b/src/ui/backups_popup.cpp
-@@ -12,6 +12,7 @@
+@@ -3,6 +3,7 @@
+ #include "backups.h"
+ #include "file_ops.h"
+ #include "localization.h"
++#include "updates.h"
+ #include <algorithm>
+ #include <filesystem>
+ 
+@@ -12,22 +13,26 @@
  bool confirming = false;
  std::string account;
  fs::path destination;
@@ -1093,7 +1700,32 @@
  std::vector<ConfigBackup> backups;
  int selected = -1;
  std::string message;
-@@ -35,6 +36,7 @@
+ fs::path root() { return fs::u8path(config_dir()) / "backups"; }
+-void refresh() {
+-    backups = list_config_backups(root(), account);
++std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id, const fs::path& destination) {
++    auto result = list_config_backups(folder, id);
+     auto target = fs::weakly_canonical(destination);
+-    backups.erase(std::remove_if(backups.begin(), backups.end(), [&](const ConfigBackup& backup) {
++    result.erase(std::remove_if(result.begin(), result.end(), [&](const ConfigBackup& backup) {
+         return fs::weakly_canonical(backup.destination) != target;
+-    }), backups.end());
+-    selected = -1;
++    }), result.end());
++    return result;
++}
++FileTaskCompletion failed(const std::string& key, const std::string& detail) {
++    return [key, detail] { message = tr_value(key.c_str(), detail); confirming = false; };
+ }
+ }
+ 
+ void ui_open_backups() {
+-    if (g_scanning.load()) return;
++    if (g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing) return;
+     {
+         std::lock_guard<std::mutex> lock(g_data_mutex);
+         int index = selected_dst.load();
+@@ -35,16 +40,23 @@
          account = dst_list[index];
          destination = fs::u8path(dst_path) / account / DOTA_ID;
      }
@@ -1101,7 +1733,17 @@
      confirming = false;
      message.clear();
      backups.clear();
-@@ -45,6 +47,7 @@
+-    try { refresh(); }
+-    catch (const std::exception& error) { message = tr_value("error", error.what()); }
++    selected = -1;
++    file_tasks_start([folder = root(), id = account, target = destination]() -> FileTaskCompletion {
++        try {
++            auto result = find_backups(folder, id, target);
++            return [result = std::move(result)]() mutable { backups = std::move(result); };
++        } catch (const std::exception& error) { return failed("error", error.what()); }
++    });
+     requested = true;
+ }
  
  void ui_render_backups_popup() {
      const char* id = "###backups_popup";
@@ -1109,7 +1751,7 @@
      if (requested) { ImGui::OpenPopup(id); requested = false; }
      auto display = ImGui::GetIO().DisplaySize;
      float width = std::min(500.f, display.x - 32.f);
-@@ -53,13 +56,18 @@
+@@ -53,32 +65,46 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
      bool open = true;
@@ -1129,19 +1771,69 @@
 -        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination.u8string().c_str());
 +        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination_label.c_str());
          ImGui::Separator();
++        const bool busy = file_tasks_busy() || updates_phase() == UpdatePhase::Installing;
++        if (busy) { ImGui::TextUnformatted(tr("working")); ImGui::BeginDisabled(); }
          if (confirming && selected >= 0 && selected < static_cast<int>(backups.size())) {
              ImGui::TextWrapped("%s", tr_value("backup_restore_warning", backups[selected].date).c_str());
-@@ -74,6 +82,7 @@
-                         std::lock_guard<std::mutex> lock(g_data_mutex);
-                         status_msg = "backup_restored";
-                         status_detail = account;
-+                        app_ui_changed();
-                     }
-                     refresh();
-                 } catch (const ConfigFileError& error) { message = tr_value(error.key.c_str(), error.detail); }
+             if (ImGui::Button(tr("cancel"), {-1.f, 34.f})) confirming = false;
+             if (ImGui::Button(tr("backup_restore"), {-1.f, 34.f})) {
+-                try {
+-                    auto result = restore_config_backup(backups[selected], destination, root(), account);
+-                    message = tr_value("backup_restored", account);
+-                    if (!result.cleanup_error.empty()) message += "\n" + tr_value("backup_cleanup_failed", result.cleanup_error);
+-                    if (!result.retained_backup.empty()) message += "\n" + tr_value("backup_retained", result.retained_backup.u8string());
+-                    {
+-                        std::lock_guard<std::mutex> lock(g_data_mutex);
+-                        status_msg = "backup_restored";
+-                        status_detail = account;
+-                    }
+-                    refresh();
+-                } catch (const ConfigFileError& error) { message = tr_value(error.key.c_str(), error.detail); }
+-                catch (const std::exception& error) { message = tr_value("error", error.what()); }
+-                confirming = false;
++                file_tasks_start([backup = backups[selected], target = destination, folder = root(), id = account]() -> FileTaskCompletion {
++                    try {
++                        auto result = restore_config_backup(backup, target, folder, id);
++                        auto refreshed = find_backups(folder, id, target);
++                        return [result, refreshed = std::move(refreshed), id]() mutable {
++                            message = tr_value("backup_restored", id);
++                            if (!result.cleanup_error.empty()) message += "\n" + tr_value("backup_cleanup_failed", result.cleanup_error);
++                            if (!result.retained_backup.empty()) message += "\n" + tr_value("backup_retained", result.retained_backup.u8string());
++                            {
++                                std::lock_guard<std::mutex> lock(g_data_mutex);
++                                status_msg = "backup_restored";
++                                status_detail = id;
++                                app_status_changed();
++                            }
++                            backups = std::move(refreshed);
++                            selected = -1;
++                            confirming = false;
++                        };
++                    } catch (const ConfigFileError& error) { return failed(error.key, error.detail); }
++                    catch (const std::exception& error) { return failed("error", error.what()); }
++                });
+             }
+         } else {
+             ImGui::TextWrapped("%s", tr("backup_retention"));
+@@ -94,6 +120,7 @@
+             if (ImGui::Button(tr("backup_restore"), {-1.f, 34.f})) confirming = true;
+             ImGui::EndDisabled();
+         }
++        if (busy) ImGui::EndDisabled();
+         if (!message.empty()) ImGui::TextWrapped("%s", message.c_str());
+         if (ImGui::Button(tr("update_close"), {-1.f, 34.f})) ImGui::CloseCurrentPopup();
+         ImGui::EndPopup();
 --- a/src/ui/panels.cpp
 +++ b/src/ui/panels.cpp
-@@ -9,7 +9,6 @@
+@@ -1,6 +1,7 @@
+ #include "ui_internal.h"
+ #include "app.h"
+ #include "localization.h"
++#include "updates.h"
+ 
+ bool g_palette_open = false;
+ bool g_confirm_copy_open = false;
+@@ -9,7 +10,6 @@
  
  void render_palette_panel(ImVec2 ds) {
      int idx = static_cast<int>(g_current_theme);
@@ -1149,7 +1841,7 @@
  
      ImGui::SetNextWindowPos({ ds.x - 250.f, 34.f });
      ImGui::SetNextWindowSize({ 238.f, 0.f });
-@@ -27,7 +26,7 @@
+@@ -27,7 +27,7 @@
          ImGuiWindowFlags_NoScrollbar |
          ImGuiWindowFlags_AlwaysAutoResize);
  
@@ -1158,6 +1850,19 @@
      ImGui::Spacing();
      ImGui::Separator();
      ImGui::Spacing();
+@@ -105,10 +105,12 @@
+     ImGui::PushStyleColor(ImGuiCol_Button, { 0.75f, 0.20f, 0.20f, 1.00f });
+     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.85f, 0.25f, 0.25f, 1.00f });
+     ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.60f, 0.14f, 0.14f, 1.00f });
++    ImGui::BeginDisabled(g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing);
+     if (ImGui::Button(tr("replace"), { -1, 0 })) {
+         copy_config();
+         g_confirm_copy_open = false;
+     }
++    ImGui::EndDisabled();
+     ImGui::PopStyleColor(3);
+ 
+     ImGui::End();
 --- a/src/ui/success_popup.cpp
 +++ b/src/ui/success_popup.cpp
 @@ -125,11 +125,8 @@
@@ -1176,7 +1881,7 @@
      ImGui::PushStyleColor(ImGuiCol_Separator, { 0.55f, 0.55f, 0.60f, 0.20f });
 --- a/src/ui/theme.cpp
 +++ b/src/ui/theme.cpp
-@@ -552,6 +552,13 @@
+@@ -552,11 +552,17 @@
      g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
  }
  
@@ -1190,6 +1895,11 @@
  void ui_apply_theme(AppTheme t) {
      ImGui::StyleColorsDark();
      g_current_theme = t;
+     g_theme = static_cast<int>(t);
+-    save_settings();
+ 
+     if (!ui_load_theme_from_file(t, themes_dir())) {
+         ImGuiStyle& st = ImGui::GetStyle();
 --- a/src/ui/ui.h
 +++ b/src/ui/ui.h
 @@ -5,6 +5,7 @@
@@ -1202,15 +1912,47 @@
  
 --- a/tests/avatar_checks.cpp
 +++ b/tests/avatar_checks.cpp
-@@ -5,6 +5,7 @@
+@@ -1,18 +1,38 @@
+ #include "avatar_data.h"
++#include "app.h"
++#include "avatar_transport.h"
+ #include <filesystem>
+ #include <fstream>
+ #include <chrono>
  #include <thread>
  #include <cassert>
  #include <iostream>
 +#include <algorithm>
  namespace fs = std::filesystem;
- std::string folder;
+-std::string folder;
++std::string folder, download_bytes;
++std::atomic<int> downloads{0}, finished_downloads{0};
++std::atomic<bool> slow_download{false}, downloading{false};
++std::string download_avatar(const std::string&, const std::function<bool()>& active) {
++    ++downloads;
++    downloading = true;
++    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (slow_download && active()) {
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    auto bytes = active() ? download_bytes : std::string{};
++    ++finished_downloads;
++    return bytes;
++}
  std::string config_dir() { return folder; }
-@@ -25,6 +26,22 @@
++bool ensure_profile_info(const std::string&) { return false; }
+ int main(int argc, char** argv) {
+     auto root = fs::temp_directory_path() / ("dotamanager-avatars-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+     folder = root.u8string();
+     fs::create_directories(root / "avatar_cache");
+     fs::copy_file(fs::u8path(argv[1]), root / "avatar_cache/42.img");
++    { std::ifstream f(fs::u8path(argv[1]), std::ios::binary);
++      download_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()); }
+     avatar_data_request("42");
+     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+     std::vector<AvatarPixels> ready;
+@@ -25,9 +45,61 @@
      assert(ready[0].width > 0 && ready[0].height > 0);
      assert(ready[0].pixels.size() == static_cast<std::size_t>(ready[0].width) * ready[0].height * 4);
      assert(avatar_data_take_ready().empty());
@@ -1231,11 +1973,50 @@
 +    }
 +    assert(avatar_data_take_ready().empty());
      { std::ofstream f(root / "avatar_cache/43.img"); f << "invalid image"; }
++    { std::lock_guard<std::mutex> lock(g_data_mutex); avatar_url_cache["43"] = "test-avatar"; }
      avatar_data_request("43");
++    ready.clear();
++    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (ready.empty()) {
++        ready = avatar_data_take_ready();
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(ready.size() == 1 && ready[0].id == "43" && downloads == 1);
++    { std::ifstream f(root / "avatar_cache/43.img", std::ios::binary);
++      std::string saved(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>{});
++      while (saved != download_bytes && std::chrono::steady_clock::now() < deadline) {
++          std::this_thread::sleep_for(std::chrono::milliseconds(1));
++          f.close(); f.open(root / "avatar_cache/43.img", std::ios::binary);
++          saved.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
++      }
++      assert(saved == download_bytes); }
++    download_bytes = "invalid downloaded image";
++    { std::lock_guard<std::mutex> lock(g_data_mutex); avatar_url_cache["45"] = "test-avatar"; }
++    avatar_data_request("45");
++    while (finished_downloads < 2) {
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    slow_download = true; downloading = false;
++    { std::lock_guard<std::mutex> lock(g_data_mutex); avatar_url_cache["44"] = "test-avatar"; }
++    avatar_data_request("44");
++    while (!downloading) {
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    auto stopped = std::chrono::steady_clock::now();
++    avatar_data_request_stop();
      avatar_data_shutdown();
++    assert(std::chrono::steady_clock::now() - stopped < std::chrono::seconds(1));
++    assert(!fs::exists(root / "avatar_cache/44.img"));
++    assert(!fs::exists(root / "avatar_cache/45.img"));
+     assert(avatar_data_take_ready().empty());
+     fs::remove_all(root);
+     std::cout << "Avatar cache and background decoding work without a renderer\n";
 --- /dev/null
 +++ b/tests/ui_state_checks.cpp
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,231 @@
 +#include "app.h"
 +#include "ui_events.h"
 +#include <cassert>
@@ -1245,6 +2026,10 @@
 +#include <chrono>
 +#include <condition_variable>
 +#include "localization.h"
++#include "file_ops.h"
++#include "backups.h"
++#include <fstream>
++#include <nlohmann/json.hpp>
 +
 +std::string test_folder;
 +std::string config_dir() { return test_folder; }
@@ -1253,6 +2038,27 @@
 +std::string read_registry_settings() { return test_settings; }
 +bool write_registry_settings(const std::string& value) { test_settings = value; return true; }
 +#endif
++
++namespace steam_api {
++std::mutex fetch_mutex;
++std::condition_variable fetch_cv;
++std::atomic<int> fetch_count{0};
++bool fetch_started = false, release_fetch = false, cancelled = false;
++std::string fetch_profile_xml(long long id, int) {
++    ++fetch_count;
++    if (id == steam3_to_64("701")) return {};
++    std::unique_lock<std::mutex> lock(fetch_mutex);
++    fetch_started = true;
++    fetch_cv.notify_all();
++    assert(fetch_cv.wait_for(lock, std::chrono::seconds(3), [] { return release_fetch || cancelled; }));
++    return cancelled ? "" : "<steamID>Shared profile</steamID><avatarMedium>test-avatar</avatarMedium>";
++}
++void cancel_requests() {
++    std::lock_guard<std::mutex> lock(fetch_mutex);
++    cancelled = true;
++    fetch_cv.notify_all();
++}
++}
 +
 +namespace {
 +std::atomic<int> wakes{0};
@@ -1299,6 +2105,15 @@
 +        assert(same.generation == generation && same.source[0].label.data() == label);
 +    }
 +
++    {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        status_detail = "status only";
++        app_status_changed();
++    }
++    assert(app_ui_snapshot().source[0].label.data() == label);
++    assert(app_ui_snapshot().detail == "status only");
++    const auto status_generation = app_ui_snapshot().generation;
++
 +    std::atomic<bool> done{false};
 +    std::thread publisher([&] {
 +        for (int i = 0; i < 1000; ++i) {
@@ -1314,7 +2129,7 @@
 +    do {
 +        const auto& state = app_ui_snapshot();
 +        assert(state.source.size() == 1 && state.destination.size() == 1);
-+        if (state.generation != generation) {
++        if (state.generation != status_generation) {
 +            assert(state.source[0].id == state.detail);
 +            assert(state.destination[0].id == state.detail);
 +            assert(state.source[0].label == state.detail + " (" + state.detail + ")");
@@ -1351,12 +2166,462 @@
 +        std::unique_lock<std::mutex> lock(scan_mutex);
 +        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
 +    }
-+    app_shutdown();
 +    ui_events::set_wake(nullptr);
 +    const auto& scanned = app_ui_snapshot();
 +    assert(scanned.source.size() == 1 && scanned.source[0].label == "Source (42)");
 +    assert(scanned.destination.size() == 1 && scanned.destination[0].label == "Destination (43)");
 +    assert(scanned.status == "scan_complete");
++    fs::create_directories(root / "source/42/570");
++    fs::create_directories(root / "destination/43/570");
++    std::ofstream(root / "source/42/570/config.txt") << "new";
++    std::ofstream(root / "destination/43/570/config.txt") << "old";
++    selected_src = 0; selected_dst = 0;
++    copy_config();
++    assert(file_tasks_busy() && !g_success.show);
++    start_scan();
++    assert(!g_scanning.load());
++    assert(set_config_path(dst_path, (root / "different").u8string()));
++    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (file_tasks_busy()) {
++        file_tasks_poll();
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(g_success.show && fs::equivalent(fs::u8path(g_success.dst_folder), root / "destination/43/570"));
++    std::string contents;
++    { std::ifstream f(root / "destination/43/570/config.txt"); f >> contents; }
++    assert(contents == "new");
++    assert(list_config_backups(root / "backups", "43").size() == 1);
++    auto cache_time = fs::last_write_time(root / CACHE_FILE);
++    set_language("en"); save_settings(); save_settings();
++    assert(fs::last_write_time(root / CACHE_FILE) == cache_time);
++    auto blocked = root / "blocked";
++    fs::create_directory(blocked);
++    std::ofstream(blocked / "keep") << "preserved";
++    bool failed_write = false;
++    try { write_file_atomic(blocked, "replacement"); } catch (...) { failed_write = true; }
++    assert(failed_write && fs::is_regular_file(blocked / "keep"));
++    for (const auto& file : fs::directory_iterator(root))
++        assert(file.path().filename().u8string().find(".tmp-") == std::string::npos);
++
++    std::vector<std::thread> profile_workers;
++    std::atomic<int> attempting{0};
++    for (int i = 0; i < 8; ++i) profile_workers.emplace_back([&] {
++        ++attempting;
++        assert(ensure_profile_info("700"));
++    });
++    {
++        std::unique_lock<std::mutex> lock(steam_api::fetch_mutex);
++        assert(steam_api::fetch_cv.wait_for(lock, std::chrono::seconds(3), [] { return steam_api::fetch_started; }));
++    }
++    while (attempting != 8) std::this_thread::yield();
++    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex); steam_api::release_fetch = true; }
++    steam_api::fetch_cv.notify_all();
++    for (auto& thread : profile_workers) thread.join();
++    assert(steam_api::fetch_count == 1 && nick_cache["700"] == "Shared profile");
++
++    fs::create_directories(root / "warnings/701");
++    assert(set_config_path(src_path, (root / "warnings").u8string()));
++    assert(set_config_path(dst_path, (root / "warnings").u8string()));
++    ui_events::set_wake(scan_wake); ui_events::dirty = false;
++    start_scan();
++    {
++        std::unique_lock<std::mutex> lock(scan_mutex);
++        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
++    }
++    assert(app_ui_snapshot().status == "scan_profile_warnings" && app_ui_snapshot().detail == "1");
++    assert(steam_api::fetch_count == 2);
++    ui_events::set_wake(nullptr);
++
++    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex);
++      steam_api::release_fetch = false; steam_api::fetch_started = false; }
++    std::thread pending([] { assert(!ensure_profile_info("702")); });
++    {
++        std::unique_lock<std::mutex> lock(steam_api::fetch_mutex);
++        assert(steam_api::fetch_cv.wait_for(lock, std::chrono::seconds(3), [] { return steam_api::fetch_started; }));
++    }
++    std::thread follower([] { assert(!ensure_profile_info("702")); });
++    app_request_stop();
++    pending.join(); follower.join();
++    app_shutdown();
++    { std::ifstream f(root / AVATAR_URL_CACHE_FILE); nlohmann::json value; f >> value; assert(value["700"] == "test-avatar"); }
 +    fs::remove_all(root);
 +    std::cout << "Redraw coalescing, wake lifecycle and coherent cached UI state passed\n";
 +}
+--- a/src/core/avatar_data.h
++++ b/src/core/avatar_data.h
+@@ -11,3 +11,4 @@
+ void avatar_data_request(const std::string& id);
+ std::vector<AvatarPixels> avatar_data_take_ready();
+ void avatar_data_shutdown();
++void avatar_data_request_stop();
+--- a/src/core/file_ops.cpp
++++ b/src/core/file_ops.cpp
+@@ -2,12 +2,46 @@
+ #include <cstdlib>
+ #include <stdexcept>
+ #include <vector>
++#include <fstream>
++#include <atomic>
++#include <chrono>
+ #ifdef _WIN32
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
++#else
++#include <unistd.h>
+ #endif
+ 
+ namespace fs = std::filesystem;
++
++void write_file_atomic(const fs::path& path, const std::string& bytes) {
++    static std::atomic<unsigned long long> serial{0};
++#ifdef _WIN32
++    auto process = GetCurrentProcessId();
++#else
++    auto process = getpid();
++#endif
++    auto temporary = path;
++    temporary += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
++        "-" + std::to_string(process) + "-" + std::to_string(++serial);
++    try {
++        std::ofstream output;
++        output.exceptions(std::ios::failbit | std::ios::badbit);
++        output.open(temporary, std::ios::binary | std::ios::trunc);
++        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
++        output.close();
++#ifdef _WIN32
++        if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
++            throw std::system_error(static_cast<int>(GetLastError()), std::system_category(), "Cannot replace saved file");
++#else
++        fs::rename(temporary, path);
++#endif
++    } catch (...) {
++        std::error_code ignored;
++        fs::remove(temporary, ignored);
++        throw;
++    }
++}
+ 
+ std::string normalize_user_path(const std::string& path) {
+     if (path.empty()) return {};
+--- a/src/core/file_ops.h
++++ b/src/core/file_ops.h
+@@ -5,6 +5,7 @@
+ 
+ std::string normalize_user_path(const std::string& path);
+ std::string default_steam_userdata();
++void write_file_atomic(const std::filesystem::path& path, const std::string& bytes);
+ std::filesystem::path replace_config_directory(const std::filesystem::path& source,
+     const std::filesystem::path& destination);
+ 
+--- a/src/network/steam_api.cpp
++++ b/src/network/steam_api.cpp
+@@ -1,10 +1,5 @@
+ #include "steam_api.h"
+-#include <cpr/cpr.h>
+ #include <cstring>
+-
+-static const char* USER_AGENT =
+-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+ 
+ namespace steam_api {
+ 
+@@ -16,19 +11,6 @@
+     } catch (...) {
+         return 0;
+     }
+-}
+-
+-std::string fetch_profile_xml(long long steam64, int timeout_ms) {
+-    if (steam64 <= 0) return {};
+-    try {
+-        auto r = cpr::Get(
+-            cpr::Url{ "https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1" },
+-            cpr::Header{{"User-Agent", USER_AGENT}, {"Accept", "text/xml,application/xml,*/*"}},
+-            cpr::Timeout{ timeout_ms },
+-            cpr::Redirect{ cpr::PostRedirectFlags::POST_ALL });
+-        if (r.status_code == 200) return r.text;
+-    } catch (...) {}
+-    return {};
+ }
+ 
+ static std::string decode_xml_entities(std::string s) {
+--- a/src/network/steam_api.h
++++ b/src/network/steam_api.h
+@@ -4,5 +4,6 @@
+ namespace steam_api {
+ long long steam3_to_64(const std::string& steam3_id);
+ std::string fetch_profile_xml(long long steam64, int timeout_ms);
++void cancel_requests();
+ std::string extract_tag(const std::string& xml, const std::string& tag);
+ }
+--- a/src/ui/avatar.cpp
++++ b/src/ui/avatar.cpp
+@@ -40,6 +40,8 @@
+     }
+ }
+ 
++void avatar_request_stop() { avatar_data_request_stop(); }
++
+ void avatar_shutdown() {
+     avatar_data_shutdown();
+     for (auto& [id, texture] : textures) {
+--- a/src/ui/avatar.h
++++ b/src/ui/avatar.h
+@@ -4,4 +4,5 @@
+ 
+ ImTextureID avatar_get(const std::string& steam3_id);
+ void avatar_flush_pending();
+-void avatar_shutdown();
+\ No newline at end of file
++void avatar_shutdown();
++void avatar_request_stop();
+--- a/tests/core_checks.py
++++ b/tests/core_checks.py
+@@ -129,7 +129,7 @@
+     env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
+     subprocess.run([str(executable), str(temp)], env=env, check=True)
+     app = (root / "src/core/app.cpp").read_text()
+-    functions = app[app.index("static void set_status("):app.index("static void fetch_profile_info")]
++    functions = app[app.index("static void set_status("):app.index("bool ensure_profile_info")]
+     settings_source = r"""
+ #include "app.h"
+ #include "file_ops.h"
+--- /dev/null
++++ b/src/core/file_tasks.cpp
+@@ -0,0 +1,68 @@
++#include "file_tasks.h"
++#include "app.h"
++#include <thread>
++#include <utility>
++
++namespace {
++std::thread worker;
++std::atomic<bool> busy{false};
++std::atomic<bool> stopping{false};
++std::atomic<bool> ready{false};
++std::mutex mutex;
++FileTaskCompletion completion;
++FileTaskCompletion failed(std::string detail) {
++    return [detail = std::move(detail)] {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        status_msg = "error";
++        status_detail = detail;
++        app_status_changed();
++    };
++}
++}
++
++bool file_tasks_start(std::function<FileTaskCompletion()> task) {
++    if (stopping.load() || g_scanning.load() || busy.exchange(true)) return false;
++    try {
++        if (worker.joinable()) worker.join();
++        worker = std::thread([task = std::move(task)] {
++            FileTaskCompletion result;
++            try { result = task(); }
++            catch (const std::exception& error) {
++                result = failed(error.what());
++            } catch (...) { result = failed("Background file operation failed"); }
++            {
++                std::lock_guard<std::mutex> lock(mutex);
++                completion = std::move(result);
++                ready = true;
++            }
++            ui_events::request_redraw();
++        });
++        return true;
++    } catch (const std::exception& error) {
++        busy = false;
++        failed(error.what())();
++        return false;
++    }
++}
++
++bool file_tasks_busy() { return busy.load(); }
++
++void file_tasks_poll() {
++    if (!ready.exchange(false)) return;
++    FileTaskCompletion result;
++    {
++        std::lock_guard<std::mutex> lock(mutex);
++        result = std::move(completion);
++    }
++    busy = false;
++    if (result) result();
++    ui_events::request_redraw();
++}
++
++void file_tasks_request_stop() { stopping = true; }
++
++void file_tasks_shutdown() {
++    file_tasks_request_stop();
++    if (worker.joinable()) worker.join();
++    file_tasks_poll();
++}
+--- /dev/null
++++ b/src/core/file_tasks.h
+@@ -0,0 +1,9 @@
++#pragma once
++#include <functional>
++
++using FileTaskCompletion = std::function<void()>;
++bool file_tasks_start(std::function<FileTaskCompletion()> task);
++bool file_tasks_busy();
++void file_tasks_poll();
++void file_tasks_request_stop();
++void file_tasks_shutdown();
+--- /dev/null
++++ b/src/network/avatar_transport.cpp
+@@ -0,0 +1,12 @@
++#include "avatar_transport.h"
++#include <cpr/cpr.h>
++
++std::string download_avatar(const std::string& url, const std::function<bool()>& active) {
++    if (!active()) return {};
++    auto response = cpr::Get(cpr::Url{url}, cpr::Header{{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}},
++        cpr::Timeout{8000}, cpr::ConnectTimeout{4000},
++        cpr::Redirect{cpr::PostRedirectFlags::POST_ALL},
++        cpr::ProgressCallback{[&](cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, intptr_t) { return active(); }});
++    if (!active() || response.status_code != 200 || response.error.code != cpr::ErrorCode::OK) return {};
++    return std::move(response.text);
++}
+--- /dev/null
++++ b/src/network/avatar_transport.h
+@@ -0,0 +1,5 @@
++#pragma once
++#include <string>
++#include <functional>
++
++std::string download_avatar(const std::string& url, const std::function<bool()>& active);
+--- /dev/null
++++ b/src/network/profile_transport.cpp
+@@ -0,0 +1,26 @@
++#include "steam_api.h"
++#include <cpr/cpr.h>
++#include <atomic>
++
++namespace {
++std::atomic<bool> stopping{false};
++}
++
++namespace steam_api {
++void cancel_requests() { stopping = true; }
++
++std::string fetch_profile_xml(long long steam64, int timeout_ms) {
++    if (steam64 <= 0 || stopping.load()) return {};
++    try {
++        auto response = cpr::Get(
++            cpr::Url{"https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1"},
++            cpr::Header{{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}, {"Accept", "text/xml,application/xml,*/*"}},
++            cpr::Timeout{timeout_ms}, cpr::ConnectTimeout{4000},
++            cpr::Redirect{cpr::PostRedirectFlags::POST_ALL},
++            cpr::ProgressCallback{[](cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, intptr_t) { return !stopping.load(); }});
++        if (!stopping.load() && response.status_code == 200 && response.error.code == cpr::ErrorCode::OK)
++            return std::move(response.text);
++    } catch (...) {}
++    return {};
++}
++}
+--- /dev/null
++++ b/tests/aur_source_checks.py
+@@ -0,0 +1,36 @@
++from pathlib import Path
++import subprocess
++import sys
++import tempfile
++
++checker = Path(__file__).resolve().parents[1] / "scripts/check-aur-sources.py"
++with tempfile.TemporaryDirectory(prefix="dotamanager-aur-coverage-") as temporary:
++    root = Path(temporary)
++    baseline, project = root / "baseline", root / "project"
++    for folder in (baseline, project):
++        folder.mkdir()
++        (folder / "CMakeLists.txt").write_text("project(Test)\n")
++        (folder / "main.cpp").write_text("int main() {}\n")
++        (folder / "src").mkdir()
++    def check(expected, name=""):
++        result = subprocess.run([sys.executable, str(checker), str(baseline), str(project)],
++            capture_output=True, text=True)
++        assert (result.returncode == 0) == expected, result.stdout + result.stderr
++        if name:
++            assert name in result.stderr
++    check(True)
++    (project / "src/new.cpp").write_text("new source\n")
++    check(False, "src/new.cpp")
++    (baseline / "src/new.cpp").write_text("old source\n")
++    check(False, "src/new.cpp")
++    (baseline / "src/new.cpp").write_text("new source\n")
++    check(True)
++    (project / "tests").mkdir()
++    (project / "tests/new_checks.cpp").write_text("new regression\n")
++    check(False, "tests/new_checks.cpp")
++    (baseline / "tests").mkdir()
++    (baseline / "tests/new_checks.cpp").write_text("new regression\n")
++    (project / "tests/__pycache__").mkdir()
++    (project / "tests/__pycache__/ignored.pyc").write_bytes(b"cache")
++    check(True)
++print("AUR coverage rejects missing and outdated sources without relying on a manual list")
+--- /dev/null
++++ b/tests/file_tasks_checks.cpp
+@@ -0,0 +1,44 @@
++#include "app.h"
++#include <cassert>
++#include <future>
++#include <chrono>
++#include <thread>
++#include <iostream>
++
++int main() {
++    std::promise<void> entered, release;
++    auto started = entered.get_future();
++    auto proceed = release.get_future().share();
++    const auto ui_thread = std::this_thread::get_id();
++    bool completed = false;
++    assert(file_tasks_start([&]() -> FileTaskCompletion {
++        assert(std::this_thread::get_id() != ui_thread);
++        entered.set_value();
++        assert(proceed.wait_for(std::chrono::seconds(3)) == std::future_status::ready);
++        return [&] { assert(std::this_thread::get_id() == ui_thread); completed = true; };
++    }));
++    assert(started.wait_for(std::chrono::seconds(3)) == std::future_status::ready);
++    assert(file_tasks_busy() && !completed);
++    assert(!file_tasks_start([] { return FileTaskCompletion{}; }));
++    release.set_value();
++    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (file_tasks_busy()) {
++        file_tasks_poll();
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(completed);
++    assert(file_tasks_start([]() -> FileTaskCompletion { throw std::runtime_error("test failure"); }));
++    while (file_tasks_busy()) {
++        file_tasks_poll();
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(status_msg == "error" && status_detail == "test failure");
++    completed = false;
++    assert(file_tasks_start([&] { return [&] { completed = true; }; }));
++    file_tasks_shutdown();
++    assert(completed && !file_tasks_busy());
++    assert(!file_tasks_start([] { return FileTaskCompletion{}; }));
++    std::cout << "File tasks return immediately, serialize work and publish on the UI thread\n";
++}
+--- /dev/null
++++ b/scripts/check-aur-sources.py
+@@ -0,0 +1,13 @@
++from pathlib import Path
++import sys
++
++baseline, project = map(Path, sys.argv[1:3])
++paths = {"CMakeLists.txt", "main.cpp"}
++for directory in ("src", "tests", "cmake", "resources"):
++    paths.update(path.relative_to(project).as_posix()
++        for path in (project / directory).rglob("*")
++        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
++for name in sorted(paths):
++    if not (baseline / name).is_file() or (baseline / name).read_bytes() != (project / name).read_bytes():
++        raise SystemExit(f"AUR patch is out of date for {name}; regenerate before pushing")
++print("Patched stable release matches the packaging implementation under test")
