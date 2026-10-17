@@ -53,11 +53,19 @@
  
  FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
  FetchContent_MakeAvailable(imgui)
-@@ -208,6 +225,15 @@
-         target_compile_options(DotaManager PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+@@ -190,7 +207,7 @@
+         target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated_app.rc")
+     endif()
+ 
+-    target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32 advapi32)
++    target_link_libraries(DotaManager PRIVATE opengl32 shell32 ole32 advapi32 winmm)
+     set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
+ 
+     if(MINGW)
+@@ -209,9 +226,27 @@
      endif()
  endif()
-+
+ 
 +include(GNUInstallDirs)
 +install(TARGETS DotaManager RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime)
 +install(FILES resources/linux/dota2cfgchanger.desktop
@@ -66,10 +74,23 @@
 +    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/32x32/apps
 +    RENAME dota2cfgchanger.png COMPONENT Runtime)
 +install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/dota2cfgchanger COMPONENT Runtime)
- 
++
  option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
  if(DOTAMANAGER_BUILD_TESTS)
-@@ -263,5 +289,23 @@
+     enable_testing()
++    add_executable(ui_state_checks tests/ui_state_checks.cpp)
++    target_link_libraries(ui_state_checks PRIVATE dotamanager_core)
++    if(MSVC)
++        target_compile_options(ui_state_checks PRIVATE /UNDEBUG /utf-8)
++    else()
++        target_compile_options(ui_state_checks PRIVATE -UNDEBUG)
++    endif()
++    add_test(NAME ui_state_checks COMMAND ui_state_checks)
++    set_tests_properties(ui_state_checks PROPERTIES TIMEOUT 10)
+     add_executable(backup_checks tests/backup_checks.cpp)
+     target_link_libraries(backup_checks PRIVATE dotamanager_core)
+     if(MSVC)
+@@ -263,5 +298,23 @@
              add_test(NAME ${test_target} COMMAND ${test_target})
          endif()
      endforeach()
@@ -104,7 +125,61 @@
 +#endif
 --- a/main.cpp
 +++ b/main.cpp
-@@ -29,6 +29,9 @@
+@@ -1,3 +1,11 @@
++#ifdef _WIN32
++#define NOMINMAX
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#include <objbase.h>
++#include <mmsystem.h>
++#pragma comment(lib, "ole32.lib")
++#endif
+ #include "imgui.h"
+ #include "backends/imgui_impl_glfw.h"
+ #include "backends/imgui_impl_opengl3.h"
+@@ -9,13 +17,34 @@
+ #include "updates.h"
+ #include "update_install.h"
+ #include "platform/update_process.h"
+-
+-#ifdef _WIN32
+-#define WIN32_LEAN_AND_MEAN
+-#include <windows.h>
+-#include <objbase.h>
+-#pragma comment(lib, "ole32.lib")
+-#endif
++#include "ui_events.h"
++#include <algorithm>
++
++namespace {
++double input_until = 0;
++void input_changed() {
++    input_until = glfwGetTime() + 0.75;
++    ui_events::request_redraw();
++}
++}
++
++namespace {
++class FrameTimerResolution {
++public:
++    void set_active(bool active) {
++#ifdef _WIN32
++        if (active == enabled) return;
++        if (active) enabled = timeBeginPeriod(1) == TIMERR_NOERROR;
++        else { timeEndPeriod(1); enabled = false; }
++#else
++        (void)active;
++#endif
++    }
++    ~FrameTimerResolution() { set_active(false); }
++private:
++    bool enabled = false;
++};
++}
+ 
+ int main(int argc, char** argv) {
+     auto arguments = update_arguments(argc, argv);
+@@ -29,11 +58,25 @@
  
      if (!glfwInit()) return 1;
      glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -114,6 +189,105 @@
      const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
      GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
      if (!window) return 1;
+     glfwMakeContextCurrent(window);
+     glfwSwapInterval(1);
++    ui_events::set_wake(glfwPostEmptyEvent);
++    glfwSetCursorPosCallback(window, [](GLFWwindow*, double, double) { input_changed(); });
++    glfwSetCursorEnterCallback(window, [](GLFWwindow*, int) { input_changed(); });
++    glfwSetMouseButtonCallback(window, [](GLFWwindow*, int, int, int) { input_changed(); });
++    glfwSetScrollCallback(window, [](GLFWwindow*, double, double) { input_changed(); });
++    glfwSetKeyCallback(window, [](GLFWwindow*, int, int, int, int) { input_changed(); });
++    glfwSetCharCallback(window, [](GLFWwindow*, unsigned int) { input_changed(); });
++    glfwSetWindowFocusCallback(window, [](GLFWwindow*, int) { input_changed(); });
++    glfwSetWindowRefreshCallback(window, [](GLFWwindow*) { ui_events::request_redraw(); });
++    glfwSetFramebufferSizeCallback(window, [](GLFWwindow*, int, int) { ui_events::request_redraw(); });
++    glfwSetWindowIconifyCallback(window, [](GLFWwindow*, int) { input_changed(); });
+ 
+     GLFWimage icon;
+     icon.width  = APP_ICON_WIDTH;
+@@ -72,11 +115,47 @@
+     if (install_error.empty()) updates_check(false);
+     else updates_install_error(install_error);
+     bool startup_confirmed = false;
++    double next_frame = 0;
++    int settle_frames = 2;
++    bool last_focus = true;
++    FrameTimerResolution frame_timer;
+ 
+     while (!glfwWindowShouldClose(window) && !updates_should_exit()) {
+         glfwPollEvents();
++        if (glfwWindowShouldClose(window) || updates_should_exit()) break;
++        if (updates_phase() == UpdatePhase::Downloaded) updates_install();
++        int dw, dh;
++        glfwGetFramebufferSize(window, &dw, &dh);
++        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) || dw == 0 || dh == 0) {
++            frame_timer.set_active(false);
++            if (ui_events::dirty.exchange(false)) continue;
++            glfwWaitEvents();
++            continue;
++        }
++        bool focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
++        bool held_input = false;
++        for (bool down : io.MouseDown) held_input |= down;
++        for (const auto& key : io.KeysData) held_input |= key.Down;
++        const double now = glfwGetTime();
++        if (focused != last_focus) { next_frame = now; last_focus = focused; }
++        const bool continuous = g_success.show ||
++            (focused && (now < input_until || held_input || io.WantTextInput));
++        if (!ui_events::dirty.load() && settle_frames == 0 && !continuous) {
++            frame_timer.set_active(false);
++            glfwWaitEvents();
++            continue;
++        }
++        frame_timer.set_active(focused);
++        if (now < next_frame) {
++            glfwWaitEventsTimeout(std::max(0.001, next_frame - now));
++            continue;
++        }
++        if (ui_events::dirty.exchange(false)) settle_frames = 2;
++        if (settle_frames > 0) --settle_frames;
++        next_frame = now + (focused ? 1.0 / 60.0 : 1.0 / 5.0);
+         ImGui_ImplOpenGL3_NewFrame();
+         ImGui_ImplGlfw_NewFrame();
++        io.DeltaTime = std::min(io.DeltaTime, 0.1f);
+         ImGui::NewFrame();
+ 
+         ImVec2 ds = io.DisplaySize;
+@@ -87,8 +166,8 @@
+         ui_render_backups_popup();
+ 
+         ImGui::Render();
+-        int dw, dh;
+         glfwGetFramebufferSize(window, &dw, &dh);
++        if (dw == 0 || dh == 0 || glfwGetWindowAttrib(window, GLFW_ICONIFIED)) continue;
+         glViewport(0, 0, dw, dh);
+         glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
+         glClear(GL_COLOR_BUFFER_BIT);
+@@ -98,12 +177,14 @@
+             update_install_confirm_started(arguments);
+             startup_confirmed = true;
+         }
+-        if (updates_snapshot().phase == UpdatePhase::Downloaded) updates_install();
+-    }
+-
++    }
++
++    frame_timer.set_active(false);
+     updates_shutdown();
+     app_shutdown();
+     avatar_shutdown();
++    ui_events::set_wake(nullptr);
++    ui_shutdown_theme();
+     ImGui_ImplOpenGL3_Shutdown();
+     ImGui_ImplGlfw_Shutdown();
+     ImGui::DestroyContext();
+@@ -118,4 +199,4 @@
+ 
+ #ifdef _WIN32
+ int APIENTRY WinMain(HINSTANCE, HINSTANCE, PSTR, int) { return main(__argc, __argv); }
+-#endif
+\ No newline at end of file
++#endif
 --- /dev/null
 +++ b/resources/linux/dota2cfgchanger.desktop
 @@ -0,0 +1,11 @@
@@ -166,7 +340,17 @@
  }
 --- a/src/core/updates.cpp
 +++ b/src/core/updates.cpp
-@@ -11,6 +11,7 @@
+@@ -3,14 +3,17 @@
+ #include "checksum.h"
+ #include "platform.h"
+ #include "update_transport.h"
++#include "ui_events.h"
+ #include <atomic>
+ #include <filesystem>
+ #include <fstream>
+ #include <mutex>
+ #include <thread>
++#include <chrono>
  #include <stdexcept>
  
  #include "app_version.h"
@@ -174,15 +358,44 @@
  
  namespace fs = std::filesystem;
  namespace {
-@@ -28,6 +29,7 @@
+@@ -25,24 +28,28 @@
+     state.phase = UpdatePhase::Failed;
+     state.error_key = key;
+     state.detail = detail;
++    ui_events::request_redraw();
  }
  }
  
 +bool updates_self_install_enabled() { return !DOTAMANAGER_PACKAGE_MANAGED; }
  const char* app_version() { return DOTA_APP_VERSION; }
  UpdateSnapshot updates_snapshot() { std::lock_guard<std::mutex> lock(mutex); return state; }
- void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; }
-@@ -65,6 +67,7 @@
+-void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; }
++UpdatePhase updates_phase() { std::lock_guard<std::mutex> lock(mutex); return state.phase; }
++void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; ui_events::request_redraw(); }
+ 
+ void updates_check(bool manual) {
+     if (!manual && std::string(app_version()) == "0.0") return;
+     {
+         std::lock_guard<std::mutex> lock(mutex);
+         if (state.phase == UpdatePhase::Checking || state.phase == UpdatePhase::Downloading || state.phase == UpdatePhase::Installing) {
+-            if (manual) state.popup = true;
++            if (manual) { state.popup = true; ui_events::request_redraw(); }
+             return;
+         }
+         state = {};
+         state.phase = UpdatePhase::Checking;
+         state.popup = manual;
++        ui_events::request_redraw();
+     }
+     if (worker.joinable()) worker.join();
+     stopping = false;
+@@ -60,11 +67,13 @@
+             state.release = std::move(release);
+             state.phase = available ? UpdatePhase::Available : UpdatePhase::Current;
+             state.popup = manual || available;
++            ui_events::request_redraw();
+         } catch (const std::exception& e) { fail("update_check_failed", e.what()); }
+     });
  }
  
  void updates_download() {
@@ -190,7 +403,42 @@
      ReleaseInfo release;
      {
          std::lock_guard<std::mutex> lock(mutex);
-@@ -120,6 +123,7 @@
+@@ -75,6 +84,7 @@
+         state.error_key.clear();
+         state.progress = 0;
+         state.popup = true;
++        ui_events::request_redraw();
+     }
+     if (worker.joinable()) worker.join();
+     stopping = false;
+@@ -90,9 +100,16 @@
+                 if (fs::file_size(target) != release.size || file_sha256(target) != release.digest)
+                     throw std::runtime_error("Existing update file does not match release; open GitHub to download manually");
+             } else {
+-                download_update_asset(release, partial, [release](std::uint64_t now) {
++                auto last_notice = std::chrono::steady_clock::time_point{};
++                download_update_asset(release, partial, [size = release.size, &last_notice](std::uint64_t now) {
+                     std::lock_guard<std::mutex> lock(mutex);
+-                    state.progress = static_cast<float>(static_cast<double>(now) / release.size);
++                    const auto clock = std::chrono::steady_clock::now();
++                    const auto progress = static_cast<float>(static_cast<double>(now) / size);
++                    if (progress != state.progress && clock - last_notice >= std::chrono::milliseconds(16)) {
++                        state.progress = progress;
++                        last_notice = clock;
++                        ui_events::request_redraw();
++                    }
+                     return !stopping.load();
+                 });
+                 if (fs::file_size(partial) != release.size) throw std::runtime_error("Download incomplete");
+@@ -106,6 +123,7 @@
+             state.phase = UpdatePhase::Downloaded;
+             state.progress = 1;
+             state.downloaded_path = target.u8string();
++            ui_events::request_redraw();
+         } catch (const std::exception& e) {
+             std::error_code ec;
+             if (!partial.empty()) fs::remove(partial, ec);
+@@ -120,6 +138,7 @@
  }
  
  void updates_install() {
@@ -198,9 +446,37 @@
      UpdateSnapshot update;
      {
          std::lock_guard<std::mutex> lock(mutex);
+@@ -129,6 +148,7 @@
+         state.phase = UpdatePhase::Installing;
+         state.error_key.clear();
+         state.popup = true;
++        ui_events::request_redraw();
+     }
+     if (worker.joinable()) worker.join();
+     stopping = false;
+@@ -137,6 +157,7 @@
+             prepare_update_install(fs::u8path(update.downloaded_path), update.release,
+                 [] { return !stopping.load(); });
+             restart_ready = true;
++            ui_events::request_redraw();
+         } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
+     });
+ }
+@@ -146,4 +167,5 @@
+     fail("update_install_failed", detail);
+     std::lock_guard<std::mutex> lock(mutex);
+     state.popup = true;
++    ui_events::request_redraw();
+ }
 --- a/src/core/updates.h
 +++ b/src/core/updates.h
-@@ -22,3 +22,5 @@
+@@ -17,8 +17,11 @@
+ void updates_download();
+ void updates_dismiss();
+ UpdateSnapshot updates_snapshot();
++UpdatePhase updates_phase();
+ void updates_shutdown();
+ 
  void updates_install();
  bool updates_should_exit();
  void updates_install_error(const std::string& detail);
@@ -208,7 +484,29 @@
 +bool updates_self_install_enabled();
 --- a/src/ui/update_popup.cpp
 +++ b/src/ui/update_popup.cpp
-@@ -48,11 +48,12 @@
+@@ -8,6 +8,7 @@
+ void ui_render_update_popup() {
+     auto update = updates_snapshot();
+     const char* id = "###update_popup";
++    if (!update.popup && !ImGui::IsPopupOpen(id)) return;
+     if (update.popup && !ImGui::IsPopupOpen(id)) ImGui::OpenPopup(id);
+     const auto display = ImGui::GetIO().DisplaySize;
+     ImGui::SetNextWindowPos({display.x * 0.5f, display.y * 0.5f},
+@@ -17,7 +18,12 @@
+     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
+     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
+     bool open = update.popup;
+-    std::string title = std::string(tr("updates")) + id;
++    static int title_language = -1;
++    static std::string title;
++    if (title_language != language_index()) {
++        title_language = language_index();
++        title = std::string(tr("updates")) + id;
++    }
+     if (ImGui::BeginPopupModal(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
+         float button_width = 170.f;
+         for (const char* key : {"update_release", "update_retry", "update_close", "update_download", "update_open_folder", "update_install"})
+@@ -48,11 +54,12 @@
          if (update.phase == UpdatePhase::Failed)
              ImGui::TextWrapped("%s", tr_value(update.error_key.c_str(), update.detail).c_str());
          ImGui::Spacing();
@@ -321,20 +619,96 @@
  
  void ui_render_main(ImFont* font_big, ImVec2 ds) {
      avatar_flush_pending();
-@@ -302,6 +303,35 @@
+@@ -149,22 +150,23 @@
+         + ImGui::GetStyle().WindowPadding.y;
+     const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
+ 
+-    std::vector<std::string> local_src_list, local_dst_list;
+-    std::map<std::string, std::string> local_nick_cache;
+-    std::string local_status;
+-    {
+-        std::lock_guard<std::mutex> lock(g_data_mutex);
+-        local_src_list = src_list;
+-        local_dst_list = dst_list;
+-        local_nick_cache = nick_cache;
+-        local_status = tr_value(status_msg.c_str(), status_detail);
++    const auto& snapshot = app_ui_snapshot();
++    const auto& local_src_list = snapshot.source;
++    const auto& local_dst_list = snapshot.destination;
++    static unsigned long long status_generation = 0;
++    static int status_language = -1;
++    static std::string status_text;
++    if (status_generation != snapshot.generation || status_language != language_index()) {
++        status_generation = snapshot.generation;
++        status_language = language_index();
++        status_text = tr_value("status", tr_value(snapshot.status.c_str(), snapshot.detail));
+     }
+ 
+     ImGui::Columns(2, "lists", true);
+     ImGui::TextUnformatted(tr("from_account"));
+ 
+     auto render_account_list = [&](
+-        const std::vector<std::string>& list,
++        const std::vector<AccountView>& list,
+         std::atomic<int>& selected_atomic,
+         const char* child_id)
+     {
+@@ -174,9 +176,8 @@
+         ImGui::BeginChild(child_id, { 0, list_h }, true);
+ 
+         for (int i = 0; i < (int)list.size(); i++) {
+-            const std::string& id = list[i];
+-            std::string nick = local_nick_cache.count(id) ? local_nick_cache[id] : id;
+-            std::string label = nick + " (" + id + ")";
++            const auto& id = list[i].id;
++            const auto& label = list[i].label;
+             bool sel = (i == selected);
+ 
+             ImGui::PushID(i);
+@@ -267,12 +268,8 @@
+         if (s < 0 || d < 0) {
+             copy_config();
+         } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
+-            const std::string& s_id = local_src_list[s];
+-            const std::string& d_id = local_dst_list[d];
+-            std::string s_nick = local_nick_cache.count(s_id) ? local_nick_cache[s_id] : s_id;
+-            std::string d_nick = local_nick_cache.count(d_id) ? local_nick_cache[d_id] : d_id;
+-            g_confirm_src_label = s_nick + " (" + s_id + ")";
+-            g_confirm_dst_label = d_nick + " (" + d_id + ")";
++            g_confirm_src_label = local_src_list[s].label;
++            g_confirm_dst_label = local_dst_list[d].label;
+             g_confirm_copy_open = true;
+         }
+     }
+@@ -280,7 +277,6 @@
+     if (scanning) ImGui::EndDisabled();
+     const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
+     ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
+-    const auto status_text = tr_value("status", local_status);
+     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
+     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
+     ImGui::BeginChild("##status", {0, 32.f},
+@@ -302,6 +298,42 @@
          ImGui::TextDisabled("Release v%s", app_version());
          ImGui::Spacing();
          if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
 +        ImGui::Spacing();
 +        ImGui::Separator();
 +        ImGui::Spacing();
-+        std::istringstream notice(tr("info_download_warning"));
-+        std::string word;
++        static int notice_language = -1;
++        static std::vector<std::string> notice_words;
++        if (notice_language != language_index()) {
++            notice_language = language_index();
++            notice_words.clear();
++            std::istringstream notice(tr("info_download_warning"));
++            std::string word;
++            while (notice >> word) notice_words.push_back(word);
++        }
 +        const float left = ImGui::GetCursorPosX();
 +        const float right = left + ImGui::GetContentRegionAvail().x;
 +        const float gap = ImGui::CalcTextSize(" ").x;
 +        bool first = true;
-+        while (notice >> word) {
++        for (const auto& word : notice_words) {
 +            const bool link = word == "{source}";
 +            const char* label = link ? tr("info_download_source") : word.c_str();
 +            const float width = ImGui::CalcTextSize(label).x;
@@ -357,3 +731,632 @@
          ImGui::EndPopup();
      }
      ImGui::PopStyleVar();
+--- a/src/core/app.cpp
++++ b/src/core/app.cpp
+@@ -2,6 +2,7 @@
+ #include "backups.h"
+ #include "file_ops.h"
+ #include "localization.h"
++#include "ui_events.h"
+ #include <nlohmann/json.hpp>
+ #include <filesystem>
+ #include <fstream>
+@@ -24,6 +25,7 @@
+     std::lock_guard<std::mutex> lock(g_data_mutex);
+     status_msg = s;
+     status_detail = detail;
++    app_ui_changed();
+ }
+ 
+ bool set_config_path(char* target, const std::string& path) {
+@@ -39,6 +41,7 @@
+             if (target == dst_path) { dst_list.clear(); selected_dst = -1; }
+         }
+         std::memcpy(target, normalized.c_str(), normalized.size() + 1);
++        app_ui_changed();
+         return true;
+     } catch (const ConfigFileError& e) {
+         set_status(e.key, e.detail);
+@@ -107,6 +110,7 @@
+             for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
+         } catch (...) {}
+     }
++    app_ui_changed();
+ }
+ 
+ void save_settings() {
+@@ -137,6 +141,35 @@
+     } catch (...) {}
+ }
+ 
++const UiSnapshot& app_ui_snapshot() {
++    static UiSnapshot cached;
++    if (cached.generation == g_ui_generation.load()) return cached;
++    UiSnapshot next;
++    std::vector<std::string> source, destination;
++    std::map<std::string, std::string> names;
++    {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        next.generation = g_ui_generation.load();
++        source = src_list;
++        destination = dst_list;
++        names = nick_cache;
++        next.status = status_msg;
++        next.detail = status_detail;
++    }
++    auto prepare = [&](const std::vector<std::string>& ids, std::vector<AccountView>& views) {
++        views.reserve(ids.size());
++        for (const auto& id : ids) {
++            const auto found = names.find(id);
++            const auto& nickname = found == names.end() ? id : found->second;
++            views.push_back({id, nickname + " (" + id + ")"});
++        }
++    };
++    prepare(source, next.source);
++    prepare(destination, next.destination);
++    cached = std::move(next);
++    return cached;
++}
++
+ static void fetch_profile_info(const std::string& id) {
+     {
+         std::lock_guard<std::mutex> lock(g_data_mutex);
+@@ -158,6 +191,7 @@
+     std::lock_guard<std::mutex> lock(g_data_mutex);
+     if (!nick.empty())       nick_cache[id] = nick;
+     if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
++    app_ui_changed();
+ }
+ 
+ static void scan_thread() {
+@@ -207,8 +241,9 @@
+         std::lock_guard<std::mutex> lock(g_data_mutex);
+         selected_src = -1;
+         selected_dst = -1;
+-        src_list = new_src;
+-        dst_list = new_dst;
++        src_list.swap(new_src);
++        dst_list.swap(new_dst);
++        app_ui_changed();
+     }
+ 
+     for (const auto& id : all_ids) {
+@@ -219,6 +254,7 @@
+     save_settings();
+     if (!scan_failed) set_status("scan_complete");
+     g_scanning = false;
++    ui_events::request_redraw();
+ }
+ 
+ void copy_config() {
+@@ -260,6 +296,8 @@
+         g_success.dst_id = d_id;
+         g_success.src_nick = s_nick;
+         g_success.dst_nick = d_nick;
++        g_success.src_label = s_nick + " (ID: " + s_id + ")";
++        g_success.dst_label = d_nick + " (ID: " + d_id + ")";
+         g_success.src_folder = src.u8string();
+         g_success.dst_folder = dst.u8string();
+         g_success.show = true;
+@@ -278,6 +316,7 @@
+         try { scan_thread(); }
+         catch (const std::exception& e) { set_status("error", e.what()); }
+         g_scanning = false;
++        ui_events::request_redraw();
+     });
+ }
+ 
+--- a/src/core/app.h
++++ b/src/core/app.h
+@@ -7,6 +7,7 @@
+ #include <map>
+ #include <mutex>
+ #include <atomic>
++#include "ui_events.h"
+ 
+ constexpr int PATH_BUF_SIZE = 4096;
+ 
+@@ -35,6 +36,25 @@
+ inline std::atomic<int> selected_dst{ -1 };
+ inline std::atomic<bool> g_scanning{ false };
+ 
++inline std::atomic<unsigned long long> g_ui_generation{1};
++inline void app_ui_changed() {
++    ++g_ui_generation;
++    ui_events::request_redraw();
++}
++
++struct AccountView {
++    std::string id;
++    std::string label;
++};
++struct UiSnapshot {
++    unsigned long long generation = 0;
++    std::vector<AccountView> source;
++    std::vector<AccountView> destination;
++    std::string status;
++    std::string detail;
++};
++const UiSnapshot& app_ui_snapshot();
++
+ struct SuccessPopupState {
+     bool show = false;
+     bool closing = false;
+@@ -44,6 +64,8 @@
+     std::string dst_id;
+     std::string src_nick;
+     std::string dst_nick;
++    std::string src_label;
++    std::string dst_label;
+     std::string src_folder;
+     std::string dst_folder;
+ };
+--- a/src/core/avatar_data.cpp
++++ b/src/core/avatar_data.cpp
+@@ -1,5 +1,6 @@
+ #include "avatar_data.h"
+ #include "app.h"
++#include "ui_events.h"
+ #include <cpr/cpr.h>
+ 
+ #include <string>
+@@ -14,6 +15,7 @@
+ #include <algorithm>
+ #include <memory>
+ #include <atomic>
++#include <deque>
+ 
+ #define STB_IMAGE_IMPLEMENTATION
+ #include "stb_image.h"
+@@ -21,27 +23,6 @@
+ namespace fs = std::filesystem;
+ 
+ namespace {
+-
+-class Semaphore {
+-public:
+-    explicit Semaphore(int count) : count_(count) {}
+-    void acquire() {
+-        std::unique_lock<std::mutex> lock(mutex_);
+-        cv_.wait(lock, [&] { return count_ > 0; });
+-        --count_;
+-    }
+-    void release() {
+-        std::unique_lock<std::mutex> lock(mutex_);
+-        ++count_;
+-        cv_.notify_one();
+-    }
+-private:
+-    std::mutex mutex_;
+-    std::condition_variable cv_;
+-    int count_;
+-};
+-
+-Semaphore g_fetch_slots(8);
+ 
+ const char* USER_AGENT =
+     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+@@ -63,33 +44,37 @@
+ 
+ static std::map<std::string, AvatarEntry> g_avatars;
+ static std::mutex g_mutex;
++static std::atomic<bool> g_ready{false};
+ 
+ static void fetch_thread(const std::string steam3_id);
+ static void mark_failed(const std::string& id);
+ 
+-struct TrackedThread {
+-    std::thread th;
+-    std::shared_ptr<std::atomic<bool>> done;
+-};
+ static std::mutex g_threads_mutex;
+-static std::vector<TrackedThread> g_threads;
++static std::condition_variable g_work;
++static std::deque<std::string> g_queue;
++static std::vector<std::thread> g_threads;
++static bool g_stopping = false;
+ 
+ static void launch_fetch(const std::string& steam3_id) {
+-    auto done = std::make_shared<std::atomic<bool>>(false);
+-    std::thread th([steam3_id, done] {
+-        try { fetch_thread(steam3_id); } catch (...) { mark_failed(steam3_id); }
+-        done->store(true);
+-    });
+-
+     std::lock_guard<std::mutex> lock(g_threads_mutex);
+-    g_threads.erase(
+-        std::remove_if(g_threads.begin(), g_threads.end(),
+-            [](TrackedThread& t) {
+-                if (t.done->load()) { t.th.join(); return true; }
+-                return false;
+-            }),
+-        g_threads.end());
+-    g_threads.push_back({ std::move(th), std::move(done) });
++    if (g_stopping) return;
++    if (g_threads.size() < 8) {
++        g_threads.emplace_back([] {
++            for (;;) {
++                std::string id;
++                {
++                    std::unique_lock<std::mutex> lock(g_threads_mutex);
++                    g_work.wait(lock, [] { return g_stopping || !g_queue.empty(); });
++                    if (g_stopping) return;
++                    id = std::move(g_queue.front());
++                    g_queue.pop_front();
++                }
++                try { fetch_thread(id); } catch (...) { mark_failed(id); }
++            }
++        });
++    }
++    g_queue.push_back(steam3_id);
++    g_work.notify_one();
+ }
+ 
+ static void mark_failed(const std::string& id) {
+@@ -106,6 +91,8 @@
+     entry.width = w;
+     entry.height = h;
+     entry.state = AvatarState::Ready;
++    g_ready = true;
++    ui_events::request_redraw();
+ }
+ 
+ static fs::path disk_cache_path(const std::string& id) {
+@@ -151,9 +138,6 @@
+         decode_and_store(steam3_id, raw);
+         return;
+     }
+-
+-    g_fetch_slots.acquire();
+-    struct SlotGuard { ~SlotGuard() { g_fetch_slots.release(); } } slot_guard;
+ 
+     std::string avatar_url;
+     {
+@@ -221,6 +205,7 @@
+ 
+ std::vector<AvatarPixels> avatar_data_take_ready() {
+     std::vector<AvatarPixels> result;
++    if (!g_ready.exchange(false)) return result;
+     std::lock_guard<std::mutex> lock(g_mutex);
+     for (auto& [id, entry] : g_avatars) {
+         if (entry.state == AvatarState::Ready && !entry.pixels.empty()) {
+@@ -234,12 +219,18 @@
+ void avatar_data_shutdown() {
+     {
+         std::lock_guard<std::mutex> lock(g_threads_mutex);
+-        for (auto& t : g_threads) {
+-            if (t.th.joinable()) t.th.join();
+-        }
+-        g_threads.clear();
+-    }
++        g_stopping = true;
++        g_queue.clear();
++    }
++    g_work.notify_all();
++    for (auto& t : g_threads) if (t.joinable()) t.join();
++    g_threads.clear();
+ 
+     std::lock_guard<std::mutex> lock(g_mutex);
+     g_avatars.clear();
+-}
++    g_ready = false;
++    {
++        std::lock_guard<std::mutex> threads_lock(g_threads_mutex);
++        g_stopping = false;
++    }
++}
+--- a/src/core/localization.cpp
++++ b/src/core/localization.cpp
+@@ -10,9 +10,10 @@
+ const char* codes[] = {"en", "ru", "uk"};
+ const auto& dictionaries() {
+     static const auto values = [] {
+-        std::array<std::map<std::string, std::string>, 3> result;
++        using Dictionary = std::map<std::string, std::string, std::less<>>;
++        std::array<Dictionary, 3> result;
+         for (int i = 0; i < 3; ++i)
+-            result[i] = nlohmann::json::parse(embedded_locales::json[i]).get<std::map<std::string, std::string>>();
++            result[i] = nlohmann::json::parse(embedded_locales::json[i]).get<Dictionary>();
+         return result;
+     }();
+     return values;
+--- /dev/null
++++ b/src/core/ui_events.h
+@@ -0,0 +1,20 @@
++#pragma once
++#include <atomic>
++#include <mutex>
++
++namespace ui_events {
++inline std::atomic<bool> dirty{true};
++inline std::mutex wake_mutex;
++inline void (*wake)() = nullptr;
++
++inline void set_wake(void (*callback)()) {
++    std::lock_guard<std::mutex> lock(wake_mutex);
++    wake = callback;
++}
++
++inline void request_redraw() {
++    if (dirty.exchange(true)) return;
++    std::lock_guard<std::mutex> lock(wake_mutex);
++    if (wake) wake();
++}
++}
+--- a/src/ui/backups_popup.cpp
++++ b/src/ui/backups_popup.cpp
+@@ -12,6 +12,7 @@
+ bool confirming = false;
+ std::string account;
+ fs::path destination;
++std::string destination_label;
+ std::vector<ConfigBackup> backups;
+ int selected = -1;
+ std::string message;
+@@ -35,6 +36,7 @@
+         account = dst_list[index];
+         destination = fs::u8path(dst_path) / account / DOTA_ID;
+     }
++    destination_label = destination.u8string();
+     confirming = false;
+     message.clear();
+     backups.clear();
+@@ -45,6 +47,7 @@
+ 
+ void ui_render_backups_popup() {
+     const char* id = "###backups_popup";
++    if (!requested && !ImGui::IsPopupOpen(id)) return;
+     if (requested) { ImGui::OpenPopup(id); requested = false; }
+     auto display = ImGui::GetIO().DisplaySize;
+     float width = std::min(500.f, display.x - 32.f);
+@@ -53,13 +56,18 @@
+     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
+     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
+     bool open = true;
+-    std::string title = std::string(tr("backups")) + id;
++    static int title_language = -1;
++    static std::string title;
++    if (title_language != language_index()) {
++        title_language = language_index();
++        title = std::string(tr("backups")) + id;
++    }
+     if (ImGui::BeginPopupModal(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
+         ImGui::TextWrapped("%s", tr_value("backup_account", account).c_str());
+         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+-        ImGui::TextWrapped("%s", destination.u8string().c_str());
++        ImGui::TextWrapped("%s", destination_label.c_str());
+         ImGui::PopStyleColor();
+-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination.u8string().c_str());
++        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination_label.c_str());
+         ImGui::Separator();
+         if (confirming && selected >= 0 && selected < static_cast<int>(backups.size())) {
+             ImGui::TextWrapped("%s", tr_value("backup_restore_warning", backups[selected].date).c_str());
+@@ -74,6 +82,7 @@
+                         std::lock_guard<std::mutex> lock(g_data_mutex);
+                         status_msg = "backup_restored";
+                         status_detail = account;
++                        app_ui_changed();
+                     }
+                     refresh();
+                 } catch (const ConfigFileError& error) { message = tr_value(error.key.c_str(), error.detail); }
+--- a/src/ui/panels.cpp
++++ b/src/ui/panels.cpp
+@@ -9,7 +9,6 @@
+ 
+ void render_palette_panel(ImVec2 ds) {
+     int idx = static_cast<int>(g_current_theme);
+-    std::string title = std::string(tr("palette")) + " (" + g_theme_data[idx].name + ")";
+ 
+     ImGui::SetNextWindowPos({ ds.x - 250.f, 34.f });
+     ImGui::SetNextWindowSize({ 238.f, 0.f });
+@@ -27,7 +26,7 @@
+         ImGuiWindowFlags_NoScrollbar |
+         ImGuiWindowFlags_AlwaysAutoResize);
+ 
+-    ImGui::TextDisabled("%s", title.c_str());
++    ImGui::TextDisabled("%s (%s)", tr("palette"), g_theme_data[idx].name.c_str());
+     ImGui::Spacing();
+     ImGui::Separator();
+     ImGui::Spacing();
+--- a/src/ui/success_popup.cpp
++++ b/src/ui/success_popup.cpp
+@@ -125,11 +125,8 @@
+         ImGui::TextColored(vc, "%s", val);
+     };
+ 
+-    std::string src_d = g_success.src_nick + " (ID: " + g_success.src_id + ")";
+-    std::string dst_d = g_success.dst_nick + " (ID: " + g_success.dst_id + ")";
+-
+-    row(tr("from"), { 0.55f, 0.55f, 0.60f, 1 }, src_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+-    row(tr("to"), { 0.55f, 0.55f, 0.60f, 1 }, dst_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
++    row(tr("from"), { 0.55f, 0.55f, 0.60f, 1 }, g_success.src_label.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
++    row(tr("to"), { 0.55f, 0.55f, 0.60f, 1 }, g_success.dst_label.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+ 
+     ImGui::Spacing();
+     ImGui::PushStyleColor(ImGuiCol_Separator, { 0.55f, 0.55f, 0.60f, 0.20f });
+--- a/src/ui/theme.cpp
++++ b/src/ui/theme.cpp
+@@ -552,6 +552,13 @@
+     g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
+ }
+ 
++void ui_shutdown_theme() {
++    if (g_bg_crimson_tex == (ImTextureID)0) return;
++    GLuint texture = (GLuint)(uintptr_t)(void*)g_bg_crimson_tex;
++    glDeleteTextures(1, &texture);
++    g_bg_crimson_tex = (ImTextureID)0;
++}
++
+ void ui_apply_theme(AppTheme t) {
+     ImGui::StyleColorsDark();
+     g_current_theme = t;
+--- a/src/ui/ui.h
++++ b/src/ui/ui.h
+@@ -5,6 +5,7 @@
+ enum class AppTheme { Dark = 0, Indigo, Vermillion, ClassicSteam, Crimson };
+ 
+ void ui_apply_theme(AppTheme t = AppTheme::Dark);
++void ui_shutdown_theme();
+ void ui_render_main(ImFont* font_big, ImVec2 ds);
+ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time);
+ 
+--- a/tests/avatar_checks.cpp
++++ b/tests/avatar_checks.cpp
+@@ -5,6 +5,7 @@
+ #include <thread>
+ #include <cassert>
+ #include <iostream>
++#include <algorithm>
+ namespace fs = std::filesystem;
+ std::string folder;
+ std::string config_dir() { return folder; }
+@@ -25,6 +26,22 @@
+     assert(ready[0].width > 0 && ready[0].height > 0);
+     assert(ready[0].pixels.size() == static_cast<std::size_t>(ready[0].width) * ready[0].height * 4);
+     assert(avatar_data_take_ready().empty());
++    for (int i = 100; i < 112; ++i) {
++        auto id = std::to_string(i);
++        fs::copy_file(fs::u8path(argv[1]), root / ("avatar_cache/" + id + ".img"));
++        for (int repeat = 0; repeat < 3; ++repeat) avatar_data_request(id);
++    }
++    std::vector<std::string> completed;
++    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
++    while (completed.size() < 12) {
++        for (auto& image : avatar_data_take_ready()) {
++            assert(std::find(completed.begin(), completed.end(), image.id) == completed.end());
++            completed.push_back(image.id);
++        }
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(5));
++    }
++    assert(avatar_data_take_ready().empty());
+     { std::ofstream f(root / "avatar_cache/43.img"); f << "invalid image"; }
+     avatar_data_request("43");
+     avatar_data_shutdown();
+--- /dev/null
++++ b/tests/ui_state_checks.cpp
+@@ -0,0 +1,124 @@
++#include "app.h"
++#include "ui_events.h"
++#include <cassert>
++#include <thread>
++#include <iostream>
++#include <filesystem>
++#include <chrono>
++#include <condition_variable>
++#include "localization.h"
++
++std::string test_folder;
++std::string config_dir() { return test_folder; }
++#ifdef _WIN32
++std::string test_settings;
++std::string read_registry_settings() { return test_settings; }
++bool write_registry_settings(const std::string& value) { test_settings = value; return true; }
++#endif
++
++namespace {
++std::atomic<int> wakes{0};
++void wake() { ++wakes; }
++std::mutex scan_mutex;
++std::condition_variable scan_finished;
++void scan_wake() {
++    std::lock_guard<std::mutex> lock(scan_mutex);
++    ui_events::dirty = false;
++    scan_finished.notify_all();
++}
++}
++
++int main() {
++    ui_events::set_wake(wake);
++    ui_events::dirty = false;
++    std::vector<std::thread> workers;
++    for (int i = 0; i < 8; ++i)
++        workers.emplace_back([] { for (int j = 0; j < 1000; ++j) ui_events::request_redraw(); });
++    for (auto& worker : workers) worker.join();
++    assert(wakes == 1 && ui_events::dirty);
++    ui_events::dirty = false;
++    ui_events::request_redraw();
++    assert(wakes == 2);
++    ui_events::set_wake(nullptr);
++    ui_events::dirty = false;
++    ui_events::request_redraw();
++    assert(wakes == 2);
++
++    {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        src_list = {"42"}; dst_list = {"43"};
++        nick_cache["42"] = "A nickname longer than a small string buffer";
++        status_msg = "scan_complete";
++        app_ui_changed();
++    }
++    const auto& first = app_ui_snapshot();
++    assert(first.source[0].label == nick_cache["42"] + " (42)");
++    assert(first.destination[0].label == "43 (43)");
++    const auto generation = first.generation;
++    const auto* label = first.source[0].label.data();
++    for (int i = 0; i < 1000; ++i) {
++        const auto& same = app_ui_snapshot();
++        assert(same.generation == generation && same.source[0].label.data() == label);
++    }
++
++    std::atomic<bool> done{false};
++    std::thread publisher([&] {
++        for (int i = 0; i < 1000; ++i) {
++            std::lock_guard<std::mutex> lock(g_data_mutex);
++            const auto id = std::to_string(i);
++            src_list = {id}; dst_list = {id};
++            nick_cache.clear(); nick_cache[id] = id;
++            status_detail = id;
++            app_ui_changed();
++        }
++        done = true;
++    });
++    do {
++        const auto& state = app_ui_snapshot();
++        assert(state.source.size() == 1 && state.destination.size() == 1);
++        if (state.generation != generation) {
++            assert(state.source[0].id == state.detail);
++            assert(state.destination[0].id == state.detail);
++            assert(state.source[0].label == state.detail + " (" + state.detail + ")");
++        }
++    } while (!done.load());
++    publisher.join();
++    assert(app_ui_snapshot().source[0].id == "999");
++
++    namespace fs = std::filesystem;
++    auto root = fs::temp_directory_path() / ("dotamanager-ui-state-" +
++        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
++    test_folder = root.u8string();
++    fs::create_directories(root / "source/42");
++    fs::create_directories(root / "destination/43");
++    assert(set_config_path(src_path, (root / "source").u8string()));
++    assert(set_config_path(dst_path, (root / "destination").u8string()));
++    {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        nick_cache = {{"42", "Source"}, {"43", "Destination"}};
++        avatar_url_cache = {{"42", "cached"}, {"43", "cached"}};
++        app_ui_changed();
++    }
++    set_language("uk");
++    save_settings();
++    set_language("en");
++    assert(set_config_path(src_path, ""));
++    load_settings();
++    assert(std::string(src_path) == (root / "source").u8string());
++    assert(std::string(language_code()) == "uk");
++    ui_events::set_wake(scan_wake);
++    ui_events::dirty = false;
++    start_scan();
++    {
++        std::unique_lock<std::mutex> lock(scan_mutex);
++        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
++    }
++    app_shutdown();
++    ui_events::set_wake(nullptr);
++    const auto& scanned = app_ui_snapshot();
++    assert(scanned.source.size() == 1 && scanned.source[0].label == "Source (42)");
++    assert(scanned.destination.size() == 1 && scanned.destination[0].label == "Destination (43)");
++    assert(scanned.status == "scan_complete");
++    fs::remove_all(root);
++    std::cout << "Redraw coalescing, wake lifecycle and coherent cached UI state passed\n";
++}
