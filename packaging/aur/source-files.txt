@@ -12,3 +12,15 @@ tests/package_update_checks.cpp
 tests/update_ui_checks.cpp
 tests/version_build_checks.cpp
 src/ui/main_window.cpp
+src/core/app.cpp
+src/core/app.h
+src/core/avatar_data.cpp
+src/core/localization.cpp
+src/core/ui_events.h
+src/ui/backups_popup.cpp
+src/ui/panels.cpp
+src/ui/success_popup.cpp
+src/ui/theme.cpp
+src/ui/ui.h
+tests/avatar_checks.cpp
+tests/ui_state_checks.cpp

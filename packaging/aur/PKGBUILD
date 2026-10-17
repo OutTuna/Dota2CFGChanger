@@ -1,6 +1,6 @@
 pkgname=dota2cfgchanger
 pkgver=1.22
-pkgrel=3
+pkgrel=4
 pkgdesc='Copy Dota 2 settings between Steam accounts'
 arch=('x86_64')
 url='https://github.com/OutTuna/Dota2CFGChanger'
@@ -22,7 +22,7 @@ sha256sums=('c14f0702dbaac396d21a467e2a15d9bc9bb4d241e22401bd587c55f42cb80307'
             'e84b8ef348f41072609f53aab05bdaab24bf5916c62d99651dfbeaf282a8e0a2'
             'c5fbc5dcab1d46064001c3b84d7a88812985cde7e0e9ced03f5677bec1ba502a'
             '9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515'
-            '4a5b10f6fe6144751bb57a2ca4081bb53154af1112d728d8e30352b0bc998802')
+            '3d59e1d21d4a3b70f3930e2b77cccffb3a98eaffe3e73024d84a4e340f46c275')
 
 prepare() {
     patch -d "Dota2CFGChanger-${pkgver}" -p1 < "${srcdir}/packaging-support.patch"
