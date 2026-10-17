@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <memory>
 #include <atomic>
+#include <deque>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -22,27 +23,6 @@
 namespace fs = std::filesystem;
 
 namespace {
-
-class Semaphore {
-public:
-    explicit Semaphore(int count) : count_(count) {}
-    void acquire() {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock, [&] { return count_ > 0; });
-        --count_;
-    }
-    void release() {
-        std::unique_lock<std::mutex> lock(mutex_);
-        ++count_;
-        cv_.notify_one();
-    }
-private:
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    int count_;
-};
-
-Semaphore g_fetch_slots(8);
 
 const char* USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -64,33 +44,37 @@ struct AvatarEntry {
 
 static std::map<std::string, AvatarEntry> g_avatars;
 static std::mutex g_mutex;
+static std::atomic<bool> g_ready{false};
 
 static void fetch_thread(const std::string steam3_id);
 static void mark_failed(const std::string& id);
 
-struct TrackedThread {
-    std::thread th;
-    std::shared_ptr<std::atomic<bool>> done;
-};
 static std::mutex g_threads_mutex;
-static std::vector<TrackedThread> g_threads;
+static std::condition_variable g_work;
+static std::deque<std::string> g_queue;
+static std::vector<std::thread> g_threads;
+static bool g_stopping = false;
 
 static void launch_fetch(const std::string& steam3_id) {
-    auto done = std::make_shared<std::atomic<bool>>(false);
-    std::thread th([steam3_id, done] {
-        try { fetch_thread(steam3_id); } catch (...) { mark_failed(steam3_id); }
-        done->store(true);
-    });
-
     std::lock_guard<std::mutex> lock(g_threads_mutex);
-    g_threads.erase(
-        std::remove_if(g_threads.begin(), g_threads.end(),
-            [](TrackedThread& t) {
-                if (t.done->load()) { t.th.join(); return true; }
-                return false;
-            }),
-        g_threads.end());
-    g_threads.push_back({ std::move(th), std::move(done) });
+    if (g_stopping) return;
+    if (g_threads.size() < 8) {
+        g_threads.emplace_back([] {
+            for (;;) {
+                std::string id;
+                {
+                    std::unique_lock<std::mutex> lock(g_threads_mutex);
+                    g_work.wait(lock, [] { return g_stopping || !g_queue.empty(); });
+                    if (g_stopping) return;
+                    id = std::move(g_queue.front());
+                    g_queue.pop_front();
+                }
+                try { fetch_thread(id); } catch (...) { mark_failed(id); }
+            }
+        });
+    }
+    g_queue.push_back(steam3_id);
+    g_work.notify_one();
 }
 
 static void mark_failed(const std::string& id) {
@@ -107,6 +91,7 @@ static void mark_ready(const std::string& id, std::vector<unsigned char>&& pixel
     entry.width = w;
     entry.height = h;
     entry.state = AvatarState::Ready;
+    g_ready = true;
     ui_events::request_redraw();
 }
 
@@ -153,9 +138,6 @@ static void fetch_thread(const std::string steam3_id) {
         decode_and_store(steam3_id, raw);
         return;
     }
-
-    g_fetch_slots.acquire();
-    struct SlotGuard { ~SlotGuard() { g_fetch_slots.release(); } } slot_guard;
 
     std::string avatar_url;
     {
@@ -223,6 +205,7 @@ void avatar_data_request(const std::string& steam3_id) {
 
 std::vector<AvatarPixels> avatar_data_take_ready() {
     std::vector<AvatarPixels> result;
+    if (!g_ready.exchange(false)) return result;
     std::lock_guard<std::mutex> lock(g_mutex);
     for (auto& [id, entry] : g_avatars) {
         if (entry.state == AvatarState::Ready && !entry.pixels.empty()) {
@@ -236,12 +219,18 @@ std::vector<AvatarPixels> avatar_data_take_ready() {
 void avatar_data_shutdown() {
     {
         std::lock_guard<std::mutex> lock(g_threads_mutex);
-        for (auto& t : g_threads) {
-            if (t.th.joinable()) t.th.join();
-        }
-        g_threads.clear();
+        g_stopping = true;
+        g_queue.clear();
     }
+    g_work.notify_all();
+    for (auto& t : g_threads) if (t.joinable()) t.join();
+    g_threads.clear();
 
     std::lock_guard<std::mutex> lock(g_mutex);
     g_avatars.clear();
+    g_ready = false;
+    {
+        std::lock_guard<std::mutex> threads_lock(g_threads_mutex);
+        g_stopping = false;
+    }
 }
