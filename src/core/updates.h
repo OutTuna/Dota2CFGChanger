@@ -17,6 +17,7 @@ void updates_check(bool manual);
 void updates_download();
 void updates_dismiss();
 UpdateSnapshot updates_snapshot();
+UpdatePhase updates_phase();
 void updates_shutdown();
 
 void updates_install();

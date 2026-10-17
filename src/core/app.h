@@ -7,6 +7,7 @@
 #include <map>
 #include <mutex>
 #include <atomic>
+#include "ui_events.h"
 
 constexpr int PATH_BUF_SIZE = 4096;
 
@@ -35,6 +36,25 @@ inline std::atomic<int> selected_src{ -1 };
 inline std::atomic<int> selected_dst{ -1 };
 inline std::atomic<bool> g_scanning{ false };
 
+inline std::atomic<unsigned long long> g_ui_generation{1};
+inline void app_ui_changed() {
+    ++g_ui_generation;
+    ui_events::request_redraw();
+}
+
+struct AccountView {
+    std::string id;
+    std::string label;
+};
+struct UiSnapshot {
+    unsigned long long generation = 0;
+    std::vector<AccountView> source;
+    std::vector<AccountView> destination;
+    std::string status;
+    std::string detail;
+};
+const UiSnapshot& app_ui_snapshot();
+
 struct SuccessPopupState {
     bool show = false;
     bool closing = false;
@@ -44,6 +64,8 @@ struct SuccessPopupState {
     std::string dst_id;
     std::string src_nick;
     std::string dst_nick;
+    std::string src_label;
+    std::string dst_label;
     std::string src_folder;
     std::string dst_folder;
 };

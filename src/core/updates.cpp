@@ -3,11 +3,13 @@
 #include "checksum.h"
 #include "platform.h"
 #include "update_transport.h"
+#include "ui_events.h"
 #include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <chrono>
 #include <stdexcept>
 
 #include "app_version.h"
@@ -26,25 +28,28 @@ void fail(const char* key, const std::string& detail) {
     state.phase = UpdatePhase::Failed;
     state.error_key = key;
     state.detail = detail;
+    ui_events::request_redraw();
 }
 }
 
 bool updates_self_install_enabled() { return !DOTAMANAGER_PACKAGE_MANAGED; }
 const char* app_version() { return DOTA_APP_VERSION; }
 UpdateSnapshot updates_snapshot() { std::lock_guard<std::mutex> lock(mutex); return state; }
-void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; }
+UpdatePhase updates_phase() { std::lock_guard<std::mutex> lock(mutex); return state.phase; }
+void updates_dismiss() { std::lock_guard<std::mutex> lock(mutex); state.popup = false; ui_events::request_redraw(); }
 
 void updates_check(bool manual) {
     if (!manual && std::string(app_version()) == "0.0") return;
     {
         std::lock_guard<std::mutex> lock(mutex);
         if (state.phase == UpdatePhase::Checking || state.phase == UpdatePhase::Downloading || state.phase == UpdatePhase::Installing) {
-            if (manual) state.popup = true;
+            if (manual) { state.popup = true; ui_events::request_redraw(); }
             return;
         }
         state = {};
         state.phase = UpdatePhase::Checking;
         state.popup = manual;
+        ui_events::request_redraw();
     }
     if (worker.joinable()) worker.join();
     stopping = false;
@@ -62,6 +67,7 @@ void updates_check(bool manual) {
             state.release = std::move(release);
             state.phase = available ? UpdatePhase::Available : UpdatePhase::Current;
             state.popup = manual || available;
+            ui_events::request_redraw();
         } catch (const std::exception& e) { fail("update_check_failed", e.what()); }
     });
 }
@@ -78,6 +84,7 @@ void updates_download() {
         state.error_key.clear();
         state.progress = 0;
         state.popup = true;
+        ui_events::request_redraw();
     }
     if (worker.joinable()) worker.join();
     stopping = false;
@@ -93,9 +100,16 @@ void updates_download() {
                 if (fs::file_size(target) != release.size || file_sha256(target) != release.digest)
                     throw std::runtime_error("Existing update file does not match release; open GitHub to download manually");
             } else {
-                download_update_asset(release, partial, [release](std::uint64_t now) {
+                auto last_notice = std::chrono::steady_clock::time_point{};
+                download_update_asset(release, partial, [size = release.size, &last_notice](std::uint64_t now) {
                     std::lock_guard<std::mutex> lock(mutex);
-                    state.progress = static_cast<float>(static_cast<double>(now) / release.size);
+                    const auto clock = std::chrono::steady_clock::now();
+                    const auto progress = static_cast<float>(static_cast<double>(now) / size);
+                    if (progress != state.progress && clock - last_notice >= std::chrono::milliseconds(16)) {
+                        state.progress = progress;
+                        last_notice = clock;
+                        ui_events::request_redraw();
+                    }
                     return !stopping.load();
                 });
                 if (fs::file_size(partial) != release.size) throw std::runtime_error("Download incomplete");
@@ -109,6 +123,7 @@ void updates_download() {
             state.phase = UpdatePhase::Downloaded;
             state.progress = 1;
             state.downloaded_path = target.u8string();
+            ui_events::request_redraw();
         } catch (const std::exception& e) {
             std::error_code ec;
             if (!partial.empty()) fs::remove(partial, ec);
@@ -133,6 +148,7 @@ void updates_install() {
         state.phase = UpdatePhase::Installing;
         state.error_key.clear();
         state.popup = true;
+        ui_events::request_redraw();
     }
     if (worker.joinable()) worker.join();
     stopping = false;
@@ -141,6 +157,7 @@ void updates_install() {
             prepare_update_install(fs::u8path(update.downloaded_path), update.release,
                 [] { return !stopping.load(); });
             restart_ready = true;
+            ui_events::request_redraw();
         } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
     });
 }
@@ -150,4 +167,5 @@ void updates_install_error(const std::string& detail) {
     fail("update_install_failed", detail);
     std::lock_guard<std::mutex> lock(mutex);
     state.popup = true;
+    ui_events::request_redraw();
 }

@@ -9,7 +9,6 @@ std::string g_confirm_dst_label;
 
 void render_palette_panel(ImVec2 ds) {
     int idx = static_cast<int>(g_current_theme);
-    std::string title = std::string(tr("palette")) + " (" + g_theme_data[idx].name + ")";
 
     ImGui::SetNextWindowPos({ ds.x - 250.f, 34.f });
     ImGui::SetNextWindowSize({ 238.f, 0.f });
@@ -27,7 +26,7 @@ void render_palette_panel(ImVec2 ds) {
         ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_AlwaysAutoResize);
 
-    ImGui::TextDisabled("%s", title.c_str());
+    ImGui::TextDisabled("%s (%s)", tr("palette"), g_theme_data[idx].name.c_str());
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();

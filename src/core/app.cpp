@@ -2,6 +2,7 @@
 #include "backups.h"
 #include "file_ops.h"
 #include "localization.h"
+#include "ui_events.h"
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
@@ -24,6 +25,7 @@ static void set_status(const std::string& s, const std::string& detail = {}) {
     std::lock_guard<std::mutex> lock(g_data_mutex);
     status_msg = s;
     status_detail = detail;
+    app_ui_changed();
 }
 
 bool set_config_path(char* target, const std::string& path) {
@@ -39,6 +41,7 @@ bool set_config_path(char* target, const std::string& path) {
             if (target == dst_path) { dst_list.clear(); selected_dst = -1; }
         }
         std::memcpy(target, normalized.c_str(), normalized.size() + 1);
+        app_ui_changed();
         return true;
     } catch (const ConfigFileError& e) {
         set_status(e.key, e.detail);
@@ -107,6 +110,7 @@ void load_settings() {
             for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
         } catch (...) {}
     }
+    app_ui_changed();
 }
 
 void save_settings() {
@@ -137,6 +141,35 @@ void save_settings() {
     } catch (...) {}
 }
 
+const UiSnapshot& app_ui_snapshot() {
+    static UiSnapshot cached;
+    if (cached.generation == g_ui_generation.load()) return cached;
+    UiSnapshot next;
+    std::vector<std::string> source, destination;
+    std::map<std::string, std::string> names;
+    {
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        next.generation = g_ui_generation.load();
+        source = src_list;
+        destination = dst_list;
+        names = nick_cache;
+        next.status = status_msg;
+        next.detail = status_detail;
+    }
+    auto prepare = [&](const std::vector<std::string>& ids, std::vector<AccountView>& views) {
+        views.reserve(ids.size());
+        for (const auto& id : ids) {
+            const auto found = names.find(id);
+            const auto& nickname = found == names.end() ? id : found->second;
+            views.push_back({id, nickname + " (" + id + ")"});
+        }
+    };
+    prepare(source, next.source);
+    prepare(destination, next.destination);
+    cached = std::move(next);
+    return cached;
+}
+
 static void fetch_profile_info(const std::string& id) {
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
@@ -158,6 +191,7 @@ static void fetch_profile_info(const std::string& id) {
     std::lock_guard<std::mutex> lock(g_data_mutex);
     if (!nick.empty())       nick_cache[id] = nick;
     if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
+    app_ui_changed();
 }
 
 static void scan_thread() {
@@ -207,8 +241,9 @@ static void scan_thread() {
         std::lock_guard<std::mutex> lock(g_data_mutex);
         selected_src = -1;
         selected_dst = -1;
-        src_list = new_src;
-        dst_list = new_dst;
+        src_list.swap(new_src);
+        dst_list.swap(new_dst);
+        app_ui_changed();
     }
 
     for (const auto& id : all_ids) {
@@ -219,6 +254,7 @@ static void scan_thread() {
     save_settings();
     if (!scan_failed) set_status("scan_complete");
     g_scanning = false;
+    ui_events::request_redraw();
 }
 
 void copy_config() {
@@ -260,6 +296,8 @@ void copy_config() {
         g_success.dst_id = d_id;
         g_success.src_nick = s_nick;
         g_success.dst_nick = d_nick;
+        g_success.src_label = s_nick + " (ID: " + s_id + ")";
+        g_success.dst_label = d_nick + " (ID: " + d_id + ")";
         g_success.src_folder = src.u8string();
         g_success.dst_folder = dst.u8string();
         g_success.show = true;
@@ -278,6 +316,7 @@ void start_scan() {
         try { scan_thread(); }
         catch (const std::exception& e) { set_status("error", e.what()); }
         g_scanning = false;
+        ui_events::request_redraw();
     });
 }
 

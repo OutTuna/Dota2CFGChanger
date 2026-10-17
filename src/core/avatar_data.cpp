@@ -1,5 +1,6 @@
 #include "avatar_data.h"
 #include "app.h"
+#include "ui_events.h"
 #include <cpr/cpr.h>
 
 #include <string>
@@ -106,6 +107,7 @@ static void mark_ready(const std::string& id, std::vector<unsigned char>&& pixel
     entry.width = w;
     entry.height = h;
     entry.state = AvatarState::Ready;
+    ui_events::request_redraw();
 }
 
 static fs::path disk_cache_path(const std::string& id) {
