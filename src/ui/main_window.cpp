@@ -150,22 +150,23 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         + ImGui::GetStyle().WindowPadding.y;
     const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
 
-    std::vector<std::string> local_src_list, local_dst_list;
-    std::map<std::string, std::string> local_nick_cache;
-    std::string local_status;
-    {
-        std::lock_guard<std::mutex> lock(g_data_mutex);
-        local_src_list = src_list;
-        local_dst_list = dst_list;
-        local_nick_cache = nick_cache;
-        local_status = tr_value(status_msg.c_str(), status_detail);
+    const auto& snapshot = app_ui_snapshot();
+    const auto& local_src_list = snapshot.source;
+    const auto& local_dst_list = snapshot.destination;
+    static unsigned long long status_generation = 0;
+    static int status_language = -1;
+    static std::string status_text;
+    if (status_generation != snapshot.generation || status_language != language_index()) {
+        status_generation = snapshot.generation;
+        status_language = language_index();
+        status_text = tr_value("status", tr_value(snapshot.status.c_str(), snapshot.detail));
     }
 
     ImGui::Columns(2, "lists", true);
     ImGui::TextUnformatted(tr("from_account"));
 
     auto render_account_list = [&](
-        const std::vector<std::string>& list,
+        const std::vector<AccountView>& list,
         std::atomic<int>& selected_atomic,
         const char* child_id)
     {
@@ -175,9 +176,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::BeginChild(child_id, { 0, list_h }, true);
 
         for (int i = 0; i < (int)list.size(); i++) {
-            const std::string& id = list[i];
-            std::string nick = local_nick_cache.count(id) ? local_nick_cache[id] : id;
-            std::string label = nick + " (" + id + ")";
+            const auto& id = list[i].id;
+            const auto& label = list[i].label;
             bool sel = (i == selected);
 
             ImGui::PushID(i);
@@ -268,12 +268,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         if (s < 0 || d < 0) {
             copy_config();
         } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
-            const std::string& s_id = local_src_list[s];
-            const std::string& d_id = local_dst_list[d];
-            std::string s_nick = local_nick_cache.count(s_id) ? local_nick_cache[s_id] : s_id;
-            std::string d_nick = local_nick_cache.count(d_id) ? local_nick_cache[d_id] : d_id;
-            g_confirm_src_label = s_nick + " (" + s_id + ")";
-            g_confirm_dst_label = d_nick + " (" + d_id + ")";
+            g_confirm_src_label = local_src_list[s].label;
+            g_confirm_dst_label = local_dst_list[d].label;
             g_confirm_copy_open = true;
         }
     }
@@ -281,7 +277,6 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (scanning) ImGui::EndDisabled();
     const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
     ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
-    const auto status_text = tr_value("status", local_status);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
     ImGui::BeginChild("##status", {0, 32.f},
@@ -306,13 +301,20 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        std::istringstream notice(tr("info_download_warning"));
-        std::string word;
+        static int notice_language = -1;
+        static std::vector<std::string> notice_words;
+        if (notice_language != language_index()) {
+            notice_language = language_index();
+            notice_words.clear();
+            std::istringstream notice(tr("info_download_warning"));
+            std::string word;
+            while (notice >> word) notice_words.push_back(word);
+        }
         const float left = ImGui::GetCursorPosX();
         const float right = left + ImGui::GetContentRegionAvail().x;
         const float gap = ImGui::CalcTextSize(" ").x;
         bool first = true;
-        while (notice >> word) {
+        for (const auto& word : notice_words) {
             const bool link = word == "{source}";
             const char* label = link ? tr("info_download_source") : word.c_str();
             const float width = ImGui::CalcTextSize(label).x;

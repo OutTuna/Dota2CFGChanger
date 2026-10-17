@@ -12,6 +12,7 @@ bool requested = false;
 bool confirming = false;
 std::string account;
 fs::path destination;
+std::string destination_label;
 std::vector<ConfigBackup> backups;
 int selected = -1;
 std::string message;
@@ -35,6 +36,7 @@ void ui_open_backups() {
         account = dst_list[index];
         destination = fs::u8path(dst_path) / account / DOTA_ID;
     }
+    destination_label = destination.u8string();
     confirming = false;
     message.clear();
     backups.clear();
@@ -45,6 +47,7 @@ void ui_open_backups() {
 
 void ui_render_backups_popup() {
     const char* id = "###backups_popup";
+    if (!requested && !ImGui::IsPopupOpen(id)) return;
     if (requested) { ImGui::OpenPopup(id); requested = false; }
     auto display = ImGui::GetIO().DisplaySize;
     float width = std::min(500.f, display.x - 32.f);
@@ -53,13 +56,18 @@ void ui_render_backups_popup() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
     bool open = true;
-    std::string title = std::string(tr("backups")) + id;
+    static int title_language = -1;
+    static std::string title;
+    if (title_language != language_index()) {
+        title_language = language_index();
+        title = std::string(tr("backups")) + id;
+    }
     if (ImGui::BeginPopupModal(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
         ImGui::TextWrapped("%s", tr_value("backup_account", account).c_str());
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("%s", destination.u8string().c_str());
+        ImGui::TextWrapped("%s", destination_label.c_str());
         ImGui::PopStyleColor();
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination.u8string().c_str());
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination_label.c_str());
         ImGui::Separator();
         if (confirming && selected >= 0 && selected < static_cast<int>(backups.size())) {
             ImGui::TextWrapped("%s", tr_value("backup_restore_warning", backups[selected].date).c_str());
@@ -74,6 +82,7 @@ void ui_render_backups_popup() {
                         std::lock_guard<std::mutex> lock(g_data_mutex);
                         status_msg = "backup_restored";
                         status_detail = account;
+                        app_ui_changed();
                     }
                     refresh();
                 } catch (const ConfigFileError& error) { message = tr_value(error.key.c_str(), error.detail); }

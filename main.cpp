@@ -9,13 +9,42 @@
 #include "updates.h"
 #include "update_install.h"
 #include "platform/update_process.h"
+#include "ui_events.h"
+#include <algorithm>
+
+namespace {
+double input_until = 0;
+void input_changed() {
+    input_until = glfwGetTime() + 0.75;
+    ui_events::request_redraw();
+}
+}
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
+#include <mmsystem.h>
 #pragma comment(lib, "ole32.lib")
 #endif
+
+namespace {
+class FrameTimerResolution {
+public:
+    void set_active(bool active) {
+#ifdef _WIN32
+        if (active == enabled) return;
+        if (active) enabled = timeBeginPeriod(1) == TIMERR_NOERROR;
+        else { timeEndPeriod(1); enabled = false; }
+#else
+        (void)active;
+#endif
+    }
+    ~FrameTimerResolution() { set_active(false); }
+private:
+    bool enabled = false;
+};
+}
 
 int main(int argc, char** argv) {
     auto arguments = update_arguments(argc, argv);
@@ -37,6 +66,17 @@ int main(int argc, char** argv) {
     if (!window) return 1;
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
+    ui_events::set_wake(glfwPostEmptyEvent);
+    glfwSetCursorPosCallback(window, [](GLFWwindow*, double, double) { input_changed(); });
+    glfwSetCursorEnterCallback(window, [](GLFWwindow*, int) { input_changed(); });
+    glfwSetMouseButtonCallback(window, [](GLFWwindow*, int, int, int) { input_changed(); });
+    glfwSetScrollCallback(window, [](GLFWwindow*, double, double) { input_changed(); });
+    glfwSetKeyCallback(window, [](GLFWwindow*, int, int, int, int) { input_changed(); });
+    glfwSetCharCallback(window, [](GLFWwindow*, unsigned int) { input_changed(); });
+    glfwSetWindowFocusCallback(window, [](GLFWwindow*, int) { input_changed(); });
+    glfwSetWindowRefreshCallback(window, [](GLFWwindow*) { ui_events::request_redraw(); });
+    glfwSetFramebufferSizeCallback(window, [](GLFWwindow*, int, int) { ui_events::request_redraw(); });
+    glfwSetWindowIconifyCallback(window, [](GLFWwindow*, int) { input_changed(); });
 
     GLFWimage icon;
     icon.width  = APP_ICON_WIDTH;
@@ -75,11 +115,47 @@ int main(int argc, char** argv) {
     if (install_error.empty()) updates_check(false);
     else updates_install_error(install_error);
     bool startup_confirmed = false;
+    double next_frame = 0;
+    int settle_frames = 2;
+    bool last_focus = true;
+    FrameTimerResolution frame_timer;
 
     while (!glfwWindowShouldClose(window) && !updates_should_exit()) {
         glfwPollEvents();
+        if (glfwWindowShouldClose(window) || updates_should_exit()) break;
+        if (updates_phase() == UpdatePhase::Downloaded) updates_install();
+        int dw, dh;
+        glfwGetFramebufferSize(window, &dw, &dh);
+        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) || dw == 0 || dh == 0) {
+            frame_timer.set_active(false);
+            if (ui_events::dirty.exchange(false)) continue;
+            glfwWaitEvents();
+            continue;
+        }
+        bool focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
+        bool held_input = false;
+        for (bool down : io.MouseDown) held_input |= down;
+        for (const auto& key : io.KeysData) held_input |= key.Down;
+        const double now = glfwGetTime();
+        if (focused != last_focus) { next_frame = now; last_focus = focused; }
+        const bool continuous = g_success.show ||
+            (focused && (now < input_until || held_input || io.WantTextInput));
+        if (!ui_events::dirty.load() && settle_frames == 0 && !continuous) {
+            frame_timer.set_active(false);
+            glfwWaitEvents();
+            continue;
+        }
+        frame_timer.set_active(focused);
+        if (now < next_frame) {
+            glfwWaitEventsTimeout(std::max(0.001, next_frame - now));
+            continue;
+        }
+        if (ui_events::dirty.exchange(false)) settle_frames = 2;
+        if (settle_frames > 0) --settle_frames;
+        next_frame = now + (focused ? 1.0 / 60.0 : 1.0 / 5.0);
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
+        io.DeltaTime = std::min(io.DeltaTime, 0.1f);
         ImGui::NewFrame();
 
         ImVec2 ds = io.DisplaySize;
@@ -90,8 +166,8 @@ int main(int argc, char** argv) {
         ui_render_backups_popup();
 
         ImGui::Render();
-        int dw, dh;
         glfwGetFramebufferSize(window, &dw, &dh);
+        if (dw == 0 || dh == 0 || glfwGetWindowAttrib(window, GLFW_ICONIFIED)) continue;
         glViewport(0, 0, dw, dh);
         glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -101,12 +177,14 @@ int main(int argc, char** argv) {
             update_install_confirm_started(arguments);
             startup_confirmed = true;
         }
-        if (updates_snapshot().phase == UpdatePhase::Downloaded) updates_install();
     }
 
+    frame_timer.set_active(false);
     updates_shutdown();
     app_shutdown();
     avatar_shutdown();
+    ui_events::set_wake(nullptr);
+    ui_shutdown_theme();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();

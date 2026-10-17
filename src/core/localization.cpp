@@ -10,9 +10,10 @@ std::atomic<int> current_language{0};
 const char* codes[] = {"en", "ru", "uk"};
 const auto& dictionaries() {
     static const auto values = [] {
-        std::array<std::map<std::string, std::string>, 3> result;
+        using Dictionary = std::map<std::string, std::string, std::less<>>;
+        std::array<Dictionary, 3> result;
         for (int i = 0; i < 3; ++i)
-            result[i] = nlohmann::json::parse(embedded_locales::json[i]).get<std::map<std::string, std::string>>();
+            result[i] = nlohmann::json::parse(embedded_locales::json[i]).get<Dictionary>();
         return result;
     }();
     return values;

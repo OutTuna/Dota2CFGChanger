@@ -125,11 +125,8 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
         ImGui::TextColored(vc, "%s", val);
     };
 
-    std::string src_d = g_success.src_nick + " (ID: " + g_success.src_id + ")";
-    std::string dst_d = g_success.dst_nick + " (ID: " + g_success.dst_id + ")";
-
-    row(tr("from"), { 0.55f, 0.55f, 0.60f, 1 }, src_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
-    row(tr("to"), { 0.55f, 0.55f, 0.60f, 1 }, dst_d.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+    row(tr("from"), { 0.55f, 0.55f, 0.60f, 1 }, g_success.src_label.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
+    row(tr("to"), { 0.55f, 0.55f, 0.60f, 1 }, g_success.dst_label.c_str(), { 0.92f, 0.92f, 0.94f, 1 });
 
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Separator, { 0.55f, 0.55f, 0.60f, 0.20f });

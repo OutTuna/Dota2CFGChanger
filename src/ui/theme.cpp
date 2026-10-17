@@ -552,6 +552,13 @@ static void load_theme_background(AppTheme t) {
     g_bg_crimson_tex = (ImTextureID)(void*)(uintptr_t)tex;
 }
 
+void ui_shutdown_theme() {
+    if (g_bg_crimson_tex == (ImTextureID)0) return;
+    GLuint texture = (GLuint)(uintptr_t)(void*)g_bg_crimson_tex;
+    glDeleteTextures(1, &texture);
+    g_bg_crimson_tex = (ImTextureID)0;
+}
+
 void ui_apply_theme(AppTheme t) {
     ImGui::StyleColorsDark();
     g_current_theme = t;

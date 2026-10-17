@@ -8,6 +8,7 @@
 void ui_render_update_popup() {
     auto update = updates_snapshot();
     const char* id = "###update_popup";
+    if (!update.popup && !ImGui::IsPopupOpen(id)) return;
     if (update.popup && !ImGui::IsPopupOpen(id)) ImGui::OpenPopup(id);
     const auto display = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos({display.x * 0.5f, display.y * 0.5f},
@@ -17,7 +18,12 @@ void ui_render_update_popup() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
     bool open = update.popup;
-    std::string title = std::string(tr("updates")) + id;
+    static int title_language = -1;
+    static std::string title;
+    if (title_language != language_index()) {
+        title_language = language_index();
+        title = std::string(tr("updates")) + id;
+    }
     if (ImGui::BeginPopupModal(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
         float button_width = 170.f;
         for (const char* key : {"update_release", "update_retry", "update_close", "update_download", "update_open_folder", "update_install"})
