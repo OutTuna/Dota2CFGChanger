@@ -1,3 +1,11 @@
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <objbase.h>
+#include <mmsystem.h>
+#pragma comment(lib, "ole32.lib")
+#endif
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -19,14 +27,6 @@ void input_changed() {
     ui_events::request_redraw();
 }
 }
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <objbase.h>
-#include <mmsystem.h>
-#pragma comment(lib, "ole32.lib")
-#endif
 
 namespace {
 class FrameTimerResolution {
