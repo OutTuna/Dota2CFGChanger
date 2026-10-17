@@ -123,9 +123,12 @@ add_library(dotamanager_core STATIC
     src/core/app.cpp
     src/core/backups.cpp
     src/core/file_ops.cpp
+    src/core/file_tasks.cpp
     src/core/localization.cpp
     src/platform/platform.cpp
     src/network/steam_api.cpp
+    src/network/avatar_transport.cpp
+    src/network/profile_transport.cpp
     src/core/avatar_data.cpp
     src/core/release_info.cpp
     src/core/checksum.cpp
@@ -247,6 +250,15 @@ if(DOTAMANAGER_BUILD_TESTS)
     endif()
     add_test(NAME ui_state_checks COMMAND ui_state_checks)
     set_tests_properties(ui_state_checks PROPERTIES TIMEOUT 10)
+    add_executable(file_tasks_checks tests/file_tasks_checks.cpp)
+    target_link_libraries(file_tasks_checks PRIVATE dotamanager_core)
+    if(MSVC)
+        target_compile_options(file_tasks_checks PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(file_tasks_checks PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME file_tasks_checks COMMAND file_tasks_checks)
+    set_tests_properties(file_tasks_checks PROPERTIES TIMEOUT 10)
     add_executable(backup_checks tests/backup_checks.cpp)
     target_link_libraries(backup_checks PRIVATE dotamanager_core)
     if(MSVC)

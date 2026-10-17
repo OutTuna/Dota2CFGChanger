@@ -5,3 +5,4 @@
 ImTextureID avatar_get(const std::string& steam3_id);
 void avatar_flush_pending();
 void avatar_shutdown();
+void avatar_request_stop();

@@ -6,6 +6,7 @@
 #include "backups.h"
 #include <filesystem>
 #include <chrono>
+#include <thread>
 #include <fstream>
 #include <cstdlib>
 #include <imgui_internal.h>
@@ -17,6 +18,7 @@ UpdateSnapshot snapshot;
 bool self_updates = true;
 bool updates_self_install_enabled() { return self_updates; }
 UpdateSnapshot updates_snapshot() { return snapshot; }
+UpdatePhase updates_phase() { return snapshot.phase; }
 void updates_dismiss() { snapshot.popup = false; }
 void updates_download() {}
 void updates_install() {}
@@ -84,6 +86,12 @@ int main() {
             else io.Fonts->AddFontDefault();
             unsigned char* pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h);
             ui_open_backups();
+            auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            while (file_tasks_busy()) {
+                file_tasks_poll();
+                assert(std::chrono::steady_clock::now() < deadline);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
             for (int frame=0; frame<5; ++frame) { ImGui::NewFrame(); ui_render_backups_popup(); ImGui::Render(); }
             auto window = ImGui::FindWindowByName("Backups###backups_popup");
             assert(window && window->Active && window->Size.x <= 720 && window->Size.y <= 568);
@@ -93,6 +101,7 @@ int main() {
             ImGui::DestroyContext();
         }
     }
+    file_tasks_shutdown();
     fs::remove_all(root);
     std::cout << "Update dialog fits all phases in English, Russian and Ukrainian\n";
 }

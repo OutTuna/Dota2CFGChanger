@@ -40,6 +40,8 @@ void avatar_flush_pending() {
     }
 }
 
+void avatar_request_stop() { avatar_data_request_stop(); }
+
 void avatar_shutdown() {
     avatar_data_shutdown();
     for (auto& [id, texture] : textures) {

@@ -1,4 +1,7 @@
 {
+  "settings_save_failed": "Could not save settings/cache: {value}",
+  "scan_profile_warnings": "Scan completed; failed profiles: {value}",
+  "working": "Working...",
   "ready": "Ready",
   "source": "Source config folder",
   "destination": "Destination account folder",

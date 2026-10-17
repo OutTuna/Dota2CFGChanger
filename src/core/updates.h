@@ -19,6 +19,7 @@ void updates_dismiss();
 UpdateSnapshot updates_snapshot();
 UpdatePhase updates_phase();
 void updates_shutdown();
+void updates_request_stop();
 
 void updates_install();
 bool updates_should_exit();

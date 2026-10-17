@@ -3,6 +3,7 @@
 #include "backups.h"
 #include "file_ops.h"
 #include "localization.h"
+#include "updates.h"
 #include <algorithm>
 #include <filesystem>
 
@@ -17,18 +18,21 @@ std::vector<ConfigBackup> backups;
 int selected = -1;
 std::string message;
 fs::path root() { return fs::u8path(config_dir()) / "backups"; }
-void refresh() {
-    backups = list_config_backups(root(), account);
+std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id, const fs::path& destination) {
+    auto result = list_config_backups(folder, id);
     auto target = fs::weakly_canonical(destination);
-    backups.erase(std::remove_if(backups.begin(), backups.end(), [&](const ConfigBackup& backup) {
+    result.erase(std::remove_if(result.begin(), result.end(), [&](const ConfigBackup& backup) {
         return fs::weakly_canonical(backup.destination) != target;
-    }), backups.end());
-    selected = -1;
+    }), result.end());
+    return result;
+}
+FileTaskCompletion failed(const std::string& key, const std::string& detail) {
+    return [key, detail] { message = tr_value(key.c_str(), detail); confirming = false; };
 }
 }
 
 void ui_open_backups() {
-    if (g_scanning.load()) return;
+    if (g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing) return;
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
         int index = selected_dst.load();
@@ -40,8 +44,13 @@ void ui_open_backups() {
     confirming = false;
     message.clear();
     backups.clear();
-    try { refresh(); }
-    catch (const std::exception& error) { message = tr_value("error", error.what()); }
+    selected = -1;
+    file_tasks_start([folder = root(), id = account, target = destination]() -> FileTaskCompletion {
+        try {
+            auto result = find_backups(folder, id, target);
+            return [result = std::move(result)]() mutable { backups = std::move(result); };
+        } catch (const std::exception& error) { return failed("error", error.what()); }
+    });
     requested = true;
 }
 
@@ -69,25 +78,33 @@ void ui_render_backups_popup() {
         ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", destination_label.c_str());
         ImGui::Separator();
+        const bool busy = file_tasks_busy() || updates_phase() == UpdatePhase::Installing;
+        if (busy) { ImGui::TextUnformatted(tr("working")); ImGui::BeginDisabled(); }
         if (confirming && selected >= 0 && selected < static_cast<int>(backups.size())) {
             ImGui::TextWrapped("%s", tr_value("backup_restore_warning", backups[selected].date).c_str());
             if (ImGui::Button(tr("cancel"), {-1.f, 34.f})) confirming = false;
             if (ImGui::Button(tr("backup_restore"), {-1.f, 34.f})) {
-                try {
-                    auto result = restore_config_backup(backups[selected], destination, root(), account);
-                    message = tr_value("backup_restored", account);
-                    if (!result.cleanup_error.empty()) message += "\n" + tr_value("backup_cleanup_failed", result.cleanup_error);
-                    if (!result.retained_backup.empty()) message += "\n" + tr_value("backup_retained", result.retained_backup.u8string());
-                    {
-                        std::lock_guard<std::mutex> lock(g_data_mutex);
-                        status_msg = "backup_restored";
-                        status_detail = account;
-                        app_ui_changed();
-                    }
-                    refresh();
-                } catch (const ConfigFileError& error) { message = tr_value(error.key.c_str(), error.detail); }
-                catch (const std::exception& error) { message = tr_value("error", error.what()); }
-                confirming = false;
+                file_tasks_start([backup = backups[selected], target = destination, folder = root(), id = account]() -> FileTaskCompletion {
+                    try {
+                        auto result = restore_config_backup(backup, target, folder, id);
+                        auto refreshed = find_backups(folder, id, target);
+                        return [result, refreshed = std::move(refreshed), id]() mutable {
+                            message = tr_value("backup_restored", id);
+                            if (!result.cleanup_error.empty()) message += "\n" + tr_value("backup_cleanup_failed", result.cleanup_error);
+                            if (!result.retained_backup.empty()) message += "\n" + tr_value("backup_retained", result.retained_backup.u8string());
+                            {
+                                std::lock_guard<std::mutex> lock(g_data_mutex);
+                                status_msg = "backup_restored";
+                                status_detail = id;
+                                app_status_changed();
+                            }
+                            backups = std::move(refreshed);
+                            selected = -1;
+                            confirming = false;
+                        };
+                    } catch (const ConfigFileError& error) { return failed(error.key, error.detail); }
+                    catch (const std::exception& error) { return failed("error", error.what()); }
+                });
             }
         } else {
             ImGui::TextWrapped("%s", tr("backup_retention"));
@@ -103,6 +120,7 @@ void ui_render_backups_popup() {
             if (ImGui::Button(tr("backup_restore"), {-1.f, 34.f})) confirming = true;
             ImGui::EndDisabled();
         }
+        if (busy) ImGui::EndDisabled();
         if (!message.empty()) ImGui::TextWrapped("%s", message.c_str());
         if (ImGui::Button(tr("update_close"), {-1.f, 34.f})) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();

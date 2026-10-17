@@ -12,10 +12,21 @@
 #include <cstring>
 #include <cstdlib>
 #include <thread>
+#include <condition_variable>
+#include <chrono>
 
 namespace {
 std::thread scan_worker;
 std::atomic<bool> stop_scan{false};
+std::atomic<bool> stopping_app{false};
+struct ProfileRequest {
+    bool fetching = false;
+    bool success = false;
+    std::chrono::steady_clock::time_point failed_at{};
+};
+std::map<std::string, ProfileRequest> profiles;
+std::mutex profiles_mutex;
+std::condition_variable profiles_ready;
 }
 
 namespace fs = std::filesystem;
@@ -25,7 +36,7 @@ static void set_status(const std::string& s, const std::string& detail = {}) {
     std::lock_guard<std::mutex> lock(g_data_mutex);
     status_msg = s;
     status_detail = detail;
-    app_ui_changed();
+    app_status_changed();
 }
 
 bool set_config_path(char* target, const std::string& path) {
@@ -110,115 +121,175 @@ void load_settings() {
             for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
         } catch (...) {}
     }
+    ++g_cache_generation;
     app_ui_changed();
 }
 
 void save_settings() {
     static std::mutex save_mutex;
+    static std::string saved;
     std::lock_guard<std::mutex> save_lock(save_mutex);
     std::string source_path, destination_path;
-    std::map<std::string, std::string> nick_copy;
-    std::map<std::string, std::string> avatar_copy;
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
         source_path = src_path;
         destination_path = dst_path;
-        nick_copy = nick_cache;
-        avatar_copy = avatar_url_cache;
     }
     try {
-        json settings = {{"src", source_path},{"dst", destination_path},{"theme", g_theme.load()},{"language", language_code()}};
+        auto settings = json{{"src", source_path}, {"dst", destination_path},
+            {"theme", g_theme.load()}, {"language", language_code()}}.dump();
+        if (settings == saved) return;
 #ifdef _WIN32
-        if (write_registry_settings(settings.dump())) {
+        if (write_registry_settings(settings)) {
             std::error_code cleanup_error;
             fs::remove(settings_path(), cleanup_error);
-        }
+        } else throw std::runtime_error("Cannot save registry settings");
 #else
-        { std::ofstream f(settings_path()); f << settings; }
+        write_file_atomic(settings_path(), settings);
 #endif
-        { std::ofstream fc(nick_cache_path()); json jc(nick_copy); fc << jc; }
-        { std::ofstream fa(avatar_url_cache_path()); json ja(avatar_copy); fa << ja; }
-    } catch (...) {}
+        saved = std::move(settings);
+    } catch (const std::exception& error) { set_status("settings_save_failed", error.what()); }
+}
+
+bool save_profile_caches() {
+    static std::mutex save_mutex;
+    static unsigned long long saved_generation = 0;
+    static std::string saved_names, saved_avatars;
+    std::lock_guard<std::mutex> save_lock(save_mutex);
+    if (saved_generation == g_cache_generation.load()) return true;
+    std::map<std::string, std::string> names, avatars;
+    unsigned long long generation;
+    {
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        generation = g_cache_generation.load();
+        names = nick_cache;
+        avatars = avatar_url_cache;
+    }
+    try {
+        auto names_json = json(names).dump();
+        auto avatars_json = json(avatars).dump();
+        if (names_json != saved_names) {
+            write_file_atomic(nick_cache_path(), names_json);
+            saved_names = std::move(names_json);
+        }
+        if (avatars_json != saved_avatars) {
+            write_file_atomic(avatar_url_cache_path(), avatars_json);
+            saved_avatars = std::move(avatars_json);
+        }
+        saved_generation = generation;
+        return true;
+    } catch (const std::exception& error) { set_status("settings_save_failed", error.what()); return false; }
 }
 
 const UiSnapshot& app_ui_snapshot() {
     static UiSnapshot cached;
     if (cached.generation == g_ui_generation.load()) return cached;
-    UiSnapshot next;
     std::vector<std::string> source, destination;
     std::map<std::string, std::string> names;
+    std::string status, detail;
+    unsigned long long generation, account_generation;
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
-        next.generation = g_ui_generation.load();
-        source = src_list;
-        destination = dst_list;
-        names = nick_cache;
-        next.status = status_msg;
-        next.detail = status_detail;
+        generation = g_ui_generation.load();
+        account_generation = g_account_generation.load();
+        if (account_generation != cached.account_generation) {
+            source = src_list;
+            destination = dst_list;
+            names = nick_cache;
+        }
+        status = status_msg;
+        detail = status_detail;
     }
-    auto prepare = [&](const std::vector<std::string>& ids, std::vector<AccountView>& views) {
+    auto prepare = [&](const std::vector<std::string>& ids) {
+        std::vector<AccountView> views;
         views.reserve(ids.size());
         for (const auto& id : ids) {
             const auto found = names.find(id);
             const auto& nickname = found == names.end() ? id : found->second;
             views.push_back({id, nickname + " (" + id + ")"});
         }
+        return views;
     };
-    prepare(source, next.source);
-    prepare(destination, next.destination);
-    cached = std::move(next);
+    if (account_generation != cached.account_generation) {
+        cached.source = prepare(source);
+        cached.destination = prepare(destination);
+        cached.account_generation = account_generation;
+    }
+    cached.status = std::move(status);
+    cached.detail = std::move(detail);
+    cached.generation = generation;
     return cached;
 }
 
-static void fetch_profile_info(const std::string& id) {
+bool ensure_profile_info(const std::string& id) {
+    if (stopping_app.load()) return false;
+    std::unique_lock<std::mutex> lock(profiles_mutex);
+    auto& request = profiles[id];
+    if (request.fetching) {
+        profiles_ready.wait(lock, [&] { return !request.fetching || stopping_app.load(); });
+        return !stopping_app.load() && request.success;
+    }
     {
-        std::lock_guard<std::mutex> lock(g_data_mutex);
-        if (nick_cache.count(id) && avatar_url_cache.count(id)) return;
+        std::lock_guard<std::mutex> data_lock(g_data_mutex);
+        if (nick_cache.count(id) && avatar_url_cache.count(id)) return true;
     }
-
-    long long steam64 = steam_api::steam3_to_64(id);
-    std::string xml = steam_api::fetch_profile_xml(steam64, 6000);
-    if (xml.empty()) {
-        set_status("profile_failed", id);
-        return;
-    }
-
-    std::string nick = steam_api::extract_tag(xml, "steamID");
-    std::string avatar_url = steam_api::extract_tag(xml, "avatarMedium");
-    if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
-    if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
-
-    std::lock_guard<std::mutex> lock(g_data_mutex);
-    if (!nick.empty())       nick_cache[id] = nick;
-    if (!avatar_url.empty()) avatar_url_cache[id] = avatar_url;
-    app_ui_changed();
+    if (request.failed_at != std::chrono::steady_clock::time_point{} &&
+        std::chrono::steady_clock::now() - request.failed_at < std::chrono::seconds(30)) return false;
+    request.fetching = true;
+    lock.unlock();
+    bool success = false;
+    try {
+        auto xml = steam_api::fetch_profile_xml(steam_api::steam3_to_64(id), 6000);
+        if (!xml.empty() && !stopping_app.load()) {
+            auto nick = steam_api::extract_tag(xml, "steamID");
+            auto avatar_url = steam_api::extract_tag(xml, "avatarMedium");
+            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarFull");
+            if (avatar_url.empty()) avatar_url = steam_api::extract_tag(xml, "avatarIcon");
+            success = !nick.empty() || !avatar_url.empty();
+            std::lock_guard<std::mutex> data_lock(g_data_mutex);
+            bool names_changed = !nick.empty() && nick_cache[id] != nick;
+            bool avatar_changed = !avatar_url.empty() && avatar_url_cache[id] != avatar_url;
+            if (names_changed) nick_cache[id] = std::move(nick);
+            if (avatar_changed) avatar_url_cache[id] = std::move(avatar_url);
+            if (names_changed || avatar_changed) ++g_cache_generation;
+            if (names_changed) app_ui_changed();
+        }
+    } catch (...) {}
+    lock.lock();
+    request.success = success;
+    request.fetching = false;
+    request.failed_at = success ? std::chrono::steady_clock::time_point{} : std::chrono::steady_clock::now();
+    lock.unlock();
+    profiles_ready.notify_all();
+    return success;
 }
 
 static void scan_thread() {
     g_scanning = true;
     set_status("scanning");
-    save_settings();
 
     std::vector<std::string> all_ids;
     std::vector<std::string> new_src, new_dst;
 
-    bool scan_failed = false;
+    std::string scan_error;
+    int profile_errors = 0;
     auto scan_dir = [&](const std::string& path, std::vector<std::string>& list) {
         std::error_code ec;
         if (path.empty() || !fs::is_directory(fs::u8path(path), ec) || ec) {
-            scan_failed = true;
-            set_status("folder_unreadable", path);
+            if (scan_error.empty()) scan_error = path;
             return;
         }
 
-        fs::directory_iterator it(fs::u8path(path), fs::directory_options::skip_permission_denied, ec);
+        fs::directory_iterator it(fs::u8path(path), ec);
         fs::directory_iterator end;
-        if (ec) { scan_failed = true; set_status("folder_unreadable", path); return; }
+        if (ec) { if (scan_error.empty()) scan_error = path; return; }
 
         for (; it != end; it.increment(ec)) {
-            if (ec) break; // stop scanning this folder, keep what we found so far
+            if (ec) { if (scan_error.empty()) scan_error = path; break; }
             bool is_dir = it->is_directory(ec);
-            if (ec || !is_dir) continue;
+            if (ec) { if (scan_error.empty()) scan_error = path; ec.clear(); continue; }
+            if (stop_scan.load()) break;
+            if (!is_dir) continue;
             std::string fname = it->path().filename().u8string();
             if (!fname.empty() &&
                 std::all_of(fname.begin(), fname.end(), [](unsigned char c) { return ::isdigit(c); })) {
@@ -226,6 +297,7 @@ static void scan_thread() {
                 list.push_back(fname);
             }
         }
+        if (ec && scan_error.empty()) scan_error = path;
     };
 
     std::string source_path, destination_path;
@@ -235,7 +307,12 @@ static void scan_thread() {
         destination_path = dst_path;
     }
     scan_dir(source_path, new_src);
-    scan_dir(destination_path, new_dst);
+    std::error_code equivalent_error;
+    bool same_path = source_path == destination_path || fs::equivalent(fs::u8path(source_path), fs::u8path(destination_path), equivalent_error);
+    if (same_path) new_dst = new_src;
+    else scan_dir(destination_path, new_dst);
+    std::sort(all_ids.begin(), all_ids.end());
+    all_ids.erase(std::unique(all_ids.begin(), all_ids.end()), all_ids.end());
 
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
@@ -248,23 +325,27 @@ static void scan_thread() {
 
     for (const auto& id : all_ids) {
         if (stop_scan.load()) break;
-        fetch_profile_info(id);
+        if (!ensure_profile_info(id)) ++profile_errors;
     }
 
-    save_settings();
-    if (!scan_failed) set_status("scan_complete");
+    bool caches_saved = save_profile_caches();
+    if (!stop_scan.load() && caches_saved) {
+        if (!scan_error.empty()) set_status("folder_unreadable", scan_error);
+        else if (profile_errors) set_status("scan_profile_warnings", std::to_string(profile_errors));
+        else set_status("scan_complete");
+    }
     g_scanning = false;
     ui_events::request_redraw();
 }
 
 void copy_config() {
-    if (g_scanning.load()) return;
+    if (g_scanning.load() || file_tasks_busy()) return;
     int s_idx = selected_src.load();
     int d_idx = selected_dst.load();
 
     if (s_idx < 0 || d_idx < 0) { set_status("select_first"); return; }
 
-    std::string s_id, d_id, s_nick, d_nick;
+    std::string s_id, d_id, s_nick, d_nick, source_path, destination_path;
     {
         std::lock_guard<std::mutex> lock(g_data_mutex);
         if (s_idx >= (int)src_list.size() || d_idx >= (int)dst_list.size()) return;
@@ -272,56 +353,81 @@ void copy_config() {
         d_id = dst_list[d_idx];
         s_nick = nick_cache.count(s_id) ? nick_cache[s_id] : ("ID: " + s_id);
         d_nick = nick_cache.count(d_id) ? nick_cache[d_id] : ("ID: " + d_id);
+        source_path = src_path;
+        destination_path = dst_path;
     }
 
-    try {
-        fs::path src = fs::u8path(src_path) / s_id / DOTA_ID;
-        fs::path dst = fs::u8path(dst_path) / d_id / DOTA_ID;
+    if (!file_tasks_start([s_id, d_id, s_nick, d_nick, source_path, destination_path]() -> FileTaskCompletion {
+        set_status("working");
+        try {
+            fs::path src = fs::u8path(source_path) / s_id / DOTA_ID;
+            fs::path dst = fs::u8path(destination_path) / d_id / DOTA_ID;
 
-        if (!fs::exists(src)) { set_status("no_config"); return; }
+            if (!fs::exists(src)) { set_status("no_config"); return {}; }
 
-        std::error_code eq_ec;
-        if (fs::exists(dst) && fs::equivalent(src, dst, eq_ec) && !eq_ec) {
-            set_status("same_folder");
-            return;
+            std::error_code eq_ec;
+            if (fs::exists(dst) && fs::equivalent(src, dst, eq_ec) && !eq_ec) {
+                set_status("same_folder");
+                return {};
+            }
+
+            auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
+            if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
+            else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
+            else set_status("copy_success", d_id);
+
+            SuccessPopupState success;
+            success.src_id = s_id;
+            success.dst_id = d_id;
+            success.src_nick = s_nick;
+            success.dst_nick = d_nick;
+            success.src_label = s_nick + " (ID: " + s_id + ")";
+            success.dst_label = d_nick + " (ID: " + d_id + ")";
+            success.src_folder = src.u8string();
+            success.dst_folder = dst.u8string();
+            success.show = true;
+            return [success = std::move(success)] { g_success = success; };
+        } catch (const ConfigFileError& e) {
+            set_status(e.key, e.detail);
+        } catch (const std::exception& e) {
+            set_status("error", e.what());
         }
-
-        auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
-        if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
-        else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
-        else set_status("copy_success", d_id);
-
-        g_success = {};
-        g_success.src_id = s_id;
-        g_success.dst_id = d_id;
-        g_success.src_nick = s_nick;
-        g_success.dst_nick = d_nick;
-        g_success.src_label = s_nick + " (ID: " + s_id + ")";
-        g_success.dst_label = d_nick + " (ID: " + d_id + ")";
-        g_success.src_folder = src.u8string();
-        g_success.dst_folder = dst.u8string();
-        g_success.show = true;
-    } catch (const ConfigFileError& e) {
-        set_status(e.key, e.detail);
-    } catch (const std::exception& e) {
-        set_status("error", e.what());
-    }
+        return {};
+    })) return;
 }
 
 void start_scan() {
-    if (g_scanning.exchange(true)) return;
+    if (stopping_app.load() || file_tasks_busy() || g_scanning.exchange(true)) return;
     if (scan_worker.joinable()) scan_worker.join();
     stop_scan = false;
-    scan_worker = std::thread([] {
-        try { scan_thread(); }
-        catch (const std::exception& e) { set_status("error", e.what()); }
+    try {
+        scan_worker = std::thread([] {
+            try { scan_thread(); }
+            catch (const std::exception& e) { set_status("error", e.what()); }
+            g_scanning = false;
+            ui_events::request_redraw();
+        });
+    } catch (const std::exception& error) {
         g_scanning = false;
-        ui_events::request_redraw();
-    });
+        set_status("error", error.what());
+    }
+}
+
+void app_request_stop() {
+    {
+        std::lock_guard<std::mutex> lock(profiles_mutex);
+        stopping_app = true;
+    }
+    stop_scan = true;
+    profiles_ready.notify_all();
+    steam_api::cancel_requests();
+    file_tasks_request_stop();
 }
 
 void app_shutdown() {
-    stop_scan = true;
+    app_request_stop();
     if (scan_worker.joinable()) scan_worker.join();
+    file_tasks_shutdown();
     save_settings();
+    save_profile_caches();
 }

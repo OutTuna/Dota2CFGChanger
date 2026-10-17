@@ -1,10 +1,5 @@
 #include "steam_api.h"
-#include <cpr/cpr.h>
 #include <cstring>
-
-static const char* USER_AGENT =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 namespace steam_api {
 
@@ -16,19 +11,6 @@ long long steam3_to_64(const std::string& steam3_id) {
     } catch (...) {
         return 0;
     }
-}
-
-std::string fetch_profile_xml(long long steam64, int timeout_ms) {
-    if (steam64 <= 0) return {};
-    try {
-        auto r = cpr::Get(
-            cpr::Url{ "https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1" },
-            cpr::Header{{"User-Agent", USER_AGENT}, {"Accept", "text/xml,application/xml,*/*"}},
-            cpr::Timeout{ timeout_ms },
-            cpr::Redirect{ cpr::PostRedirectFlags::POST_ALL });
-        if (r.status_code == 200) return r.text;
-    } catch (...) {}
-    return {};
 }
 
 static std::string decode_xml_entities(std::string s) {
