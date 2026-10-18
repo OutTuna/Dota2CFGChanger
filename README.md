@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="resources/icons/dotamanager.png" width="64" height="64" alt="Dota 2 Config Manager icon">
+  <img src="resources/icons/dotamanager.png" width="72" height="72" alt="Dota 2 Config Manager icon">
 </p>
 
 <h1 align="center">Dota 2 Config Manager</h1>
@@ -11,77 +11,167 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml"><img src="https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?branch=main&amp;style=for-the-badge&amp;label=build" alt="Build status"></a>
+  <a href="https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml"><img src="https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?branch=main&amp;style=for-the-badge&amp;label=build" alt="Windows and Linux build status"></a>
   <a href="https://github.com/OutTuna/Dota2CFGChanger/releases/latest"><img src="https://img.shields.io/badge/download-Latest-c95050?style=for-the-badge" alt="Download Latest"></a>
-  <a href="#getting-started"><img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-586575?style=for-the-badge" alt="Windows and Linux"></a>
-  <a href="#a-few-details"><img src="https://img.shields.io/badge/languages-EN%20%7C%20RU%20%7C%20UA-586575?style=for-the-badge" alt="English, Russian and Ukrainian"></a>
+  <a href="#download"><img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-586575?style=for-the-badge" alt="Windows and Linux"></a>
+  <a href="#features"><img src="https://img.shields.io/badge/languages-EN%20%7C%20RU%20%7C%20UA-586575?style=for-the-badge" alt="English, Russian and Ukrainian"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-586575?style=for-the-badge" alt="MIT license"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/OutTuna/Dota2CFGChanger/releases/latest">Download</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#build-from-source">Build</a> ·
   <a href="https://github.com/OutTuna/Dota2CFGChanger/issues">Issues</a> ·
   <a href="docs/TODO.md">Roadmap</a> ·
   <a href="#русский">Русский</a>
 </p>
 
-Copy your Dota 2 settings from one Steam account to another. Pick the account with the setup you want, choose the destination, and confirm the copy.
+Copy your Dota 2 configuration between Steam accounts, with verified backups and a restore history. Choose the source, choose the destination, and confirm the transfer. No Steam login or API key required.
 
-## Getting started
+## Features
 
-Download `DotaManager.exe` for Windows or `Dota2_CFG_Changer-x86_64.AppImage` for Linux from the releases page. Themes and translations are built in; there is no installer or extra resource folder to download.
+| Transfer | Recover | Keep it lightweight |
+| --- | --- | --- |
+| Find Steam accounts and copy their Dota 2 config. | Keep the last **5 verified backups per account** and restore from the app. | Wait for events at rest; scan, copy and load avatars in the background. |
 
-On Linux, make the AppImage executable before opening it:
+- **Three languages:** English, Russian and Ukrainian. English is the default.
+- **Five built-in themes:** Dark by default, with a palette editor for Crimson.
+- **Standalone releases:** one Windows executable or Linux AppImage, with themes and translations embedded.
+- **Account previews:** cached names and avatars from public Steam Community profiles. Failed lookups still leave the account ID visible.
+- **Verified updates:** check file size and SHA-256, replace the application through a helper, then confirm the new window has started.
+
+## Download
+
+| Platform | Standalone download | Run |
+| --- | --- | --- |
+| Windows x64 | [DotaManager.exe](https://github.com/OutTuna/Dota2CFGChanger/releases/latest/download/DotaManager.exe) | Open the executable. |
+| Linux x86_64 | [Dota2_CFG_Changer-x86_64.AppImage](https://github.com/OutTuna/Dota2CFGChanger/releases/latest/download/Dota2_CFG_Changer-x86_64.AppImage) | Make it executable, then launch it. |
 
 ```sh
 chmod +x Dota2_CFG_Changer-x86_64.AppImage
 ./Dota2_CFG_Changer-x86_64.AppImage
 ```
 
-Both platforms need a working OpenGL driver. The Linux folder picker uses `zenity` or `kdialog`, and the interface automatically uses installed JetBrains Mono (including NL and Nerd Font variants), falling back to DejaVu, Liberation or Noto. User font folders and system font folders are searched; there is no font selector or mandatory JetBrains Mono dependency. macOS is not supported.
+Both platforms need a working OpenGL driver. On Linux, the folder picker uses `zenity` or `kdialog`. macOS is not supported.
 
-1. Close Dota 2 and Steam before copying.
-2. Check the source and destination folders. The app tries to find Steam's `userdata` directory, including Linux Flatpak installations. You can choose another folder manually.
-3. Click **Scan folders**.
-4. Select the source account on the left and the destination account on the right.
-5. Click **Copy config** and confirm.
+<details>
+<summary>Linux fonts and package recipes</summary>
 
-The folders should follow Steam's layout: `<root>/<account_id>/570/`. You can use the same `userdata` root for both lists, or a saved copy as the source. Only the selected account's `570` directory is replaced.
+The interface automatically uses installed JetBrains Mono, including NL and Nerd Font variants, and falls back to DejaVu, Liberation or Noto. It searches both user and system font folders. JetBrains Mono is optional; there is no font selector in the app.
 
-Before replacing an existing destination config, the app saves a verified backup with the account ID and UTC date. It keeps the last **5 backups per account** under `%APPDATA%\DotaManager\backups` on Windows or `$XDG_CONFIG_HOME/DotaManager/backups` / `~/.config/DotaManager/backups` on Linux. If saving the backup fails, the config is left unchanged. Select a destination account and click **Backups** at the bottom to restore a copy after confirmation; restoration also backs up the current config first. The initial copy to a destination without a config has nothing to back up.
+Package recipes have their own branches and installation instructions:
 
-The app also prepares new files before replacing the destination and attempts rollback if replacement fails. Interrupted transaction files are preserved when recovery fails; resolve them before retrying. Keep a separate copy of settings you want to retain beyond the five-backup history.
-
-## A few details
-
-- English is the default language. Switch between **RU / UA / EN** at the top right, immediately beside the theme selector. Language and theme are saved automatically.
-- Dark is the default theme; five themes are included. The Crimson theme also has a palette editor. A local `themes/` folder can override the built-in themes; missing or invalid resources fall back to the embedded ones.
-- Account names and avatars come from public Steam Community profiles and are cached locally. This needs an internet connection, but no Steam login or API key. If a profile lookup fails, the account ID still appears in the list.
-- Release builds check for updates at startup. You can also check using the button at the bottom of the window. Downloading starts only when you click **Download and update**; the app checks the file size and SHA-256 before keeping it. If a verified download is unavailable, use **Open release**. After verification, a helper waits for the application to close, replaces the running `.exe` or original AppImage at its existing path, and starts it again. The previous file is kept until the new window confirms startup; replacement or startup failure triggers recovery. If the application folder is not writable, use the downloaded file or GitHub release manually. Older builds without the installer must be replaced manually once.
-
-On Windows, paths, theme and language are saved under `HKEY_CURRENT_USER\Software\OutTuna\Dota2CFGChanger`, in the `Settings` value. An existing `settings.json` is migrated and removed only after a successful registry write. Profile caches, avatars and updates still use `%APPDATA%\DotaManager`. On Linux, settings and caches use `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager`.
-
-## Linux packages
-
-| Distribution | Branch | Installation guide |
+| System | Recipe | Installation guide |
 | --- | --- | --- |
-| Arch Linux / AUR | [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) | [Build and install with makepkg](https://github.com/OutTuna/Dota2CFGChanger/blob/aur-packaging/README.md#arch-linux-installation) |
+| Arch Linux | [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) | [Build and install with makepkg](https://github.com/OutTuna/Dota2CFGChanger/blob/aur-packaging/README.md#arch-linux-installation) |
 | NixOS / Nix | [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging) | [Run or install with Nix](https://github.com/OutTuna/Dota2CFGChanger/blob/nix-packaging/README.md#nixos-installation) |
 
-Both package recipes have passed CI. AUR publication is waiting for new account registration to reopen; the nixpkgs submission is being prepared. Neither package is listed in its official catalog yet. The standalone Windows `.exe` and Linux AppImage remain available from [releases](https://github.com/OutTuna/Dota2CFGChanger/releases/latest).
+Package-managed builds use their package manager for application updates. Follow the README on the corresponding branch for the supported installation method.
 
-## Building
+</details>
 
-You need Git, CMake 3.14+, a C++17 compiler and internet access for the first configuration. CMake fetches the pinned dependencies: Dear ImGui, GLFW, cpr/libcurl, nlohmann/json and stb.
+## Quick start
 
-On Debian or Ubuntu, install the **development packages first**:
+1. Close Dota 2 and Steam before copying.
+2. Check the source and destination folders. The app tries to find Steam's `userdata` directory, including Linux Flatpak installations; you can choose another folder manually.
+3. Click **Scan folders**.
+4. Select the source account on the left and the destination account on the right.
+5. Click **Copy config**, check the selected accounts, and confirm.
+
+Use the same `userdata` root for both lists, or choose a saved copy as the source. Each root should follow Steam's layout:
+
+```text
+userdata/
+└── <account_id>/
+    └── 570/
+```
+
+> [!IMPORTANT]
+> The selected destination account's **entire `570` directory is replaced**. An existing config is backed up first. If that backup fails, replacement does not start.
+
+### Backups and restore
+
+Select a destination account and click **Backups** at the bottom of the window. Choose a saved copy and confirm restoration. Restoring also backs up the current config first.
+
+Backups include the account ID and UTC date, and are verified with file hashes. The app retains the last **5 backups per account**. A destination with no existing config has nothing to back up on the first copy.
+
+New files are prepared before replacing the destination. If replacement fails, the app attempts rollback; files needed for recovery are preserved if rollback cannot finish. Resolve an interrupted transaction before retrying, and keep a separate copy of anything you need beyond the five-backup history.
+
+### Updates
+
+Versioned standalone builds check for updates at startup. You can also use **Check for updates** at the bottom of the window.
+
+1. Choose **Download and update** to start downloading.
+2. The app verifies the file size and SHA-256.
+3. A helper waits for the app to close, replaces its executable at the existing path, and restarts it.
+4. The previous executable is kept until the new window confirms startup. Replacement or startup failure triggers recovery.
+
+Use **Open release** if a verified download is unavailable. If the application folder is not writable, replace the file manually using the [release download](https://github.com/OutTuna/Dota2CFGChanger/releases/latest). Older builds without the installer need to be replaced manually once. Package-managed installations update through their package manager.
+
+### Settings and local data
+
+Language and theme are selected at the top right and saved automatically. A local `themes/` folder can override the embedded themes; missing or invalid resources fall back to the built-in ones.
+
+| Data | Windows | Linux |
+| --- | --- | --- |
+| Paths, language and theme | `HKCU\Software\OutTuna\Dota2CFGChanger`, value `Settings` | `$XDG_CONFIG_HOME/DotaManager/settings.json` or `~/.config/DotaManager/settings.json` |
+| Profile caches, avatars and downloads | `%APPDATA%\DotaManager` | `$XDG_CONFIG_HOME/DotaManager` or `~/.config/DotaManager` |
+| Config backups | `%APPDATA%\DotaManager\backups` | `$XDG_CONFIG_HOME/DotaManager/backups` or `~/.config/DotaManager/backups` |
+
+On Windows, an existing `settings.json` is migrated to the registry and removed only after a successful write. Copying configs and restoring backups use local files; fetching uncached profile names, avatars and releases needs an internet connection.
+
+## Architecture
+
+**C++17 · Dear ImGui · GLFW · OpenGL**
+
+The window waits when nothing changes. Input, window events and background results request a redraw and wake the UI thread. Active interaction is paced toward 60 FPS; a minimized window skips ImGui layout, OpenGL rendering and buffer swaps.
+
+```mermaid
+flowchart TB
+    input["Input and window events"] --> redraw["Request redraw"]
+    workers["Scan, file tasks, avatars and updates"] -->|"Publish state"| redraw
+    redraw --> wake["glfwPostEmptyEvent"]
+    wake --> ui["Main / UI thread"]
+    ui --> needed{"Redraw or animation?"}
+    needed -->|"No"| wait["Wait for events"]
+    wait -->|"Next event"| ui
+    needed -->|"Yes"| frame["Read cached UI state → ImGui → OpenGL"]
+    frame --> ui
+
+    classDef accent fill:#321f25,stroke:#c95050,color:#ffffff
+    class redraw,wake,frame accent
+```
+
+Account lists and labels are rebuilt when their data changes, rather than copied each frame. Status changes have a separate generation counter. File operations run on one background worker; avatars use a bounded worker pool, and concurrent requests for the same Steam profile share the result. Network requests support cancellation, and workers are joined before GLFW shuts down. OpenGL texture uploads and cleanup stay on the UI thread.
+
+A local Windows Release validation recorded **zero rendered frames in each of two 120-second idle intervals**, one focused and one unfocused. CPU time was 0.031 s and 0.016 s respectively on a Ryzen 7 7700 / RTX 5070 system. These are observations from that test, not fixed resource-use guarantees for every driver or workload.
+
+| Location | Responsibility |
+| --- | --- |
+| [`main.cpp`](main.cpp) | Window lifecycle, event-driven rendering and shutdown order. |
+| [`src/ui/`](src/ui) | ImGui views, cached presentation state, themes and avatar textures. |
+| [`src/core/`](src/core) | Scanning, shared profile data, file tasks, backups and update coordination. |
+| [`src/network/`](src/network) | Cancellable Steam profile, avatar and release HTTP requests. |
+| [`src/platform/`](src/platform) | Native paths, settings storage, dialogs, fonts and updater processes. |
+| [`resources/`](resources) · [`cmake/`](cmake) | Icons, embedded themes and translations, build-time resource generation. |
+| [`tests/`](tests) · [`scripts/`](scripts) | Regression tests, build validation and packaging checks. |
+| [`packaging/aur/`](packaging/aur) | Arch recipe and compatibility patch for the pinned source release. |
+
+## Build from source
+
+You need **Git, CMake 3.15+ and a C++17 compiler**. The first configuration needs internet access to fetch the pinned dependencies: Dear ImGui, GLFW, cpr/libcurl, nlohmann/json and stb.
+
+On Windows, install the Visual Studio **Desktop development with C++** workload and Windows SDK, then use a Visual Studio developer terminal.
+
+On Debian or Ubuntu, install the development packages first:
 
 ```sh
 sudo apt install build-essential cmake git libgl1-mesa-dev libx11-dev \
   libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libssl-dev
 ```
 
-From a Visual Studio developer terminal on Windows, or a shell on Linux:
+Build on either platform:
 
 ```sh
 git clone https://github.com/OutTuna/Dota2CFGChanger.git
@@ -90,11 +180,28 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
 
-With the Visual Studio generator, the result is `build/Release/DotaManager.exe`. On Linux it is `build/DotaManager`; the GitHub Actions workflow handles AppImage packaging. CI publishes the Windows `.exe` and Linux `.AppImage` as a stable Latest release, checks the compiled version and caches dependencies between builds. The AppImage is built on Ubuntu 22.04 with GCC 11, checked for Ubuntu 22.04 ABI compatibility and launched under a virtual display on Ubuntu 22.04 and 24.04 before publication. Official Actions use Node.js 24.
+| Toolchain | Output |
+| --- | --- |
+| Windows, Visual Studio generator | `build/Release/DotaManager.exe` |
+| Windows, single-config Ninja or Makefiles | `build/DotaManager.exe` |
+| Linux | `build/DotaManager` |
 
-For a versioned local build, pass `-DAPP_VERSION=x.y` when configuring. The default `0.0` development build skips the startup update check.
+The release workflow also packages the Linux binary as an AppImage.
 
-To build and run the C++ checks:
+<details>
+<summary>CMake 4 and versioned local builds</summary>
+
+With CMake 4, add `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to the configure command for compatibility with older minimum-version declarations in the pinned dependencies:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+```
+
+Pass `-DAPP_VERSION=x.y` to embed a local version. The default `0.0` development build skips automatic startup update checks; manual checks remain available.
+
+</details>
+
+### Tests and CI
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON
@@ -102,191 +209,45 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-## How the code fits together
+The regression suite covers cached UI state and redraw notifications, background file tasks, backups and restore, avatar cache recovery and cancellation, release validation, updater recovery and package-managed behavior.
 
-`main.cpp` runs the window. `src/ui/` draws the interface, while `dotamanager_core` handles scanning, config replacement, profile data and updates without depending on ImGui or OpenGL. `src/ui/avatar.cpp` uploads the images from `src/core/avatar_data.cpp` as OpenGL textures. Theme and translation resources are embedded during the build.
+For the Python checks, from the repository root:
 
-```text
-main.cpp              application entry point
-src/core/             settings, scanning, config files, caches and updates
-src/network/          Steam and release HTTP requests
-src/platform/         native paths, dialogs, fonts and external links
-src/ui/               windows, panels, themes and OpenGL avatars
-resources/            icons, themes, translations and Windows metadata
-cmake/                resource embedding
-scripts/              development and CI checks
-tests/                regression checks
-packaging/aur/        Arch package recipe and release compatibility patch
-packaging/nix/        Nix recipe and VM test (nix-packaging branch)
-docs/                 roadmap and packaging guide
+```sh
+python3 tests/core_checks.py build/_deps/json-src/include
+python3 tests/aur_source_checks.py
 ```
 
-The AppImage uses the checked-in PNG icon. CI does not need an image converter.
+On Windows, use `python` instead if that is the command for your Python 3 installation.
 
-[Open the full diagram in GitDiagram](https://gitdiagram.com/outtuna/dota2cfgchanger).
-
-<details>
-<summary>Project diagram</summary>
-
-```mermaid
-flowchart TB
-
-subgraph group_ui["User interface"]
-  node_entry["App startup<br/>[main.cpp]"]
-  node_window["Main window<br/>[main_window.cpp]"]
-  node_panels["Dialogs and panels<br/>[panels.cpp]"]
-  node_success["Copy result<br/>[success_popup.cpp]"]
-  node_updateui["Update dialog<br/>[update_popup.cpp]"]
-  node_backupui["Backup list and restore confirmation<br/>[backups_popup.cpp]"]
-end
-
-subgraph group_core["Application core"]
-  node_app["App coordination<br/>[app.cpp]"]
-  node_files["Config replacement<br/>[file_ops.cpp]"]
-  node_backups["Verified backups and retention<br/>[backups.cpp]"]
-  node_settings[("Settings and caches<br/>[app.cpp]")]
-  node_localization["Translations<br/>[localization.cpp]"]
-  node_avatar_data[("Avatar cache<br/>[avatar_data.cpp]")]
-  node_updates["Update service<br/>[updates.cpp]"]
-  node_installer["Install and restart<br/>[update_install.cpp]"]
-  node_release["Release metadata<br/>[release_info.cpp]"]
-  node_checksum["Download verification<br/>[checksum.cpp]"]
-end
-
-subgraph group_net["Network services"]
-  node_steam["Steam profiles<br/>[steam_api.cpp]"]
-  node_transport["Release transport"]
-end
-
-subgraph group_platform["Platform and presentation resources"]
-  node_platform_api["Platform services<br/>[platform.cpp]"]
-  node_process["Executable path and helper<br/>[update_process.cpp]"]
-  node_avatars["Avatar textures<br/>[avatar.cpp]"]
-  node_themes["Themes<br/>[theme.cpp]"]
-  node_resources["Theme and locale data"]
-end
-
-subgraph group_packages["Distribution and validation"]
-  node_sources["Pinned source release"]
-  node_portable["Windows EXE / Linux AppImage"]
-  node_arch["Arch package<br/>[aur-packaging]"]
-  node_nix["Nix package and NixOS VM test<br/>[nix-packaging]"]
-  node_package_manager["Package manager updates"]
-end
-
-node_sources --> node_portable
-node_sources --> node_arch
-node_sources --> node_nix
-node_arch --> node_package_manager
-node_nix --> node_package_manager
-node_updateui -->|"package installation guidance"| node_package_manager
-click node_arch "https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging"
-click node_nix "https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging"
-class node_sources,node_portable,node_arch,node_nix,node_package_manager toneTeal
-
-node_user(("User"))
-node_steamcommunity(("Steam Community"))
-node_release_service(("GitHub releases"))
-node_configdirs[("Steam userdata folders")]
-node_local_settings[("Local settings store")]
-
-node_user -->|"operates"| node_window
-node_entry -->|"loads settings"| node_app
-node_entry -->|"renders"| node_window
-node_entry -->|"checks updates"| node_updates
-node_window -->|"scans and copies"| node_app
-node_window -->|"opens dialogs"| node_panels
-node_window -->|"requests avatars"| node_avatars
-node_window -->|"uses themes"| node_themes
-node_window -->|"translates labels"| node_localization
-node_window -->|"requests checks"| node_updates
-node_app -->|"backs up and replaces config"| node_backups
-node_window -->|"opens backup list"| node_backupui
-node_backupui -->|"restores selected copy"| node_backups
-node_backups -->|"replaces config"| node_files
-node_backups -->|"checks file hashes"| node_checksum
-node_app -->|"fetches profiles"| node_steam
-node_app -->|"reads and writes"| node_settings
-node_app -->|"scans and copies"| node_configdirs
-node_settings -->|"persists"| node_local_settings
-node_app -->|"uses path services"| node_platform_api
-node_steam -->|"looks up profiles"| node_steamcommunity
-node_avatar_data -->|"downloads images"| node_steamcommunity
-node_avatars -->|"uploads cached images"| node_avatar_data
-node_updates -->|"standalone builds: install verified download"| node_installer
-node_installer -->|"verifies staged file"| node_checksum
-node_installer -->|"waits, replaces and restarts"| node_process
-node_entry -->|"confirms new window startup"| node_installer
-node_updates -->|"fetches and downloads"| node_transport
-node_updates -->|"verifies download"| node_checksum
-node_updates -->|"opens release"| node_platform_api
-node_updates -->|"uses release metadata"| node_release
-node_transport -->|"requests releases"| node_release_service
-node_updateui -->|"controls updates"| node_updates
-node_themes -->|"loads theme data"| node_resources
-node_localization -->|"uses translations"| node_resources
-node_window -->|"shows result"| node_success
-
-click node_entry "https://github.com/outtuna/dota2cfgchanger/blob/main/main.cpp"
-click node_window "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/main_window.cpp"
-click node_panels "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/panels.cpp"
-click node_success "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/success_popup.cpp"
-click node_updateui "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/update_popup.cpp"
-click node_app "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
-click node_backups "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/backups.cpp"
-click node_backupui "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/backups_popup.cpp"
-click node_files "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/file_ops.cpp"
-click node_settings "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/app.cpp"
-click node_localization "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/localization.cpp"
-click node_avatar_data "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/avatar_data.cpp"
-click node_installer "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/update_install.cpp"
-click node_process "https://github.com/outtuna/dota2cfgchanger/blob/main/src/platform/update_process.cpp"
-click node_updates "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/updates.cpp"
-click node_release "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/release_info.cpp"
-click node_checksum "https://github.com/outtuna/dota2cfgchanger/blob/main/src/core/checksum.cpp"
-click node_steam "https://github.com/outtuna/dota2cfgchanger/blob/main/src/network/steam_api.cpp"
-click node_transport "https://github.com/outtuna/dota2cfgchanger/blob/main/src/network/update_transport.cpp"
-click node_platform_api "https://github.com/outtuna/dota2cfgchanger/blob/main/src/platform/platform.cpp"
-click node_avatars "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/avatar.cpp"
-click node_themes "https://github.com/outtuna/dota2cfgchanger/blob/main/src/ui/theme.cpp"
-click node_resources "https://github.com/outtuna/dota2cfgchanger/tree/main/resources"
-
-classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
-classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
-classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
-classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
-classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
-classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
-classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
-class node_entry,node_window,node_panels,node_success,node_updateui,node_backupui,node_user toneBlue
-class node_app,node_files,node_backups,node_settings,node_localization,node_avatar_data,node_updates,node_installer,node_release,node_checksum,node_configdirs,node_local_settings toneAmber
-class node_steam,node_transport toneMint
-class node_platform_api,node_process,node_avatars,node_themes,node_resources toneRose
-class node_steamcommunity,node_release_service toneIndigo
-```
-
-</details>
+| Workflow | Validation |
+| --- | --- |
+| [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, version checks and AppImage validation on Ubuntu 22.04 / 24.04. |
+| [Arch package](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/aur.yaml) | Source and patch coverage, build without network, regression tests, package installation and launch. |
 
 ## Русский
 
-Программа переносит настройки Dota 2 между Steam-аккаунтами. Скачайте `.exe` для Windows или `.AppImage` для Linux из [релизов](https://github.com/OutTuna/Dota2CFGChanger/releases). Темы и переводы уже внутри.
+**Перенос конфигов Dota 2 между Steam-аккаунтами с бэкапами и восстановлением.** Скачайте [Windows EXE](https://github.com/OutTuna/Dota2CFGChanger/releases/latest/download/DotaManager.exe) или [Linux AppImage](https://github.com/OutTuna/Dota2CFGChanger/releases/latest/download/Dota2_CFG_Changer-x86_64.AppImage). Темы и переводы уже внутри; вход в Steam и API-ключ не нужны.
 
-Закройте Dota 2 и Steam, проверьте пути к `userdata` и запустите сканирование. Слева выберите аккаунт с нужными настройками, справа — тот, куда их перенести. Нажмите кнопку копирования и подтвердите замену.
+1. Закройте Dota 2 и Steam.
+2. Проверьте пути к `userdata` и нажмите кнопку сканирования.
+3. Слева выберите исходный аккаунт, справа — целевой.
+4. Нажмите кнопку копирования и подтвердите замену.
 
-Копируется папка `<account_id>/570` целиком. Перед заменой сохраняется проверенный бэкап; хранятся последние 5 копий на аккаунт. Выберите аккаунт назначения и нажмите «Бэкапы» внизу окна, чтобы восстановить копию после подтверждения. Перед восстановлением текущий конфиг тоже сохраняется. Если создать бэкап не удалось, замена не начнётся. Бэкапы находятся в пользовательской папке DotaManager, отдельно от файла приложения.
+Копируется **вся папка `<account_id>/570`**. Перед заменой сохраняется проверенный бэкап; хранятся последние **5 копий на аккаунт**. Для восстановления выберите целевой аккаунт и нажмите **«Бэкапы»**. Текущий конфиг перед восстановлением тоже сохраняется. Если создать бэкап не удалось, замена не начнётся.
 
-Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Dark — тема по умолчанию. Внизу находятся статус, Info и проверка обновлений; Info показывает автора, номер релиза и ссылку GitHub. Имена и аватарки загружаются из Steam Community без входа в аккаунт. При наличии обновления появится окно; файл скачивается только по нажатию. После проверки загрузки программа сама закроется, заменит свой файл по текущему пути и запустится снова. При ошибке замены или запуска помощник попытается восстановить предыдущую версию. Если папка недоступна для записи, используйте скачанный файл вручную. Старые сборки без этой функции нужно один раз заменить вручную.
+Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Имена и аватары загружаются из публичных Steam Community-профилей и кэшируются. В покое интерфейс ждёт событий; сканирование, копирование, восстановление и загрузка аватаров выполняются в фоне.
 
-Для Arch используйте ветку [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) и её инструкцию установки через `makepkg -si`. Для NixOS — ветку [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging) с командами запуска и установки через Nix. Оба пакета проверены CI; публикация в AUR и включение в nixpkgs ещё ожидаются.
+Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Для обновления нужна запись в папку приложения; пакетные установки обновляются через пакетный менеджер.
 
-## License
+Бэкапы, аватары и загрузки находятся в `%APPDATA%\DotaManager` на Windows или `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` на Linux. Настройки Windows хранятся в `HKCU\Software\OutTuna\Dota2CFGChanger`, значение `Settings`; на Linux — в `settings.json` внутри каталога DotaManager.
 
-[MIT](LICENSE). OutTuna.
+Для Arch и NixOS используйте инструкции в ветках [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) и [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging).
 
-## Testers
+## License and thanks
+
+[MIT](LICENSE) · OutTuna.
 
 Thanks for testing builds and helping catch UI issues:
 
-- [Qoudanna](https://github.com/Qoudanna)
-- [ciqparis](https://github.com/ciqparis)
-- [paradisetears](https://github.com/paradisetears)
+[Qoudanna](https://github.com/Qoudanna) · [ciqparis](https://github.com/ciqparis) · [paradisetears](https://github.com/paradisetears)
