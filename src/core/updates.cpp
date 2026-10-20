@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "update_transport.h"
 #include "ui_events.h"
+#include "file_ops.h"
 #include <atomic>
 #include <filesystem>
 #include <fstream>
@@ -53,7 +54,7 @@ void updates_check(bool manual) {
     }
     if (worker.joinable()) worker.join();
     stopping = false;
-    worker = std::thread([manual] {
+    try { worker = std::thread([manual] {
         try {
             auto body = fetch_update_release([] { return !stopping.load(); });
 #ifdef _WIN32
@@ -69,7 +70,7 @@ void updates_check(bool manual) {
             state.popup = manual || available;
             ui_events::request_redraw();
         } catch (const std::exception& e) { fail("update_check_failed", e.what()); }
-    });
+    }); } catch (const std::exception& error) { fail("update_check_failed", error.what()); }
 }
 
 void updates_download() {
@@ -88,18 +89,28 @@ void updates_download() {
     }
     if (worker.joinable()) worker.join();
     stopping = false;
-    worker = std::thread([release] {
-        fs::path partial;
+    try { worker = std::thread([release] {
+        fs::path partial, workspace;
+        bool owned_workspace = false;
         try {
             auto folder = fs::u8path(config_dir()) / "updates" / release.version;
+            reject_config_link(folder.parent_path());
+            reject_config_link(folder);
             fs::create_directories(folder);
             auto target = folder / release.asset_name;
-            partial = target;
-            partial += ".part";
+            reject_config_link(target);
             if (fs::exists(target)) {
+                if (!fs::is_regular_file(fs::symlink_status(target))) throw std::runtime_error("Invalid cached update file");
                 if (fs::file_size(target) != release.size || file_sha256(target) != release.digest)
                     throw std::runtime_error("Existing update file does not match release; open GitHub to download manually");
             } else {
+                workspace = target; workspace += ".download";
+                if (!fs::create_directory(workspace)) throw std::runtime_error("An earlier download must be resolved: " + workspace.u8string());
+                owned_workspace = true;
+#ifndef _WIN32
+                fs::permissions(workspace, fs::perms::owner_all, fs::perm_options::replace);
+#endif
+                partial = workspace / "payload.part";
                 auto last_notice = std::chrono::steady_clock::time_point{};
                 download_update_asset(release, partial, [size = release.size, &last_notice](std::uint64_t now) {
                     std::lock_guard<std::mutex> lock(mutex);
@@ -118,6 +129,8 @@ void updates_download() {
                 fs::permissions(partial, fs::perms::owner_exec, fs::perm_options::add);
 #endif
                 fs::rename(partial, target);
+                fs::remove(workspace);
+                owned_workspace = false;
             }
             std::lock_guard<std::mutex> lock(mutex);
             state.phase = UpdatePhase::Downloaded;
@@ -126,10 +139,10 @@ void updates_download() {
             ui_events::request_redraw();
         } catch (const std::exception& e) {
             std::error_code ec;
-            if (!partial.empty()) fs::remove(partial, ec);
+            if (owned_workspace) fs::remove_all(workspace, ec);
             fail("update_download_failed", e.what());
         }
-    });
+    }); } catch (const std::exception& error) { fail("update_download_failed", error.what()); }
 }
 
 void updates_request_stop() { stopping = true; }
@@ -154,14 +167,14 @@ void updates_install() {
     }
     if (worker.joinable()) worker.join();
     stopping = false;
-    worker = std::thread([update] {
+    try { worker = std::thread([update] {
         try {
             prepare_update_install(fs::u8path(update.downloaded_path), update.release,
                 [] { return !stopping.load(); });
             restart_ready = true;
             ui_events::request_redraw();
         } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
-    });
+    }); } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
 }
 
 bool updates_should_exit() { return restart_ready.load(); }

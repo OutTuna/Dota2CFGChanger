@@ -1,12 +1,3 @@
-// Auto-configured by CMake (configure_file) from app.rc.in -- do not edit
-// the generated copy directly, edit this template instead.
-//
-// A .exe with no icon, no manifest and no VERSIONINFO at all (just raw
-// code) is itself a small heuristic signal to some AV engines -- "real"
-// applications almost always carry this metadata; its total absence is
-// common in hastily-assembled malware droppers. None of this guarantees
-// avoiding a false positive, but it's a legitimate, low-cost signal to add.
-
 #include <winresrc.h>
 
 IDI_ICON1 ICON "@CMAKE_SOURCE_DIR@/resources/icons/Icon.ico"

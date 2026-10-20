@@ -157,6 +157,14 @@ int main() {
     std::ofstream(root / "source/42/570/config.txt") << "new";
     std::ofstream(root / "destination/43/570/config.txt") << "old";
     selected_src = 0; selected_dst = 0;
+    prepare_copy_preview(); cancel_copy_preview();
+    const auto preview_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (file_tasks_busy()) {
+        file_tasks_poll();
+        assert(std::chrono::steady_clock::now() < preview_deadline);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    assert(!g_copy_preview_ready && g_copy_preview.entries.empty());
     copy_config();
     assert(file_tasks_busy() && !g_success.show);
     start_scan();
@@ -173,6 +181,10 @@ int main() {
     { std::ifstream f(root / "destination/43/570/config.txt"); f >> contents; }
     assert(contents == "new");
     assert(list_config_backups(root / "backups", "43").size() == 1);
+    assert(success_popup_animating());
+    g_success.anim_t = 0.30f; assert(!success_popup_animating());
+    g_success.closing = true; assert(success_popup_animating());
+    g_success.show = false; assert(!success_popup_animating());
     auto cache_time = fs::last_write_time(root / CACHE_FILE);
     set_language("en"); save_settings(); save_settings();
     assert(fs::last_write_time(root / CACHE_FILE) == cache_time);

@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
 #ifdef __linux__
     glfwWindowHintString(GLFW_X11_CLASS_NAME, "DotaManager");
 #endif
-    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
+    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_build_version_label() + ")";
     GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
     if (!window) return 1;
     glfwMakeContextCurrent(window);
@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
     ui_apply_theme(static_cast<AppTheme>(g_theme.load()));
 
     ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     FontPaths fonts = find_font_paths();
     ImFont* font_default = nullptr;
@@ -139,7 +140,7 @@ int main(int argc, char** argv) {
         for (const auto& key : io.KeysData) held_input |= key.Down;
         const double now = glfwGetTime();
         if (focused != last_focus) { next_frame = now; last_focus = focused; }
-        const bool continuous = g_success.show ||
+        const bool continuous = success_popup_animating() ||
             (focused && (now < input_until || held_input || io.WantTextInput));
         if (!ui_events::dirty.load() && settle_frames == 0 && !continuous) {
             frame_timer.set_active(false);

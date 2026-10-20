@@ -16,24 +16,22 @@ void check_account(const std::string& account) {
     if (account.empty() || account.find_first_not_of("0123456789") != std::string::npos)
         throw ConfigFileError("backup_invalid");
 }
-bool contains(const fs::path& parent, const fs::path& child) {
-    auto p = parent.begin(), c = child.begin();
-    for (; p != parent.end() && c != child.end() && *p == *c; ++p, ++c) {}
-    return p == parent.end();
-}
 void separate(const fs::path& a, const fs::path& b) {
     auto left = fs::weakly_canonical(a), right = fs::weakly_canonical(b);
-    if (contains(left, right) || contains(right, left)) throw ConfigFileError("overlap");
+    if (config_path_contains(left, right) || config_path_contains(right, left)) throw ConfigFileError("overlap");
 }
 void check_store(const fs::path& root, const std::string& account) {
     check_account(account);
-    if (fs::is_symlink(fs::symlink_status(root)) || fs::is_symlink(fs::symlink_status(root / account)))
-        throw ConfigFileError("symlink");
+    reject_config_link(root);
+    reject_config_link(root / account);
 }
 json tree(const fs::path& path) {
+    reject_config_link(path);
+    reject_config_link(path.parent_path());
     if (!fs::is_directory(fs::symlink_status(path))) throw ConfigFileError("backup_invalid");
     json result = json::object();
     for (const auto& entry : fs::recursive_directory_iterator(path)) {
+        reject_config_link(entry.path());
         auto status = entry.symlink_status();
         auto name = entry.path().lexically_relative(path).generic_u8string();
         if (fs::is_directory(status)) result[name] = {{"directory", true}};
@@ -44,6 +42,8 @@ json tree(const fs::path& path) {
     return result;
 }
 json metadata(const fs::path& folder) {
+    reject_config_link(folder);
+    reject_config_link(folder / "backup.json");
     if (!fs::is_directory(fs::symlink_status(folder)) ||
         !fs::is_regular_file(fs::symlink_status(folder / "backup.json"))) throw ConfigFileError("backup_invalid");
     std::ifstream stream(folder / "backup.json");
@@ -82,6 +82,9 @@ ConfigBackup create_config_backup(const fs::path& destination, const fs::path& r
         check_store(root, account);
         separate(destination, root);
         auto before = tree(destination);
+        std::uintmax_t bytes = 0;
+        for (const auto& item : before.items()) if (item.value().contains("size")) bytes += item.value().at("size").get<std::uintmax_t>();
+        require_config_space(root, bytes);
         auto folder = root / account;
         fs::create_directories(folder);
         auto id = timestamp(true);
@@ -120,26 +123,30 @@ std::vector<ConfigBackup> list_config_backups(const fs::path& root, const std::s
             auto destination = fs::u8path(value.at("destination").get<std::string>());
             if (!destination.is_absolute()) continue;
             result.push_back({entry.path(), destination, account, value.at("date").get<std::string>()});
-        } catch (const std::exception&) {}
+        } catch (const std::exception&) { throw ConfigFileError("backup_invalid", entry.path().filename().u8string()); }
     }
     std::sort(result.begin(), result.end(), [](const ConfigBackup& a, const ConfigBackup& b) { return a.path.filename() > b.path.filename(); });
     return result;
 }
 
 BackupCopyResult copy_config_with_backup(const fs::path& source, const fs::path& destination,
-    const fs::path& root, const std::string& account) {
+    const fs::path& root, const std::string& account, const ConfigPreview* preview) {
     check_store(root, account);
     separate(source, destination);
     separate(source, root);
     separate(destination, root);
-    tree(source);
+    auto current = preview_config_transfer(source, destination);
+    if (preview) validate_config_preview(*preview, source, destination);
+    if (!current.changes) return {};
     auto temp = destination; temp += ".dotamanager_tmp";
     auto recovery = destination; recovery += ".dotamanager_backup";
     if (fs::exists(fs::symlink_status(temp)) || fs::exists(fs::symlink_status(recovery)))
         throw ConfigFileError("previous_copy", destination.u8string());
-    if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
     BackupCopyResult result;
-    result.retained_backup = replace_config_directory(source, destination);
+    result.retained_backup = replace_config_directory(source, destination, [&] {
+        validate_config_preview(preview ? *preview : current, source, destination);
+        if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
+    });
     result.cleanup_error = prune(root, account);
     return result;
 }
@@ -154,9 +161,11 @@ BackupCopyResult restore_config_backup(const ConfigBackup& backup, const fs::pat
         fs::weakly_canonical(fs::u8path(value.at("destination").get<std::string>())) != fs::weakly_canonical(destination) ||
         tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
     separate(destination, root);
-    if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
     BackupCopyResult result;
-    result.retained_backup = replace_config_directory(backup.path / "570", destination);
+    result.retained_backup = replace_config_directory(backup.path / "570", destination, [&] {
+        if (tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
+        if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
+    });
     result.cleanup_error = prune(root, account);
     return result;
 }

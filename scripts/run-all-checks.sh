@@ -1,17 +1,4 @@
 #!/usr/bin/env bash
-# Runs every local test-point in order, fast-to-slow, and prints a
-# summary. Meant to replace "push -> wait for Actions -> read log ->
-# fix -> push again" with something you can run on your own machine.
-#
-#   ./scripts/run-all-checks.sh            # everything except the full build
-#   ./scripts/run-all-checks.sh --full      # also do the full Linux compile+link
-#
-# Individual checks (see comments in each file for what they catch and
-# why):
-#   scripts/check-workflow.sh          - actionlint on .github/workflows/
-#   scripts/check-version-logic.sh     - unit-tests the version bump rules
-#   scripts/check-cmake-configure.sh   - does `cmake configure` succeed
-#   scripts/check-full-build-linux.sh  - full compile+link (slow, opt-in)
 
 set -uo pipefail
 cd "$(dirname "$0")/.."

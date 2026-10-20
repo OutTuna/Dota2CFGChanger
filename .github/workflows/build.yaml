@@ -1,8 +1,8 @@
-name: Build & Release (Windows + Linux)
+name: Alpha CI (Windows + Linux)
 
 on:
   push:
-    branches: [ "main", "aur-packaging" ]
+    branches: [ "alpha" ]
     paths-ignore:
       - "README.md"
       - "LICENSE"
@@ -16,9 +16,8 @@ on:
         type: boolean
         default: false
 
-# Two overlapping runs would race on tags / the "latest" release.
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -29,10 +28,14 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.channel.outputs.channel }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+      - name: Select distribution channel
+        id: channel
+        run: echo "channel=alpha" >> "$GITHUB_OUTPUT"
       - name: Compute version
         id: version
         env:
@@ -61,7 +64,7 @@ jobs:
           path: build/_deps
           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
+        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}" "-DAPP_RELEASE_CHANNEL=${{ needs.compute-version.outputs.channel }}"
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Regression tests
@@ -77,8 +80,6 @@ jobs:
     needs: compute-version
     runs-on: ubuntu-22.04
     env:
-      # linuxdeploy and its plugin are themselves AppImages; runners have no
-      # FUSE, so run them by self-extraction instead of mounting.
       APPIMAGE_EXTRACT_AND_RUN: "1"
       ARCH: x86_64
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -124,7 +125,7 @@ jobs:
           key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
           restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
+        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}" "-DAPP_RELEASE_CHANNEL=${{ needs.compute-version.outputs.channel }}"
 
       - name: Build
         run: cmake --build build --config Release -j"$(nproc)"
@@ -133,6 +134,7 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure
           python3 tests/core_checks.py build/_deps/json-src/include
+          python3 tests/prerelease_checks.py
 
       - name: Compiler cache statistics
         run: ccache --show-stats
@@ -143,7 +145,6 @@ jobs:
           base=https://github.com/linuxdeploy
           wget -q -O "$HOME/ld/linuxdeploy" \
             "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
-          # linuxdeploy finds the plugin by this exact name on PATH
           wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
             "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
           chmod +x "$HOME/ld/"*
@@ -221,45 +222,18 @@ jobs:
           fi
           bash scripts/check-appimage.sh "${images[0]}"
 
-  release:
-    if: github.ref == 'refs/heads/main'
+  prerelease:
+    if: github.ref == 'refs/heads/alpha'
     needs: [compute-version, build-windows, build-linux, check-appimage]
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Download all artifacts
+      - name: Download prerelease artifacts
         uses: actions/download-artifact@v8.0.1
-
-      - name: Tag and release
+      - name: Publish isolated prerelease
         env:
+          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
           VERSION: ${{ needs.compute-version.outputs.version }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          APPIMAGE_FILE=$(find DotaManager-Linux -name "*.AppImage" -type f | head -n1)
-          if [ -z "$APPIMAGE_FILE" ]; then
-            echo "Error: AppImage not found"
-            ls -la DotaManager-Linux/
-            exit 1
-          fi
-
-          git tag "$VERSION"
-          git push origin "$VERSION"
-
-          # --cleanup-tag also removes the old "latest" git tag, otherwise the
-          # new release would stay pinned to a stale commit.
-          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
-
-          gh release create latest \
-            --target "$GITHUB_SHA" \
-            --title "Latest Build ($VERSION)" \
-            --latest=true \
-            --notes "Automated build $VERSION from commit $GITHUB_SHA" \
-            DotaManager-Windows/DotaManager.exe \
-            "$APPIMAGE_FILE"
+        run: bash scripts/publish-prerelease.sh
