@@ -52,9 +52,22 @@ int main() {
     assert(value.phase == UpdatePhase::Available && value.popup);
     assert(downloads == 0);
     updates_dismiss(); assert(!updates_snapshot().popup);
+#ifndef _WIN32
+
+    auto legacy_target = root / "updates" / value.release.version / value.release.asset_name;
+    auto legacy_partial = legacy_target; legacy_partial += ".part";
+    auto legacy_victim = root / "legacy-victim";
+    fs::create_directories(legacy_target.parent_path());
+    { std::ofstream f(legacy_victim); f << "precious"; }
+    fs::create_symlink(legacy_victim, legacy_partial);
+#endif
     updates_download(); value = wait();
     assert(value.phase == UpdatePhase::Downloaded && fs::exists(fs::u8path(value.downloaded_path)));
     assert(downloads == 1);
+#ifndef _WIN32
+    assert(fs::file_size(legacy_victim) == 8 && fs::is_symlink(legacy_partial));
+    fs::remove(legacy_partial);
+#endif
     updates_install(); value = wait();
     while (value.phase == UpdatePhase::Installing) { std::this_thread::sleep_for(std::chrono::milliseconds(5)); value = updates_snapshot(); }
     assert(value.phase == UpdatePhase::Failed && value.error_key == "update_install_failed");
@@ -67,6 +80,19 @@ int main() {
     updates_check(true); wait(); updates_download(); value = wait();
     assert(value.phase == UpdatePhase::Failed && fs::file_size(target) == 3);
     fs::remove(target);
+#ifndef _WIN32
+    auto victim = root / "preserve";
+    { std::ofstream f(victim); f << "precious"; }
+    auto workspace = target; workspace += ".download";
+    fs::create_directory_symlink(root, workspace);
+    updates_check(true); wait(); updates_download(); value = wait();
+    assert(value.phase == UpdatePhase::Failed && fs::file_size(victim) == 8 && fs::is_symlink(workspace));
+    fs::remove(workspace);
+    fs::create_symlink(victim, target);
+    updates_check(true); wait(); updates_download(); value = wait();
+    assert(value.phase == UpdatePhase::Failed && fs::file_size(victim) == 8);
+    fs::remove(target);
+#endif
     download_bytes = "bad"; updates_check(true); wait(); updates_download(); value = wait();
     assert(value.phase == UpdatePhase::Failed && !fs::exists(target) && !fs::exists(partial));
     download_bytes = "a"; updates_check(true); wait(); updates_download(); value = wait();

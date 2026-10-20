@@ -13,7 +13,7 @@
 
 std::string file_sha256(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
-    if (!input) throw std::runtime_error("Cannot read download");
+    if (!input) throw std::runtime_error("Cannot read file");
     std::array<unsigned char, 32> digest{};
     std::array<char, 65536> buffer{};
 #ifdef _WIN32
@@ -39,9 +39,9 @@ std::string file_sha256(const std::filesystem::path& path) {
 #else
         if (EVP_DigestUpdate(context.get(), buffer.data(), static_cast<std::size_t>(count)) != 1)
 #endif
-            throw std::runtime_error("Cannot hash download");
+            throw std::runtime_error("Cannot hash file");
     }
-    if (input.bad()) throw std::runtime_error("Cannot read download");
+    if (input.bad()) throw std::runtime_error("Cannot read file");
 #ifdef _WIN32
     if (BCryptFinishHash(context.hash, digest.data(), static_cast<ULONG>(digest.size()), 0) < 0)
 #else

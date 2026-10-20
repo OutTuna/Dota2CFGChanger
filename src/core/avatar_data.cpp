@@ -101,9 +101,13 @@ static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) 
     fs::path p = disk_cache_path(id);
     std::error_code error;
     if (!fs::exists(p, error) || error) return false;
+    if (!fs::is_regular_file(fs::symlink_status(p)) || fs::file_size(p) > MAX_AVATAR_BYTES) return false;
     std::ifstream f(p, std::ios::binary);
     if (!f) return false;
-    raw_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    raw_bytes.resize(std::min<std::uintmax_t>(fs::file_size(p), MAX_AVATAR_BYTES) + 1);
+    f.read(raw_bytes.data(), static_cast<std::streamsize>(raw_bytes.size()));
+    if (f.bad() || static_cast<std::size_t>(f.gcount()) > MAX_AVATAR_BYTES) return false;
+    raw_bytes.resize(static_cast<std::size_t>(f.gcount()));
     return !raw_bytes.empty();
 }
 
@@ -115,7 +119,11 @@ static void save_to_disk_cache(const std::string& id, const std::string& raw_byt
 }
 
 static bool decode_and_store(const std::string& id, const std::string& raw_bytes) {
+    if (raw_bytes.empty() || raw_bytes.size() > MAX_AVATAR_BYTES) return false;
     int w = 0, h = 0, ch = 0;
+    if (!stbi_info_from_memory(reinterpret_cast<const unsigned char*>(raw_bytes.data()),
+        static_cast<int>(raw_bytes.size()), &w, &h, &ch) || w <= 0 || h <= 0 || w > 512 || h > 512)
+        return false;
     std::unique_ptr<unsigned char, decltype(&stbi_image_free)> data(stbi_load_from_memory(
         reinterpret_cast<const unsigned char*>(raw_bytes.data()),
         (int)raw_bytes.size(), &w, &h, &ch, 4), stbi_image_free);
@@ -124,8 +132,15 @@ static bool decode_and_store(const std::string& id, const std::string& raw_bytes
         return false;
     }
 
-    std::vector<unsigned char> pixels(data.get(), data.get() + (size_t)w * h * 4);
-    mark_ready(id, std::move(pixels), w, h);
+    const int scale = std::max(w, h);
+    const int width = scale > 64 ? std::max(1, w * 64 / scale) : w;
+    const int height = scale > 64 ? std::max(1, h * 64 / scale) : h;
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4);
+    for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+        auto source = data.get() + (static_cast<std::size_t>(y * h / height) * w + x * w / width) * 4;
+        std::copy_n(source, 4, pixels.data() + (static_cast<std::size_t>(y) * width + x) * 4);
+    }
+    mark_ready(id, std::move(pixels), width, height);
     return true;
 }
 
@@ -166,7 +181,8 @@ static void fetch_thread(const std::string steam3_id) {
 }
 
 void avatar_data_request(const std::string& steam3_id) {
-    if (g_cancelled.load()) return;
+    if (g_cancelled.load() || steam3_id.empty() || steam3_id.size() > 10 ||
+        steam3_id.find_first_not_of("0123456789") != std::string::npos) return;
     std::lock_guard<std::mutex> lock(g_mutex);
 
     auto it = g_avatars.find(steam3_id);
@@ -187,7 +203,6 @@ void avatar_data_request(const std::string& steam3_id) {
 
     return;
 }
-
 
 std::vector<AvatarPixels> avatar_data_take_ready() {
     std::vector<AvatarPixels> result;

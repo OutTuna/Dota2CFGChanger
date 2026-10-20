@@ -12,7 +12,6 @@ spec = importlib.util.spec_from_file_location(
 abi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(abi)
 
-
 class AppImageChecks(unittest.TestCase):
     def test_only_runtime_requirements_are_checked(self):
         output = """Version definition section '.gnu.version_d':
@@ -57,7 +56,6 @@ Version needs section '.gnu.version_r':
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(RuntimeError, "No ELF files"):
                 abi.check(Path(tmp))
-
 
 if __name__ == "__main__":
     unittest.main()

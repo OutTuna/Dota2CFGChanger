@@ -8,7 +8,6 @@ import sys
 import tempfile
 import time
 
-
 def wait_until(condition, description, seconds=30):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -16,7 +15,6 @@ def wait_until(condition, description, seconds=30):
             return
         time.sleep(0.1)
     raise RuntimeError(description)
-
 
 def check(image):
     with tempfile.TemporaryDirectory(prefix="dotamanager-restart-") as tmp:
@@ -68,7 +66,6 @@ def check(image):
                 process.kill()
                 process.wait()
             print((folder / "helper.log").read_text() if (folder / "helper.log").exists() else "")
-
 
 if __name__ == "__main__":
     check(Path(sys.argv[1]).resolve())

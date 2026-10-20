@@ -33,6 +33,8 @@ int main(int argc, char** argv) {
     fs::copy_file(fs::u8path(argv[1]), root / "avatar_cache/42.img");
     { std::ifstream f(fs::u8path(argv[1]), std::ios::binary);
       download_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()); }
+    avatar_data_request("../42");
+    avatar_data_request("/42");
     avatar_data_request("42");
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
     std::vector<AvatarPixels> ready;
@@ -42,7 +44,7 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     assert(ready.size() == 1 && ready[0].id == "42");
-    assert(ready[0].width > 0 && ready[0].height > 0);
+    assert(ready[0].width > 0 && ready[0].height > 0 && ready[0].width <= 64 && ready[0].height <= 64);
     assert(ready[0].pixels.size() == static_cast<std::size_t>(ready[0].width) * ready[0].height * 4);
     assert(avatar_data_take_ready().empty());
     for (int i = 100; i < 112; ++i) {

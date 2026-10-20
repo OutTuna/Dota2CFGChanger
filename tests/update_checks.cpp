@@ -31,7 +31,11 @@ int main() {
     bad = release; bad["assets"][0]["digest"] = nullptr;
     assert(parse_release_info(bad.dump(), true).download_url.empty());
     bad = release; bad["assets"][0]["size"] = -1; reject(bad);
+    bad = release; bad["assets"][0]["size"] = 1e300; reject(bad);
+    bad = release; bad["assets"][0]["size"] = "3"; reject(bad);
+    bad = release; bad["assets"][0]["size"] = 3.5; reject(bad);
     bad = release; bad["draft"] = true; reject(bad);
+    bad = release; bad["prerelease"] = true; reject(bad);
     bad = release; bad["name"] = "Latest Build (v1.10/../bad)"; reject(bad);
     auto path = std::filesystem::temp_directory_path() / ("dotamanager-hash-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     { std::ofstream f(path, std::ios::binary); f << "abc"; }

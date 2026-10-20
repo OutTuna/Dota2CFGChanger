@@ -22,7 +22,7 @@ sha256sums=('c14f0702dbaac396d21a467e2a15d9bc9bb4d241e22401bd587c55f42cb80307'
             'e84b8ef348f41072609f53aab05bdaab24bf5916c62d99651dfbeaf282a8e0a2'
             'c5fbc5dcab1d46064001c3b84d7a88812985cde7e0e9ced03f5677bec1ba502a'
             '9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515'
-            'c9ef2b54c88342952f1edefb830350e8d3148448fcfd3f85731b408933f90d34')
+            'ef0168eb9cd88fd6c167e3a397e2e5405c5ffaea34c608ca64edb8c3c53c20cf')
 
 prepare() {
     patch -d "Dota2CFGChanger-${pkgver}" -p1 < "${srcdir}/packaging-support.patch"

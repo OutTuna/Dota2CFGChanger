@@ -66,6 +66,11 @@ int main() {
     fails([&] { copy_config_with_backup(source, destination, store, "123"); });
     assert(read(destination / "cfg/options.txt") == "version-2");
 #endif
+
+    auto broken = store / "123/broken"; fs::create_directory(broken);
+    write(broken / "backup.json", "{broken");
+    fails([&] { list_config_backups(store, "123"); });
+    assert(fs::exists(broken / "backup.json"));
     fs::remove_all(root);
     std::cout << "Backup creation, integrity, retention, restore and failure protection passed\n";
 }
