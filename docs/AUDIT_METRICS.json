@@ -1,0 +1,24 @@
+{
+  "baseline_ref": "ca72461b70679fdb18651869a150db4af2f34142",
+  "machine": "arm64",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.5)",
+  "fixture": "128 x 4096 bytes, 7 operations per scenario, warm filesystem cache, median",
+  "measurements": {
+    "baseline": {
+      "identical_median_ms": 48.3761,
+      "changed_median_ms": 52.4295,
+      "process_wall_seconds": 1.0436949579999997,
+      "process_user_seconds": 0.066443,
+      "process_system_seconds": 0.698878,
+      "process_peak_rss_bytes": 4898816
+    },
+    "working": {
+      "identical_median_ms": 9.46079,
+      "changed_median_ms": 73.5645,
+      "process_wall_seconds": 0.7840160840000001,
+      "process_user_seconds": 0.050442,
+      "process_system_seconds": 0.575718,
+      "process_peak_rss_bytes": 4456448
+    }
+  }
+}

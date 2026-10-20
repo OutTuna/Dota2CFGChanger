@@ -9,6 +9,7 @@
 #include <atomic>
 #include "ui_events.h"
 #include "file_tasks.h"
+#include "config_preview.h"
 
 constexpr int PATH_BUF_SIZE = 4096;
 
@@ -79,12 +80,19 @@ struct SuccessPopupState {
 };
 
 inline SuccessPopupState g_success;
+inline bool success_popup_animating() {
+    return g_success.show && (g_success.closing || g_success.anim_t < 0.30f);
+}
 
 void load_settings();
 void save_settings();
 bool save_profile_caches();
 bool ensure_profile_info(const std::string& id);
-void copy_config();
+void copy_config(const ConfigPreview* preview = nullptr);
+void prepare_copy_preview();
+void cancel_copy_preview();
+inline ConfigPreview g_copy_preview;
+inline bool g_copy_preview_ready = false;
 std::string browse_for_folder(const char* title);
 
 void start_scan();

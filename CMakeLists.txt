@@ -13,6 +13,11 @@ string(REGEX REPLACE "^v" "" APP_VERSION_STRING "${APP_VERSION}")
 if(NOT APP_VERSION_STRING MATCHES "^[0-9]+[.][0-9]+([.][0-9]+)?([.][0-9]+)?$")
     message(FATAL_ERROR "APP_VERSION must include major and minor components, e.g. v1.13")
 endif()
+set(APP_RELEASE_CHANNEL "stable" CACHE STRING "Distribution channel: stable or alpha")
+set_property(CACHE APP_RELEASE_CHANNEL PROPERTY STRINGS stable alpha)
+if(NOT APP_RELEASE_CHANNEL MATCHES "^(stable|alpha)$")
+    message(FATAL_ERROR "APP_RELEASE_CHANNEL must be stable or alpha")
+endif()
 file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 configure_file("${CMAKE_SOURCE_DIR}/cmake/AppVersion.h.in"
     "${CMAKE_BINARY_DIR}/generated/app_version.h" @ONLY)
@@ -24,7 +29,6 @@ if(APP_VERSION_PARTS_LEN GREATER 1)
 else()
     set(APP_VERSION_MINOR "0")
 endif()
-
 
 option(DOTAMANAGER_SYSTEM_LIBS "Use system curl, GLFW and JSON with predownloaded cpr, ImGui and stb sources" OFF)
 option(DOTAMANAGER_PACKAGE_MANAGED "Update this installation through its package manager" OFF)
@@ -40,6 +44,10 @@ endif()
 if(WIN32)
     set(CURL_USE_SCHANNEL ON  CACHE BOOL "" FORCE)
     set(CURL_USE_OPENSSL  OFF CACHE BOOL "" FORCE)
+elseif(APPLE)
+
+    set(CURL_USE_OPENSSL OFF CACHE BOOL "" FORCE)
+    set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
 else()
     set(CURL_USE_OPENSSL  ON  CACHE BOOL "" FORCE)
     set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
@@ -122,6 +130,7 @@ find_package(Threads REQUIRED)
 add_library(dotamanager_core STATIC
     src/core/app.cpp
     src/core/backups.cpp
+    src/core/config_preview.cpp
     src/core/file_ops.cpp
     src/core/file_tasks.cpp
     src/core/localization.cpp
@@ -199,7 +208,6 @@ if(NOT WIN32)
     target_link_libraries(DotaManager PRIVATE OpenGL::GL)
 endif()
 
-
 if(WIN32)
     if(EXISTS "${CMAKE_SOURCE_DIR}/resources/icons/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/resources/windows/app.manifest")
         configure_file(
@@ -241,6 +249,15 @@ install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/dota2cfgchan
 option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
 if(DOTAMANAGER_BUILD_TESTS)
     enable_testing()
+    add_executable(config_safety_checks tests/config_safety_checks.cpp)
+    target_link_libraries(config_safety_checks PRIVATE dotamanager_core)
+    if(MSVC)
+        target_compile_options(config_safety_checks PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(config_safety_checks PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME config_safety_checks COMMAND config_safety_checks)
+    set_tests_properties(config_safety_checks PROPERTIES TIMEOUT 20)
     add_executable(ui_state_checks tests/ui_state_checks.cpp)
     target_link_libraries(ui_state_checks PRIVATE dotamanager_core)
     if(MSVC)
@@ -278,9 +295,9 @@ if(DOTAMANAGER_BUILD_TESTS)
     set_tests_properties(update_install_checks PROPERTIES TIMEOUT 60)
     add_executable(version_build_checks tests/version_build_checks.cpp)
     target_link_libraries(version_build_checks PRIVATE dotamanager_core)
-    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}")
+    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}" "${APP_RELEASE_CHANNEL}")
     add_executable(update_checks tests/update_checks.cpp src/core/release_info.cpp src/core/checksum.cpp)
-    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp)
+    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp src/core/file_ops.cpp)
     add_executable(avatar_checks tests/avatar_checks.cpp)
     target_link_libraries(avatar_checks PRIVATE dotamanager_core)
     add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp src/ui/backups_popup.cpp
@@ -310,9 +327,21 @@ if(DOTAMANAGER_BUILD_TESTS)
             add_test(NAME ${test_target} COMMAND ${test_target})
         endif()
     endforeach()
+    add_executable(preview_ui_checks tests/preview_ui_checks.cpp src/ui/panels.cpp src/ui/main_window.cpp
+        ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
+    target_include_directories(preview_ui_checks PRIVATE ${imgui_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(preview_ui_checks PRIVATE dotamanager_core)
+    if(MSVC)
+        target_compile_options(preview_ui_checks PRIVATE /UNDEBUG /utf-8)
+    else()
+        target_compile_options(preview_ui_checks PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME preview_ui_checks COMMAND preview_ui_checks)
+    set_tests_properties(preview_ui_checks PROPERTIES TIMEOUT 20)
     target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
     add_executable(package_update_checks tests/package_update_checks.cpp src/core/updates.cpp
-        src/core/release_info.cpp src/core/checksum.cpp)
+        src/core/release_info.cpp src/core/checksum.cpp src/core/file_ops.cpp)
     target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
         ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
     target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
@@ -329,4 +358,8 @@ if(DOTAMANAGER_BUILD_TESTS)
         endif()
     endif()
     add_test(NAME package_update_checks COMMAND package_update_checks)
+    set_tests_properties(ui_state_checks file_tasks_checks backup_checks version_build_checks
+        update_checks update_service_checks avatar_checks update_ui_checks preview_ui_checks package_update_checks
+        PROPERTIES LABELS "portable")
+    set_tests_properties(config_safety_checks update_install_checks PROPERTIES LABELS "process-integration")
 endif()

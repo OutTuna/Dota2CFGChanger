@@ -1,16 +1,18 @@
 #include "steam_api.h"
 #include <cstring>
+#include <charconv>
+#include <cstdint>
 
 namespace steam_api {
 
 static const long long STEAM64_BASE = 76561197960265728LL;
 
 long long steam3_to_64(const std::string& steam3_id) {
-    try {
-        return std::stoll(steam3_id) + STEAM64_BASE;
-    } catch (...) {
+    std::uint32_t account = 0;
+    const auto parsed = std::from_chars(steam3_id.data(), steam3_id.data() + steam3_id.size(), account);
+    if (steam3_id.empty() || parsed.ec != std::errc{} || parsed.ptr != steam3_id.data() + steam3_id.size() || !account)
         return 0;
-    }
+    return STEAM64_BASE + account;
 }
 
 static std::string decode_xml_entities(std::string s) {

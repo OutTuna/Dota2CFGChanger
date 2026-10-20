@@ -4,6 +4,7 @@
 #include "updates.h"
 #include "avatar.h"
 #include <sstream>
+#include <filesystem>
 
 void ui_render_main(ImFont* font_big, ImVec2 ds) {
     avatar_flush_pending();
@@ -173,9 +174,25 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         int selected = selected_atomic.load();
         bool use_custom_palette = ui_theme_has_palette_editor(g_current_theme);
 
-        ImGui::BeginChild(child_id, { 0, list_h }, true);
-
-        for (int i = 0; i < (int)list.size(); i++) {
+        struct FilterState { ImGuiTextFilter filter; std::vector<int> indices; unsigned long long generation = 0; };
+        static FilterState source_filter, destination_filter;
+        auto& filtered = &selected_atomic == &selected_src ? source_filter : destination_filter;
+        ImGui::PushID(child_id);
+        ImGui::SetNextItemWidth(-1.f);
+        const bool changed = ImGui::InputTextWithHint("##account_search", tr("account_search"),
+            filtered.filter.InputBuf, IM_ARRAYSIZE(filtered.filter.InputBuf));
+        if (changed) filtered.filter.Build();
+        if (changed || filtered.generation != snapshot.account_generation) {
+            filtered.indices.clear();
+            for (int i = 0; i < static_cast<int>(list.size()); ++i)
+                if (filtered.filter.PassFilter(list[i].label.c_str())) filtered.indices.push_back(i);
+            filtered.generation = snapshot.account_generation;
+        }
+        ImGui::BeginChild(child_id, { 0, list_h - ImGui::GetFrameHeightWithSpacing() }, true);
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(filtered.indices.size()), ROW_H + ImGui::GetStyle().ItemSpacing.y);
+        while (clipper.Step()) for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+            int i = filtered.indices[row];
             const auto& id = list[i].id;
             const auto& label = list[i].label;
             bool sel = (i == selected);
@@ -204,6 +221,13 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
                 selected_atomic.store(i);
             }
 
+            if (ImGui::BeginPopupContextItem("##account_actions")) {
+                if (ImGui::MenuItem(tr("account_open_folder"))) {
+                    const auto base = &selected_atomic == &selected_src ? src_path : dst_path;
+                    open_external((std::filesystem::u8path(base) / id).u8string());
+                }
+                ImGui::EndPopup();
+            }
             if (use_custom_palette) ImGui::PopStyleColor(3);
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -251,6 +275,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         }
 
         ImGui::EndChild();
+        ImGui::PopID();
     };
 
     render_account_list(local_src_list, selected_src, "##src_list");
@@ -270,6 +295,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
             g_confirm_src_label = local_src_list[s].label;
             g_confirm_dst_label = local_dst_list[d].label;
+            prepare_copy_preview();
             g_confirm_copy_open = true;
         }
     }
@@ -295,7 +321,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     if (ImGui::BeginPopupModal("Info###info", &info_open,
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
         ImGui::TextUnformatted("OutTuna");
-        ImGui::TextDisabled("Release v%s", app_version());
+        ImGui::TextDisabled("Release v%s", app_build_version_label().c_str());
         ImGui::Spacing();
         if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
         ImGui::Spacing();

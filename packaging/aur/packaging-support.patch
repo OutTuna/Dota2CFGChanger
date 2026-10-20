@@ -1,18 +1,40 @@
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -26,6 +26,11 @@
+@@ -12,6 +12,11 @@
+ string(REGEX REPLACE "^v" "" APP_VERSION_STRING "${APP_VERSION}")
+ if(NOT APP_VERSION_STRING MATCHES "^[0-9]+[.][0-9]+([.][0-9]+)?([.][0-9]+)?$")
+     message(FATAL_ERROR "APP_VERSION must include major and minor components, e.g. v1.13")
++endif()
++set(APP_RELEASE_CHANNEL "stable" CACHE STRING "Distribution channel: stable or alpha")
++set_property(CACHE APP_RELEASE_CHANNEL PROPERTY STRINGS stable alpha)
++if(NOT APP_RELEASE_CHANNEL MATCHES "^(stable|alpha)$")
++    message(FATAL_ERROR "APP_RELEASE_CHANNEL must be stable or alpha")
  endif()
- 
+ file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+ configure_file("${CMAKE_SOURCE_DIR}/cmake/AppVersion.h.in"
+@@ -25,6 +30,10 @@
+     set(APP_VERSION_MINOR "0")
+ endif()
  
 +option(DOTAMANAGER_SYSTEM_LIBS "Use system curl, GLFW and JSON with predownloaded cpr, ImGui and stb sources" OFF)
 +option(DOTAMANAGER_PACKAGE_MANAGED "Update this installation through its package manager" OFF)
 +configure_file("${CMAKE_SOURCE_DIR}/cmake/PackageMode.h.in"
 +    "${CMAKE_BINARY_DIR}/generated/package_mode.h" @ONLY)
-+
+ 
  set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
  
- if(MSVC)
-@@ -46,22 +51,34 @@
+@@ -35,6 +44,10 @@
+ if(WIN32)
+     set(CURL_USE_SCHANNEL ON  CACHE BOOL "" FORCE)
+     set(CURL_USE_OPENSSL  OFF CACHE BOOL "" FORCE)
++elseif(APPLE)
++
++    set(CURL_USE_OPENSSL OFF CACHE BOOL "" FORCE)
++    set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
+ else()
+     set(CURL_USE_OPENSSL  ON  CACHE BOOL "" FORCE)
+     set(CURL_USE_SCHANNEL OFF CACHE BOOL "" FORCE)
+@@ -46,22 +59,34 @@
  set(BUILD_MISC_DOCS          OFF CACHE BOOL "" FORCE)
  
  set(ZLIB_BUILD_SHARED_LIBS   OFF CACHE BOOL "" FORCE)
@@ -53,9 +75,11 @@
  
  FetchContent_Declare(imgui GIT_REPOSITORY https://github.com/ocornut/imgui GIT_TAG v1.91.6 GIT_SHALLOW TRUE)
  FetchContent_MakeAvailable(imgui)
-@@ -106,9 +123,12 @@
+@@ -105,10 +130,14 @@
+ add_library(dotamanager_core STATIC
      src/core/app.cpp
      src/core/backups.cpp
++    src/core/config_preview.cpp
      src/core/file_ops.cpp
 +    src/core/file_tasks.cpp
      src/core/localization.cpp
@@ -66,7 +90,15 @@
      src/core/avatar_data.cpp
      src/core/release_info.cpp
      src/core/checksum.cpp
-@@ -190,7 +210,7 @@
+@@ -179,7 +208,6 @@
+     target_link_libraries(DotaManager PRIVATE OpenGL::GL)
+ endif()
+ 
+-
+ if(WIN32)
+     if(EXISTS "${CMAKE_SOURCE_DIR}/resources/icons/Icon.ico" AND EXISTS "${CMAKE_SOURCE_DIR}/resources/windows/app.manifest")
+         configure_file(
+@@ -190,7 +218,7 @@
          target_sources(DotaManager PRIVATE "${CMAKE_BINARY_DIR}/generated_app.rc")
      endif()
  
@@ -75,7 +107,7 @@
      set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
  
      if(MINGW)
-@@ -209,9 +229,36 @@
+@@ -209,9 +237,45 @@
      endif()
  endif()
  
@@ -91,6 +123,15 @@
  option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
  if(DOTAMANAGER_BUILD_TESTS)
      enable_testing()
++    add_executable(config_safety_checks tests/config_safety_checks.cpp)
++    target_link_libraries(config_safety_checks PRIVATE dotamanager_core)
++    if(MSVC)
++        target_compile_options(config_safety_checks PRIVATE /UNDEBUG /utf-8)
++    else()
++        target_compile_options(config_safety_checks PRIVATE -UNDEBUG)
++    endif()
++    add_test(NAME config_safety_checks COMMAND config_safety_checks)
++    set_tests_properties(config_safety_checks PROPERTIES TIMEOUT 20)
 +    add_executable(ui_state_checks tests/ui_state_checks.cpp)
 +    target_link_libraries(ui_state_checks PRIVATE dotamanager_core)
 +    if(MSVC)
@@ -112,15 +153,39 @@
      add_executable(backup_checks tests/backup_checks.cpp)
      target_link_libraries(backup_checks PRIVATE dotamanager_core)
      if(MSVC)
-@@ -263,5 +310,23 @@
+@@ -231,9 +295,9 @@
+     set_tests_properties(update_install_checks PROPERTIES TIMEOUT 60)
+     add_executable(version_build_checks tests/version_build_checks.cpp)
+     target_link_libraries(version_build_checks PRIVATE dotamanager_core)
+-    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}")
++    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}" "${APP_RELEASE_CHANNEL}")
+     add_executable(update_checks tests/update_checks.cpp src/core/release_info.cpp src/core/checksum.cpp)
+-    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp)
++    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp src/core/file_ops.cpp)
+     add_executable(avatar_checks tests/avatar_checks.cpp)
+     target_link_libraries(avatar_checks PRIVATE dotamanager_core)
+     add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp src/ui/backups_popup.cpp
+@@ -263,5 +327,39 @@
              add_test(NAME ${test_target} COMMAND ${test_target})
          endif()
      endforeach()
 -    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9")
 -endif()
++    add_executable(preview_ui_checks tests/preview_ui_checks.cpp src/ui/panels.cpp src/ui/main_window.cpp
++        ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
++        ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
++    target_include_directories(preview_ui_checks PRIVATE ${imgui_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
++    target_link_libraries(preview_ui_checks PRIVATE dotamanager_core)
++    if(MSVC)
++        target_compile_options(preview_ui_checks PRIVATE /UNDEBUG /utf-8)
++    else()
++        target_compile_options(preview_ui_checks PRIVATE -UNDEBUG)
++    endif()
++    add_test(NAME preview_ui_checks COMMAND preview_ui_checks)
++    set_tests_properties(preview_ui_checks PROPERTIES TIMEOUT 20)
 +    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
 +    add_executable(package_update_checks tests/package_update_checks.cpp src/core/updates.cpp
-+        src/core/release_info.cpp src/core/checksum.cpp)
++        src/core/release_info.cpp src/core/checksum.cpp src/core/file_ops.cpp)
 +    target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
 +        ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
 +    target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
@@ -137,6 +202,10 @@
 +        endif()
 +    endif()
 +    add_test(NAME package_update_checks COMMAND package_update_checks)
++    set_tests_properties(ui_state_checks file_tasks_checks backup_checks version_build_checks
++        update_checks update_service_checks avatar_checks update_ui_checks preview_ui_checks package_update_checks
++        PROPERTIES LABELS "portable")
++    set_tests_properties(config_safety_checks update_install_checks PROPERTIES LABELS "process-integration")
 +endif()
 --- /dev/null
 +++ b/cmake/PackageMode.h.in
@@ -205,10 +274,11 @@
  
      if (!glfwInit()) return 1;
      glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+-    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
 +#ifdef __linux__
 +    glfwWindowHintString(GLFW_X11_CLASS_NAME, "DotaManager");
 +#endif
-     const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
++    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_build_version_label() + ")";
      GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
      if (!window) return 1;
      glfwMakeContextCurrent(window);
@@ -227,7 +297,15 @@
  
      GLFWimage icon;
      icon.width  = APP_ICON_WIDTH;
-@@ -72,11 +115,48 @@
+@@ -50,6 +93,7 @@
+     ui_apply_theme(static_cast<AppTheme>(g_theme.load()));
+ 
+     ImGuiIO& io = ImGui::GetIO();
++    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+ 
+     FontPaths fonts = find_font_paths();
+     ImFont* font_default = nullptr;
+@@ -72,11 +116,48 @@
      if (install_error.empty()) updates_check(false);
      else updates_install_error(install_error);
      bool startup_confirmed = false;
@@ -255,7 +333,7 @@
 +        for (const auto& key : io.KeysData) held_input |= key.Down;
 +        const double now = glfwGetTime();
 +        if (focused != last_focus) { next_frame = now; last_focus = focused; }
-+        const bool continuous = g_success.show ||
++        const bool continuous = success_popup_animating() ||
 +            (focused && (now < input_until || held_input || io.WantTextInput));
 +        if (!ui_events::dirty.load() && settle_frames == 0 && !continuous) {
 +            frame_timer.set_active(false);
@@ -276,7 +354,7 @@
          ImGui::NewFrame();
  
          ImVec2 ds = io.DisplaySize;
-@@ -87,8 +167,8 @@
+@@ -87,8 +168,8 @@
          ui_render_backups_popup();
  
          ImGui::Render();
@@ -286,7 +364,7 @@
          glViewport(0, 0, dw, dh);
          glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
          glClear(GL_COLOR_BUFFER_BIT);
-@@ -98,12 +178,17 @@
+@@ -98,12 +179,17 @@
              update_install_confirm_started(arguments);
              startup_confirmed = true;
          }
@@ -308,7 +386,7 @@
      ImGui_ImplOpenGL3_Shutdown();
      ImGui_ImplGlfw_Shutdown();
      ImGui::DestroyContext();
-@@ -118,4 +203,4 @@
+@@ -118,4 +204,4 @@
  
  #ifdef _WIN32
  int APIENTRY WinMain(HINSTANCE, HINSTANCE, PSTR, int) { return main(__argc, __argv); }
@@ -339,7 +417,16 @@
    "ready": "Ready",
    "source": "Source config folder",
    "destination": "Destination account folder",
-@@ -76,5 +79,8 @@
+@@ -39,7 +42,7 @@
+   "source_invalid": "Source config is not a directory.",
+   "overlap": "Source and destination folders overlap.",
+   "previous_copy": "Previous copy files exist beside: {value}. Preserve or restore them before retrying.",
+-  "symlink": "Config contains a symbolic link; copying was stopped.",
++  "symlink": "A configuration path contains a link, reparse point or unsupported special file. Replacement was stopped.",
+   "restore_failed": "Could not restore config. Previous config saved at: {value}",
+   "home_missing": "HOME is not set. Choose an absolute folder path.",
+   "theme_0": "Dark (default)",
+@@ -76,5 +79,25 @@
    "backup_restored": "Backup restored for account {value}.",
    "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
    "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
@@ -347,7 +434,24 @@
 +  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}",
 +  "update_package_managed": "This installation is managed by your package manager. Update the package there; on Arch with yay or paru, run yay -Syu or paru -Syu.",
 +  "info_download_warning": "If you downloaded this anywhere other than {source} — you were deceived.",
-+  "info_download_source": "here"
++  "info_download_source": "here",
++  "space_insufficient": "Not enough free space. No configuration was replaced. Free disk space and try again.",
++  "operation_locked": "Another operation or an interrupted session holds this account lock. No files were replaced. Close other instances; see the recovery guide before removing a stale lock.",
++  "config_changed": "Configuration files changed or the prepared copy failed verification. No replacement was applied. Close Steam/Dota 2, refresh the preview and retry. Any completed backup is kept.",
++  "staging_cleanup_failed": "The destination was kept or restored, but temporary files could not be removed: {value}. Resolve the temporary directory before retrying.",
++  "preview_failed": "Preview unavailable. Check the status message, close this dialog and retry.",
++  "config_identical": "The configurations are identical. No files or backups will be written.",
++  "affected_files": "Affected files",
++  "transfer_bytes": "Copy volume (bytes)",
++  "transfer_preview": "Changes in the entire 570 directory",
++  "preview_add": "Add",
++  "preview_replace": "Replace",
++  "preview_remove": "Remove",
++  "preview_unchanged": "Unchanged",
++  "account_search": "Search",
++  "account_open_folder": "Open account folder",
++  "settings_load_failed": "Settings could not be read; defaults are in use. Check settings.json before saving: {value}",
++  "profile_cache_invalid": "A profile cache could not be read; uncached profiles will be fetched again: {value}"
  }
 --- a/resources/locales/ru.json
 +++ b/resources/locales/ru.json
@@ -359,7 +463,16 @@
    "ready": "Готово",
    "source": "Папка исходного конфига",
    "destination": "Папка целевого аккаунта",
-@@ -76,5 +79,8 @@
+@@ -39,7 +42,7 @@
+   "source_invalid": "Исходный конфиг не является папкой.",
+   "overlap": "Папки источника и назначения пересекаются.",
+   "previous_copy": "Остались файлы предыдущего копирования рядом с: {value}. Сохраните или восстановите их перед повторной попыткой.",
+-  "symlink": "Конфиг содержит символическую ссылку; копирование остановлено.",
++  "symlink": "Путь конфига содержит ссылку, reparse point или неподдерживаемый специальный файл. Замена остановлена.",
+   "restore_failed": "Не удалось восстановить конфиг. Прежний конфиг сохранён здесь: {value}",
+   "home_missing": "HOME не задан. Выберите абсолютный путь к папке.",
+   "theme_0": "Тёмная (по умолчанию)",
+@@ -76,5 +79,25 @@
    "backup_restored": "Бэкап восстановлен для аккаунта {value}.",
    "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
    "backup_invalid": "Бэкап повреждён или его файлы изменены. Восстановление не выполнено.",
@@ -367,7 +480,24 @@
 +  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}",
 +  "update_package_managed": "Эта установка обновляется через пакетный менеджер. Обновите пакет там; на Arch с yay или paru выполните yay -Syu или paru -Syu.",
 +  "info_download_warning": "Если вы скачали это не {source} — вас обманули.",
-+  "info_download_source": "отсюда"
++  "info_download_source": "отсюда",
++  "space_insufficient": "Недостаточно свободного места. Конфиг не заменён. Освободите место и повторите попытку.",
++  "operation_locked": "Аккаунт занят другой операцией или осталась блокировка прерванного сеанса. Файлы не заменены. Закройте другие экземпляры; перед удалением старой блокировки прочитайте инструкцию восстановления.",
++  "config_changed": "Конфиги изменились или подготовленная копия не прошла проверку. Замена не выполнена. Закройте Steam/Dota 2, обновите предпросмотр и повторите. Созданный бэкап сохранён.",
++  "staging_cleanup_failed": "Назначение сохранено или восстановлено, но временные файлы не удалены: {value}. Перед повторной попыткой разберите временную папку.",
++  "preview_failed": "Предпросмотр недоступен. Проверьте сообщение статуса, закройте окно и повторите.",
++  "config_identical": "Конфиги идентичны. Файлы и бэкапы записываться не будут.",
++  "affected_files": "Затронуто файлов",
++  "transfer_bytes": "Объём копирования (байт)",
++  "transfer_preview": "Изменения во всей папке 570",
++  "preview_add": "Добавить",
++  "preview_replace": "Заменить",
++  "preview_remove": "Удалить",
++  "preview_unchanged": "Без изменений",
++  "account_search": "Поиск",
++  "account_open_folder": "Открыть папку аккаунта",
++  "settings_load_failed": "Не удалось прочитать настройки; используются значения по умолчанию. Проверьте settings.json перед сохранением: {value}",
++  "profile_cache_invalid": "Не удалось прочитать кэш профилей; отсутствующие данные будут загружены заново: {value}"
  }
 --- a/resources/locales/uk.json
 +++ b/resources/locales/uk.json
@@ -379,7 +509,16 @@
    "ready": "Готово",
    "source": "Папка вихідного конфігу",
    "destination": "Папка цільового акаунта",
-@@ -76,5 +79,8 @@
+@@ -39,7 +42,7 @@
+   "source_invalid": "Вихідний конфіг не є папкою.",
+   "overlap": "Папки джерела та призначення перетинаються.",
+   "previous_copy": "Залишилися файли попереднього копіювання поруч із: {value}. Збережіть або відновіть їх перед повторною спробою.",
+-  "symlink": "Конфіг містить символічне посилання; копіювання зупинено.",
++  "symlink": "Шлях конфіга містить посилання, reparse point або непідтримуваний спеціальний файл. Заміну зупинено.",
+   "restore_failed": "Не вдалося відновити конфіг. Попередній конфіг збережено тут: {value}",
+   "home_missing": "HOME не задано. Виберіть абсолютний шлях до папки.",
+   "theme_0": "Темна (типово)",
+@@ -76,5 +79,25 @@
    "backup_restored": "Бекап відновлено для акаунта {value}.",
    "backup_create_failed": "Не вдалося створити бекап. Заміну конфіга скасовано: {value}",
    "backup_invalid": "Бекап пошкоджено або його файли змінено. Відновлення не виконано.",
@@ -387,15 +526,33 @@
 +  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}",
 +  "update_package_managed": "Ця установка оновлюється через пакетний менеджер. Оновіть пакет там; на Arch із yay або paru виконайте yay -Syu або paru -Syu.",
 +  "info_download_warning": "Якщо ви завантажили це не {source} — вас обманули.",
-+  "info_download_source": "звідси"
++  "info_download_source": "звідси",
++  "space_insufficient": "Недостатньо вільного місця. Конфіг не замінено. Звільніть місце й повторіть спробу.",
++  "operation_locked": "Акаунт зайнятий іншою операцією або залишилося блокування перерваного сеансу. Файли не замінено. Закрийте інші екземпляри; перед видаленням старого блокування прочитайте інструкцію відновлення.",
++  "config_changed": "Конфіги змінилися або підготовлена копія не пройшла перевірку. Заміна не виконана. Закрийте Steam/Dota 2, оновіть перегляд і повторіть. Створений бекап збережено.",
++  "staging_cleanup_failed": "Призначення збережене або відновлене, але тимчасові файли не видалені: {value}. Перед повторною спробою перевірте тимчасову папку.",
++  "preview_failed": "Перегляд недоступний. Перевірте повідомлення стану, закрийте вікно й повторіть.",
++  "config_identical": "Конфіги ідентичні. Файли та бекапи не записуватимуться.",
++  "affected_files": "Зачеплено файлів",
++  "transfer_bytes": "Обсяг копіювання (байт)",
++  "transfer_preview": "Зміни в усій папці 570",
++  "preview_add": "Додати",
++  "preview_replace": "Замінити",
++  "preview_remove": "Видалити",
++  "preview_unchanged": "Без змін",
++  "account_search": "Пошук",
++  "account_open_folder": "Відкрити папку акаунта",
++  "settings_load_failed": "Не вдалося прочитати налаштування; використовуються типові значення. Перевірте settings.json перед збереженням: {value}",
++  "profile_cache_invalid": "Не вдалося прочитати кеш профілів; відсутні дані будуть завантажені знову: {value}"
  }
 --- a/src/core/updates.cpp
 +++ b/src/core/updates.cpp
-@@ -3,14 +3,17 @@
+@@ -3,14 +3,18 @@
  #include "checksum.h"
  #include "platform.h"
  #include "update_transport.h"
 +#include "ui_events.h"
++#include "file_ops.h"
  #include <atomic>
  #include <filesystem>
  #include <fstream>
@@ -409,7 +566,7 @@
  
  namespace fs = std::filesystem;
  namespace {
-@@ -25,24 +28,28 @@
+@@ -25,28 +29,32 @@
      state.phase = UpdatePhase::Failed;
      state.error_key = key;
      state.detail = detail;
@@ -440,13 +597,19 @@
      }
      if (worker.joinable()) worker.join();
      stopping = false;
-@@ -60,11 +67,13 @@
+-    worker = std::thread([manual] {
++    try { worker = std::thread([manual] {
+         try {
+             auto body = fetch_update_release([] { return !stopping.load(); });
+ #ifdef _WIN32
+@@ -60,11 +68,13 @@
              state.release = std::move(release);
              state.phase = available ? UpdatePhase::Available : UpdatePhase::Current;
              state.popup = manual || available;
 +            ui_events::request_redraw();
          } catch (const std::exception& e) { fail("update_check_failed", e.what()); }
-     });
+-    });
++    }); } catch (const std::exception& error) { fail("update_check_failed", error.what()); }
  }
  
  void updates_download() {
@@ -454,7 +617,7 @@
      ReleaseInfo release;
      {
          std::lock_guard<std::mutex> lock(mutex);
-@@ -75,6 +84,7 @@
+@@ -75,24 +85,42 @@
          state.error_key.clear();
          state.progress = 0;
          state.popup = true;
@@ -462,11 +625,33 @@
      }
      if (worker.joinable()) worker.join();
      stopping = false;
-@@ -90,9 +100,16 @@
+-    worker = std::thread([release] {
+-        fs::path partial;
++    try { worker = std::thread([release] {
++        fs::path partial, workspace;
++        bool owned_workspace = false;
+         try {
+             auto folder = fs::u8path(config_dir()) / "updates" / release.version;
++            reject_config_link(folder.parent_path());
++            reject_config_link(folder);
+             fs::create_directories(folder);
+             auto target = folder / release.asset_name;
+-            partial = target;
+-            partial += ".part";
++            reject_config_link(target);
+             if (fs::exists(target)) {
++                if (!fs::is_regular_file(fs::symlink_status(target))) throw std::runtime_error("Invalid cached update file");
                  if (fs::file_size(target) != release.size || file_sha256(target) != release.digest)
                      throw std::runtime_error("Existing update file does not match release; open GitHub to download manually");
              } else {
 -                download_update_asset(release, partial, [release](std::uint64_t now) {
++                workspace = target; workspace += ".download";
++                if (!fs::create_directory(workspace)) throw std::runtime_error("An earlier download must be resolved: " + workspace.u8string());
++                owned_workspace = true;
++#ifndef _WIN32
++                fs::permissions(workspace, fs::perms::owner_all, fs::perm_options::replace);
++#endif
++                partial = workspace / "payload.part";
 +                auto last_notice = std::chrono::steady_clock::time_point{};
 +                download_update_asset(release, partial, [size = release.size, &last_notice](std::uint64_t now) {
                      std::lock_guard<std::mutex> lock(mutex);
@@ -481,16 +666,26 @@
                      return !stopping.load();
                  });
                  if (fs::file_size(partial) != release.size) throw std::runtime_error("Download incomplete");
-@@ -106,6 +123,7 @@
+@@ -101,25 +129,31 @@
+                 fs::permissions(partial, fs::perms::owner_exec, fs::perm_options::add);
+ #endif
+                 fs::rename(partial, target);
++                fs::remove(workspace);
++                owned_workspace = false;
+             }
+             std::lock_guard<std::mutex> lock(mutex);
              state.phase = UpdatePhase::Downloaded;
              state.progress = 1;
              state.downloaded_path = target.u8string();
 +            ui_events::request_redraw();
          } catch (const std::exception& e) {
              std::error_code ec;
-             if (!partial.empty()) fs::remove(partial, ec);
-@@ -114,12 +132,15 @@
-     });
+-            if (!partial.empty()) fs::remove(partial, ec);
++            if (owned_workspace) fs::remove_all(workspace, ec);
+             fail("update_download_failed", e.what());
+         }
+-    });
++    }); } catch (const std::exception& error) { fail("update_download_failed", error.what()); }
  }
  
 +void updates_request_stop() { stopping = true; }
@@ -506,7 +701,7 @@
      UpdateSnapshot update;
      {
          std::lock_guard<std::mutex> lock(mutex);
-@@ -129,6 +150,7 @@
+@@ -129,16 +163,18 @@
          state.phase = UpdatePhase::Installing;
          state.error_key.clear();
          state.popup = true;
@@ -514,15 +709,20 @@
      }
      if (worker.joinable()) worker.join();
      stopping = false;
-@@ -137,6 +159,7 @@
+-    worker = std::thread([update] {
++    try { worker = std::thread([update] {
+         try {
              prepare_update_install(fs::u8path(update.downloaded_path), update.release,
                  [] { return !stopping.load(); });
              restart_ready = true;
 +            ui_events::request_redraw();
          } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
-     });
+-    });
++    }); } catch (const std::exception& error) { fail("update_install_failed", error.what()); }
  }
-@@ -146,4 +169,5 @@
+ 
+ bool updates_should_exit() { return restart_ready.load(); }
+@@ -146,4 +182,5 @@
      fail("update_install_failed", detail);
      std::lock_guard<std::mutex> lock(mutex);
      state.popup = true;
@@ -530,7 +730,23 @@
  }
 --- a/src/core/updates.h
 +++ b/src/core/updates.h
-@@ -17,8 +17,12 @@
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include "release_info.h"
++#include "app_version.h"
+ #include <string>
+ 
+ enum class UpdatePhase { Idle, Checking, Available, Current, Downloading, Downloaded, Installing, Failed };
+@@ -13,12 +14,21 @@
+     std::string downloaded_path;
+ };
+ const char* app_version();
++inline const char* app_release_channel() { return DOTA_RELEASE_CHANNEL; }
++inline std::string app_build_version_label() {
++    const std::string channel = app_release_channel();
++    return std::string(app_version()) + (channel == "stable" ? "" : " " + channel);
++}
+ void updates_check(bool manual);
  void updates_download();
  void updates_dismiss();
  UpdateSnapshot updates_snapshot();
@@ -699,28 +915,37 @@
  }
 --- a/tests/version_build_checks.cpp
 +++ b/tests/version_build_checks.cpp
-@@ -1,8 +1,10 @@
+@@ -1,13 +1,17 @@
  #include "updates.h"
 +#include "package_mode.h"
  #include <iostream>
  #include <string>
  
  int main(int argc, char** argv) {
+-    if (argc != 2 || std::string(app_version()) != argv[1]) {
 +    if (updates_self_install_enabled() != !DOTAMANAGER_PACKAGE_MANAGED) return 1;
-     if (argc != 2 || std::string(app_version()) != argv[1]) {
++    if (argc != 3 || std::string(app_version()) != argv[1] || std::string(app_release_channel()) != argv[2]) {
          std::cerr << "Compiled application version differs from the release version: "
                    << app_version() << '\n';
+         return 1;
+     }
+     if (newer_version(argv[1], app_version())) return 1;
++    const std::string suffix = std::string(argv[2]) == "stable" ? "" : " " + std::string(argv[2]);
++    if (app_build_version_label() != std::string(argv[1]) + suffix) return 1;
+     std::cout << "Application and release versions match: " << app_version() << '\n';
+ }
 --- a/src/ui/main_window.cpp
 +++ b/src/ui/main_window.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
  #include "localization.h"
  #include "updates.h"
  #include "avatar.h"
 +#include <sstream>
++#include <filesystem>
  
  void ui_render_main(ImFont* font_big, ImVec2 ds) {
      avatar_flush_pending();
-@@ -99,7 +100,7 @@
+@@ -99,7 +101,7 @@
  
      ImGui::Separator();
  
@@ -729,7 +954,7 @@
      if (scanning) ImGui::BeginDisabled();
      static bool open_src = false;
      static bool open_dst = false;
-@@ -137,7 +138,7 @@
+@@ -137,7 +139,7 @@
  
      if (scanning) ImGui::EndDisabled();
      if (scanning) ImGui::BeginDisabled();
@@ -738,7 +963,7 @@
          start_scan();
      if (scanning) ImGui::EndDisabled();
  
-@@ -149,22 +150,23 @@
+@@ -149,34 +151,50 @@
          + ImGui::GetStyle().WindowPadding.y;
      const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
  
@@ -772,19 +997,62 @@
          std::atomic<int>& selected_atomic,
          const char* child_id)
      {
-@@ -174,9 +176,8 @@
-         ImGui::BeginChild(child_id, { 0, list_h }, true);
+         int selected = selected_atomic.load();
+         bool use_custom_palette = ui_theme_has_palette_editor(g_current_theme);
  
-         for (int i = 0; i < (int)list.size(); i++) {
+-        ImGui::BeginChild(child_id, { 0, list_h }, true);
+-
+-        for (int i = 0; i < (int)list.size(); i++) {
 -            const std::string& id = list[i];
 -            std::string nick = local_nick_cache.count(id) ? local_nick_cache[id] : id;
 -            std::string label = nick + " (" + id + ")";
++        struct FilterState { ImGuiTextFilter filter; std::vector<int> indices; unsigned long long generation = 0; };
++        static FilterState source_filter, destination_filter;
++        auto& filtered = &selected_atomic == &selected_src ? source_filter : destination_filter;
++        ImGui::PushID(child_id);
++        ImGui::SetNextItemWidth(-1.f);
++        const bool changed = ImGui::InputTextWithHint("##account_search", tr("account_search"),
++            filtered.filter.InputBuf, IM_ARRAYSIZE(filtered.filter.InputBuf));
++        if (changed) filtered.filter.Build();
++        if (changed || filtered.generation != snapshot.account_generation) {
++            filtered.indices.clear();
++            for (int i = 0; i < static_cast<int>(list.size()); ++i)
++                if (filtered.filter.PassFilter(list[i].label.c_str())) filtered.indices.push_back(i);
++            filtered.generation = snapshot.account_generation;
++        }
++        ImGui::BeginChild(child_id, { 0, list_h - ImGui::GetFrameHeightWithSpacing() }, true);
++        ImGuiListClipper clipper;
++        clipper.Begin(static_cast<int>(filtered.indices.size()), ROW_H + ImGui::GetStyle().ItemSpacing.y);
++        while (clipper.Step()) for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
++            int i = filtered.indices[row];
 +            const auto& id = list[i].id;
 +            const auto& label = list[i].label;
              bool sel = (i == selected);
  
              ImGui::PushID(i);
-@@ -267,12 +268,8 @@
+@@ -203,6 +221,13 @@
+                 selected_atomic.store(i);
+             }
+ 
++            if (ImGui::BeginPopupContextItem("##account_actions")) {
++                if (ImGui::MenuItem(tr("account_open_folder"))) {
++                    const auto base = &selected_atomic == &selected_src ? src_path : dst_path;
++                    open_external((std::filesystem::u8path(base) / id).u8string());
++                }
++                ImGui::EndPopup();
++            }
+             if (use_custom_palette) ImGui::PopStyleColor(3);
+ 
+             ImDrawList* dl = ImGui::GetWindowDrawList();
+@@ -250,6 +275,7 @@
+         }
+ 
+         ImGui::EndChild();
++        ImGui::PopID();
+     };
+ 
+     render_account_list(local_src_list, selected_src, "##src_list");
+@@ -267,12 +293,9 @@
          if (s < 0 || d < 0) {
              copy_config();
          } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
@@ -796,10 +1064,11 @@
 -            g_confirm_dst_label = d_nick + " (" + d_id + ")";
 +            g_confirm_src_label = local_src_list[s].label;
 +            g_confirm_dst_label = local_dst_list[d].label;
++            prepare_copy_preview();
              g_confirm_copy_open = true;
          }
      }
-@@ -280,7 +277,6 @@
+@@ -280,7 +303,6 @@
      if (scanning) ImGui::EndDisabled();
      const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
      ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
@@ -807,8 +1076,12 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
      ImGui::BeginChild("##status", {0, 32.f},
-@@ -302,13 +298,49 @@
-         ImGui::TextDisabled("Release v%s", app_version());
+@@ -299,16 +321,52 @@
+     if (ImGui::BeginPopupModal("Info###info", &info_open,
+         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
+         ImGui::TextUnformatted("OutTuna");
+-        ImGui::TextDisabled("Release v%s", app_version());
++        ImGui::TextDisabled("Release v%s", app_build_version_label().c_str());
          ImGui::Spacing();
          if (ImGui::Button("GitHub", {-1.f, 32.f})) open_external(REPOSITORY_URL);
 +        ImGui::Spacing();
@@ -868,17 +1141,19 @@
  #include <nlohmann/json.hpp>
  #include <filesystem>
  #include <fstream>
-@@ -11,10 +12,21 @@
+@@ -11,10 +12,23 @@
  #include <cstring>
  #include <cstdlib>
  #include <thread>
 +#include <condition_variable>
 +#include <chrono>
++#include <memory>
  
  namespace {
  std::thread scan_worker;
  std::atomic<bool> stop_scan{false};
 +std::atomic<bool> stopping_app{false};
++unsigned long long preview_generation = 0;
 +struct ProfileRequest {
 +    bool fetching = false;
 +    bool success = false;
@@ -890,7 +1165,7 @@
  }
  
  namespace fs = std::filesystem;
-@@ -24,6 +36,7 @@
+@@ -24,6 +38,7 @@
      std::lock_guard<std::mutex> lock(g_data_mutex);
      status_msg = s;
      status_detail = detail;
@@ -898,7 +1173,7 @@
  }
  
  bool set_config_path(char* target, const std::string& path) {
-@@ -39,6 +52,7 @@
+@@ -39,6 +54,7 @@
              if (target == dst_path) { dst_list.clear(); selected_dst = -1; }
          }
          std::memcpy(target, normalized.c_str(), normalized.size() + 1);
@@ -906,10 +1181,32 @@
          return true;
      } catch (const ConfigFileError& e) {
          set_status(e.key, e.detail);
-@@ -107,84 +121,175 @@
-             for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
-         } catch (...) {}
+@@ -89,7 +105,7 @@
+                 fs::remove(settings_path(), cleanup_error);
+             }
+ #endif
+-        } catch (...) {}
++        } catch (const std::exception& error) { set_status("settings_load_failed", error.what()); }
      }
+     if (fs::exists(nick_cache_path())) {
+         try {
+@@ -97,7 +113,7 @@
+             json j; f >> j;
+             std::lock_guard<std::mutex> lock(g_data_mutex);
+             for (auto& el : j.items()) nick_cache[el.key()] = el.value();
+-        } catch (...) {}
++        } catch (const std::exception&) { set_status("profile_cache_invalid", CACHE_FILE); }
+     }
+     if (fs::exists(avatar_url_cache_path())) {
+         try {
+@@ -105,93 +121,188 @@
+             json j; f >> j;
+             std::lock_guard<std::mutex> lock(g_data_mutex);
+             for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
+-        } catch (...) {}
+-    }
++        } catch (const std::exception&) { set_status("profile_cache_invalid", AVATAR_URL_CACHE_FILE); }
++    }
 +    ++g_cache_generation;
 +    app_ui_changed();
  }
@@ -1123,7 +1420,10 @@
              std::string fname = it->path().filename().u8string();
              if (!fname.empty() &&
                  std::all_of(fname.begin(), fname.end(), [](unsigned char c) { return ::isdigit(c); })) {
-@@ -192,6 +297,7 @@
++                if (!steam_api::steam3_to_64(fname)) continue;
++                try { reject_config_link(it->path()); }
++                catch (const ConfigFileError&) { if (scan_error.empty()) scan_error = it->path().u8string(); continue; }
+                 all_ids.push_back(fname);
                  list.push_back(fname);
              }
          }
@@ -1131,7 +1431,7 @@
      };
  
      std::string source_path, destination_path;
-@@ -201,34 +307,45 @@
+@@ -201,34 +312,76 @@
          destination_path = dst_path;
      }
      scan_dir(source_path, new_src);
@@ -1171,11 +1471,45 @@
 +        else set_status("scan_complete");
 +    }
      g_scanning = false;
-+    ui_events::request_redraw();
- }
- 
- void copy_config() {
+-}
+-
+-void copy_config() {
 -    if (g_scanning.load()) return;
++    ui_events::request_redraw();
++}
++
++void cancel_copy_preview() {
++    ++preview_generation;
++    g_copy_preview_ready = false;
++    g_copy_preview = {};
++}
++
++void prepare_copy_preview() {
++    cancel_copy_preview();
++    const auto request = preview_generation;
++    std::filesystem::path source, destination;
++    {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        int s = selected_src.load(), d = selected_dst.load();
++        if (s < 0 || d < 0 || s >= static_cast<int>(src_list.size()) || d >= static_cast<int>(dst_list.size())) return;
++        source = fs::u8path(src_path) / src_list[s] / DOTA_ID;
++        destination = fs::u8path(dst_path) / dst_list[d] / DOTA_ID;
++    }
++    file_tasks_start([source, destination, request]() -> FileTaskCompletion {
++        try {
++            auto preview = preview_config_transfer(source, destination);
++            return [preview = std::move(preview), request]() mutable {
++                if (request != preview_generation) return;
++                g_copy_preview = std::move(preview);
++                g_copy_preview_ready = true;
++            };
++        } catch (const ConfigFileError& error) { set_status(error.key, error.detail); }
++        catch (const std::exception& error) { set_status("error", error.what()); }
++        return {};
++    });
++}
++
++void copy_config(const ConfigPreview* preview) {
 +    if (g_scanning.load() || file_tasks_busy()) return;
      int s_idx = selected_src.load();
      int d_idx = selected_dst.load();
@@ -1187,7 +1521,7 @@
      {
          std::lock_guard<std::mutex> lock(g_data_mutex);
          if (s_idx >= (int)src_list.size() || d_idx >= (int)dst_list.size()) return;
-@@ -236,53 +353,81 @@
+@@ -236,53 +389,82 @@
          d_id = dst_list[d_idx];
          s_nick = nick_cache.count(s_id) ? nick_cache[s_id] : ("ID: " + s_id);
          d_nick = nick_cache.count(d_id) ? nick_cache[d_id] : ("ID: " + d_id);
@@ -1227,7 +1561,8 @@
 +        destination_path = dst_path;
 +    }
 +
-+    if (!file_tasks_start([s_id, d_id, s_nick, d_nick, source_path, destination_path]() -> FileTaskCompletion {
++    const auto expected = preview ? std::make_shared<ConfigPreview>(*preview) : nullptr;
++    if (!file_tasks_start([s_id, d_id, s_nick, d_nick, source_path, destination_path, expected]() -> FileTaskCompletion {
 +        set_status("working");
 +        try {
 +            fs::path src = fs::u8path(source_path) / s_id / DOTA_ID;
@@ -1241,7 +1576,7 @@
 +                return {};
 +            }
 +
-+            auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
++            auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id, expected.get());
 +            if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
 +            else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
 +            else set_status("copy_success", d_id);
@@ -1310,16 +1645,17 @@
 +}
 --- a/src/core/app.h
 +++ b/src/core/app.h
-@@ -7,6 +7,8 @@
+@@ -7,6 +7,9 @@
  #include <map>
  #include <mutex>
  #include <atomic>
 +#include "ui_events.h"
 +#include "file_tasks.h"
++#include "config_preview.h"
  
  constexpr int PATH_BUF_SIZE = 4096;
  
-@@ -35,6 +37,32 @@
+@@ -35,6 +38,32 @@
  inline std::atomic<int> selected_dst{ -1 };
  inline std::atomic<bool> g_scanning{ false };
  
@@ -1352,7 +1688,7 @@
  struct SuccessPopupState {
      bool show = false;
      bool closing = false;
-@@ -44,6 +72,8 @@
+@@ -44,16 +73,28 @@
      std::string dst_id;
      std::string src_nick;
      std::string dst_nick;
@@ -1361,13 +1697,22 @@
      std::string src_folder;
      std::string dst_folder;
  };
-@@ -52,8 +82,11 @@
+ 
+ inline SuccessPopupState g_success;
++inline bool success_popup_animating() {
++    return g_success.show && (g_success.closing || g_success.anim_t < 0.30f);
++}
  
  void load_settings();
  void save_settings();
+-void copy_config();
 +bool save_profile_caches();
 +bool ensure_profile_info(const std::string& id);
- void copy_config();
++void copy_config(const ConfigPreview* preview = nullptr);
++void prepare_copy_preview();
++void cancel_copy_preview();
++inline ConfigPreview g_copy_preview;
++inline bool g_copy_preview_ready = false;
  std::string browse_for_folder(const char* title);
  
  void start_scan();
@@ -1492,17 +1837,24 @@
  }
  
  static fs::path disk_cache_path(const std::string& id) {
-@@ -114,7 +99,8 @@
+@@ -114,46 +99,56 @@
  
  static bool load_from_disk_cache(const std::string& id, std::string& raw_bytes) {
      fs::path p = disk_cache_path(id);
 -    if (!fs::exists(p)) return false;
 +    std::error_code error;
 +    if (!fs::exists(p, error) || error) return false;
++    if (!fs::is_regular_file(fs::symlink_status(p)) || fs::file_size(p) > MAX_AVATAR_BYTES) return false;
      std::ifstream f(p, std::ios::binary);
      if (!f) return false;
-     raw_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
-@@ -124,36 +110,30 @@
+-    raw_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
++    raw_bytes.resize(std::min<std::uintmax_t>(fs::file_size(p), MAX_AVATAR_BYTES) + 1);
++    f.read(raw_bytes.data(), static_cast<std::streamsize>(raw_bytes.size()));
++    if (f.bad() || static_cast<std::size_t>(f.gcount()) > MAX_AVATAR_BYTES) return false;
++    raw_bytes.resize(static_cast<std::size_t>(f.gcount()));
+     return !raw_bytes.empty();
+ }
+ 
  static void save_to_disk_cache(const std::string& id, const std::string& raw_bytes) {
      try {
          fs::create_directories(fs::u8path(config_dir()) / AVATAR_DISK_DIR);
@@ -1514,8 +1866,12 @@
  
 -static void decode_and_store(const std::string& id, const std::string& raw_bytes) {
 +static bool decode_and_store(const std::string& id, const std::string& raw_bytes) {
++    if (raw_bytes.empty() || raw_bytes.size() > MAX_AVATAR_BYTES) return false;
      int w = 0, h = 0, ch = 0;
 -    auto* data = stbi_load_from_memory(
++    if (!stbi_info_from_memory(reinterpret_cast<const unsigned char*>(raw_bytes.data()),
++        static_cast<int>(raw_bytes.size()), &w, &h, &ch) || w <= 0 || h <= 0 || w > 512 || h > 512)
++        return false;
 +    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> data(stbi_load_from_memory(
          reinterpret_cast<const unsigned char*>(raw_bytes.data()),
 -        (int)raw_bytes.size(), &w, &h, &ch, 4);
@@ -1528,11 +1884,19 @@
 -
 -    std::vector<unsigned char> pixels(data, data + (size_t)w * h * 4);
 -    stbi_image_free(data);
+-    mark_ready(id, std::move(pixels), w, h);
 +        return false;
 +    }
 +
-+    std::vector<unsigned char> pixels(data.get(), data.get() + (size_t)w * h * 4);
-     mark_ready(id, std::move(pixels), w, h);
++    const int scale = std::max(w, h);
++    const int width = scale > 64 ? std::max(1, w * 64 / scale) : w;
++    const int height = scale > 64 ? std::max(1, h * 64 / scale) : h;
++    std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4);
++    for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
++        auto source = data.get() + (static_cast<std::size_t>(y * h / height) * w + x * w / width) * 4;
++        std::copy_n(source, 4, pixels.data() + (static_cast<std::size_t>(y) * width + x) * 4);
++    }
++    mark_ready(id, std::move(pixels), width, height);
 +    return true;
  }
  
@@ -1551,7 +1915,7 @@
  
      std::string avatar_url;
      {
-@@ -163,17 +143,10 @@
+@@ -163,17 +158,10 @@
      }
  
      if (avatar_url.empty()) {
@@ -1573,7 +1937,7 @@
      }
  
      if (avatar_url.empty()) {
-@@ -181,22 +154,19 @@
+@@ -181,22 +169,20 @@
          return;
      }
  
@@ -1598,19 +1962,23 @@
  }
  
  void avatar_data_request(const std::string& steam3_id) {
-+    if (g_cancelled.load()) return;
++    if (g_cancelled.load() || steam3_id.empty() || steam3_id.size() > 10 ||
++        steam3_id.find_first_not_of("0123456789") != std::string::npos) return;
      std::lock_guard<std::mutex> lock(g_mutex);
  
      auto it = g_avatars.find(steam3_id);
-@@ -221,6 +191,7 @@
+@@ -218,9 +204,9 @@
+     return;
+ }
  
+-
  std::vector<AvatarPixels> avatar_data_take_ready() {
      std::vector<AvatarPixels> result;
 +    if (!g_ready.exchange(false)) return result;
      std::lock_guard<std::mutex> lock(g_mutex);
      for (auto& [id, entry] : g_avatars) {
          if (entry.state == AvatarState::Ready && !entry.pixels.empty()) {
-@@ -231,15 +202,26 @@
+@@ -231,15 +217,26 @@
      return result;
  }
  
@@ -1850,22 +2218,112 @@
      ImGui::Spacing();
      ImGui::Separator();
      ImGui::Spacing();
-@@ -105,10 +105,12 @@
+@@ -70,15 +70,20 @@
+ }
+ 
+ void render_confirm_copy_popup(ImVec2 ds) {
+-    const float POP_W = 380.f;
++    const float POP_W = 540.f;
+     ImGui::SetNextWindowPos({ds.x * 0.5f, ds.y * 0.5f}, ImGuiCond_Always, {0.5f, 0.5f});
+     ImGui::SetNextWindowSizeConstraints({POP_W, 0.f}, {POP_W, ds.y - 32.f});
+     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.f);
+     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 16.f, 14.f });
+ 
+-    ImGui::Begin("##confirm_copy", &g_confirm_copy_open,
+-        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize |
+-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize);
++    const auto title = std::string(tr("confirmation")) + "###confirm_copy";
++    if (!ImGui::IsPopupOpen("###confirm_copy")) ImGui::OpenPopup("###confirm_copy");
++    if (!ImGui::BeginPopupModal(title.c_str(), &g_confirm_copy_open,
++        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
++        if (!g_confirm_copy_open) cancel_copy_preview();
++        ImGui::PopStyleVar(2);
++        return;
++    }
+ 
+     ImGui::TextColored({ 0.90f, 0.75f, 0.25f, 1.f }, "%s", tr("confirmation"));
+     ImGui::Spacing();
+@@ -95,23 +100,48 @@
+ 
+     ImGui::Spacing();
+     ImGui::Separator();
++    if (file_tasks_busy()) ImGui::TextUnformatted(tr("working"));
++    else if (!g_copy_preview_ready) ImGui::TextWrapped("%s", tr("preview_failed"));
++    else {
++        ImGui::TextUnformatted(tr("transfer_preview"));
++        ImGui::Text("%s: %zu | %s: %llu", tr("affected_files"), g_copy_preview.affected_files,
++            tr("transfer_bytes"), static_cast<unsigned long long>(g_copy_preview.changes ? g_copy_preview.copy_bytes : 0));
++        if (!g_copy_preview.changes) ImGui::TextWrapped("%s", tr("config_identical"));
++        ImGui::BeginChild("##preview_files", {0, 170}, ImGuiChildFlags_Borders);
++        ImGuiListClipper clipper;
++        clipper.Begin(static_cast<int>(g_copy_preview.entries.size()));
++        while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
++            const auto& entry = g_copy_preview.entries[i];
++            const char* key = entry.change == ConfigChange::Add ? "preview_add" :
++                entry.change == ConfigChange::Replace ? "preview_replace" :
++                entry.change == ConfigChange::Remove ? "preview_remove" : "preview_unchanged";
++            ImGui::Text("%s | %s%s", tr(key), entry.relative.generic_u8string().c_str(), entry.directory ? "/" : "");
++            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", entry.relative.generic_u8string().c_str());
++        }
++        ImGui::EndChild();
++    }
+     ImGui::Spacing();
+ 
+     if (ImGui::Button(tr("cancel"), { 120, 0 })) {
+         g_confirm_copy_open = false;
++        ImGui::CloseCurrentPopup();
+     }
+     ImGui::SameLine();
+ 
      ImGui::PushStyleColor(ImGuiCol_Button, { 0.75f, 0.20f, 0.20f, 1.00f });
      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.85f, 0.25f, 0.25f, 1.00f });
      ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.60f, 0.14f, 0.14f, 1.00f });
-+    ImGui::BeginDisabled(g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing);
-     if (ImGui::Button(tr("replace"), { -1, 0 })) {
-         copy_config();
+-    if (ImGui::Button(tr("replace"), { -1, 0 })) {
+-        copy_config();
++    ImGui::BeginDisabled(!g_copy_preview_ready || g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing);
++    if (ImGui::Button(tr(g_copy_preview_ready && !g_copy_preview.changes ? "ok" : "replace"), { -1, 0 })) {
++        copy_config(&g_copy_preview);
          g_confirm_copy_open = false;
++        ImGui::CloseCurrentPopup();
      }
 +    ImGui::EndDisabled();
      ImGui::PopStyleColor(3);
  
-     ImGui::End();
+-    ImGui::End();
++    ImGui::EndPopup();
++    if (!g_confirm_copy_open) cancel_copy_preview();
+     ImGui::PopStyleVar(2);
+ }
+ 
 --- a/src/ui/success_popup.cpp
 +++ b/src/ui/success_popup.cpp
-@@ -125,11 +125,8 @@
+@@ -3,6 +3,7 @@
+ #include "localization.h"
+ #include <GLFW/glfw3.h>
+ #include <cmath>
++#include <algorithm>
+ 
+ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
+     if (!g_success.show) return;
+@@ -11,7 +12,7 @@
+     const float CLOSE_DUR = 0.25f;
+ 
+     if (!g_success.closing) {
+-        g_success.anim_t += delta_time;
++        g_success.anim_t = std::min(OPEN_DUR, g_success.anim_t + delta_time);
+     } else {
+         g_success.close_t += delta_time;
+         if (g_success.close_t >= CLOSE_DUR) {
+@@ -44,7 +45,7 @@
+     const float pop_x2 = cx + sw * 0.5f;
+     const float pop_y2 = cy + sh * 0.5f;
+ 
+-    const float time = (float)glfwGetTime();
++    const float time = g_success.anim_t;
+     const float pulse = 0.5f + 0.5f * sinf(time * 2.8f);
+ 
+     ImGui::SetNextWindowPos({ 0, 0 });
+@@ -125,11 +126,8 @@
          ImGui::TextColored(vc, "%s", val);
      };
  
@@ -1912,7 +2370,7 @@
  
 --- a/tests/avatar_checks.cpp
 +++ b/tests/avatar_checks.cpp
-@@ -1,18 +1,38 @@
+@@ -1,18 +1,40 @@
  #include "avatar_data.h"
 +#include "app.h"
 +#include "avatar_transport.h"
@@ -1949,11 +2407,17 @@
      fs::copy_file(fs::u8path(argv[1]), root / "avatar_cache/42.img");
 +    { std::ifstream f(fs::u8path(argv[1]), std::ios::binary);
 +      download_bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()); }
++    avatar_data_request("../42");
++    avatar_data_request("/42");
      avatar_data_request("42");
      auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
      std::vector<AvatarPixels> ready;
-@@ -25,9 +45,61 @@
-     assert(ready[0].width > 0 && ready[0].height > 0);
+@@ -22,12 +44,64 @@
+         std::this_thread::sleep_for(std::chrono::milliseconds(5));
+     }
+     assert(ready.size() == 1 && ready[0].id == "42");
+-    assert(ready[0].width > 0 && ready[0].height > 0);
++    assert(ready[0].width > 0 && ready[0].height > 0 && ready[0].width <= 64 && ready[0].height <= 64);
      assert(ready[0].pixels.size() == static_cast<std::size_t>(ready[0].width) * ready[0].height * 4);
      assert(avatar_data_take_ready().empty());
 +    for (int i = 100; i < 112; ++i) {
@@ -2016,7 +2480,7 @@
      std::cout << "Avatar cache and background decoding work without a renderer\n";
 --- /dev/null
 +++ b/tests/ui_state_checks.cpp
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,243 @@
 +#include "app.h"
 +#include "ui_events.h"
 +#include <cassert>
@@ -2176,6 +2640,14 @@
 +    std::ofstream(root / "source/42/570/config.txt") << "new";
 +    std::ofstream(root / "destination/43/570/config.txt") << "old";
 +    selected_src = 0; selected_dst = 0;
++    prepare_copy_preview(); cancel_copy_preview();
++    const auto preview_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (file_tasks_busy()) {
++        file_tasks_poll();
++        assert(std::chrono::steady_clock::now() < preview_deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(!g_copy_preview_ready && g_copy_preview.entries.empty());
 +    copy_config();
 +    assert(file_tasks_busy() && !g_success.show);
 +    start_scan();
@@ -2192,6 +2664,10 @@
 +    { std::ifstream f(root / "destination/43/570/config.txt"); f >> contents; }
 +    assert(contents == "new");
 +    assert(list_config_backups(root / "backups", "43").size() == 1);
++    assert(success_popup_animating());
++    g_success.anim_t = 0.30f; assert(!success_popup_animating());
++    g_success.closing = true; assert(success_popup_animating());
++    g_success.show = false; assert(!success_popup_animating());
 +    auto cache_time = fs::last_write_time(root / CACHE_FILE);
 +    set_language("en"); save_settings(); save_settings();
 +    assert(fs::last_write_time(root / CACHE_FILE) == cache_time);
@@ -2257,15 +2733,19 @@
 +void avatar_data_request_stop();
 --- a/src/core/file_ops.cpp
 +++ b/src/core/file_ops.cpp
-@@ -2,12 +2,46 @@
+@@ -2,12 +2,50 @@
  #include <cstdlib>
  #include <stdexcept>
  #include <vector>
 +#include <fstream>
 +#include <atomic>
 +#include <chrono>
++#include <array>
++#include <limits>
++#include <algorithm>
  #ifdef _WIN32
  #define WIN32_LEAN_AND_MEAN
++#define NOMINMAX
  #include <windows.h>
 +#else
 +#include <unistd.h>
@@ -2304,19 +2784,200 @@
  
  std::string normalize_user_path(const std::string& path) {
      if (path.empty()) return {};
+@@ -51,31 +89,118 @@
+     return candidates.front().u8string();
+ }
+ 
+-fs::path replace_config_directory(const fs::path& source, const fs::path& destination) {
++bool config_path_contains(const fs::path& parent, const fs::path& child) {
++    auto p = parent.begin(), c = child.begin();
++    for (; p != parent.end() && c != child.end(); ++p, ++c) {
++#ifdef _WIN32
++        const auto& left = p->native(); const auto& right = c->native();
++        if (CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(),
++            static_cast<int>(right.size()), TRUE) != CSTR_EQUAL) return false;
++#else
++        if (*p != *c) return false;
++#endif
++    }
++    return p == parent.end();
++}
++
++void reject_config_link(const fs::path& path) {
++    if (fs::is_symlink(fs::symlink_status(path))) throw ConfigFileError("symlink");
++#ifdef _WIN32
++    const auto attributes = GetFileAttributesW(path.c_str());
++    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT))
++        throw ConfigFileError("symlink");
++#endif
++}
++
++ConfigTree inspect_config_tree(const fs::path& path) {
++    reject_config_link(path);
++
++    reject_config_link(path.parent_path());
++    if (!fs::is_directory(fs::symlink_status(path))) throw ConfigFileError("source_invalid");
++    ConfigTree result;
++    for (const auto& entry : fs::recursive_directory_iterator(path)) {
++        reject_config_link(entry.path());
++        auto status = entry.symlink_status();
++        ConfigEntry value;
++        value.directory = fs::is_directory(status);
++        if (!value.directory) {
++            if (!fs::is_regular_file(status)) throw ConfigFileError("symlink");
++            value.size = entry.file_size();
++            value.modified = entry.last_write_time();
++        }
++        result.emplace(entry.path().lexically_relative(path), value);
++    }
++    return result;
++}
++
++bool config_files_equal(const fs::path& left, const fs::path& right) {
++    if (fs::file_size(left) != fs::file_size(right)) return false;
++    std::ifstream a(left, std::ios::binary), b(right, std::ios::binary);
++    if (!a || !b) throw ConfigFileError("source_invalid");
++    std::array<char, 65536> x, y;
++    do {
++        a.read(x.data(), x.size()); b.read(y.data(), y.size());
++        if (a.bad() || b.bad()) throw ConfigFileError("source_invalid");
++        if (a.gcount() != b.gcount() || !std::equal(x.begin(), x.begin() + a.gcount(), y.begin())) return false;
++    } while (a && b);
++    return a.eof() && b.eof();
++}
++
++void require_config_space(const fs::path& folder, std::uintmax_t bytes) {
++    auto existing = fs::absolute(folder);
++    while (!fs::exists(existing) && existing.has_relative_path()) existing = existing.parent_path();
++    if (fs::space(existing).available < bytes) throw ConfigFileError("space_insufficient");
++}
++
++fs::path replace_config_directory(const fs::path& source, const fs::path& destination,
++    const std::function<void()>& before_replace) {
+     if (!fs::is_directory(source)) throw ConfigFileError("source_invalid");
+     const auto src = fs::weakly_canonical(source);
+     const auto dst = fs::weakly_canonical(destination);
+-    auto nested = [](const fs::path& parent, const fs::path& child) {
+-        auto p = parent.begin(), c = child.begin();
+-        for (; p != parent.end() && c != child.end() && *p == *c; ++p, ++c) {}
+-        return p == parent.end();
+-    };
+-    if (nested(src, dst) || nested(dst, src))
+-        throw ConfigFileError("overlap");
+-    fs::path temp = destination;
+-    temp += ".dotamanager_tmp";
+-    fs::path backup = destination;
+-    backup += ".dotamanager_backup";
++    if (config_path_contains(src, dst) || config_path_contains(dst, src)) throw ConfigFileError("overlap");
++    reject_config_link(source); reject_config_link(source.parent_path());
++    reject_config_link(destination); reject_config_link(destination.parent_path());
++
++    auto lock_path = dst; lock_path += ".dotamanager_lock";
++    if (!fs::create_directory(lock_path)) throw ConfigFileError("operation_locked");
++    struct Lock {
++        fs::path path;
++        ~Lock() { std::error_code ignored; fs::remove(path, ignored); }
++    } lock{lock_path};
++    fs::path temp = destination; temp += ".dotamanager_tmp";
++    fs::path backup = destination; backup += ".dotamanager_backup";
+     if (fs::exists(fs::symlink_status(temp)) || fs::exists(fs::symlink_status(backup)))
+         throw ConfigFileError("previous_copy", destination.u8string());
+-    for (const auto& entry : fs::recursive_directory_iterator(source))
+-        if (entry.is_symlink()) throw ConfigFileError("symlink");
+-    if (fs::is_symlink(fs::symlink_status(source)) || fs::is_symlink(fs::symlink_status(destination)))
+-        throw ConfigFileError("symlink");
+-    bool saved = false;
++    const auto before = inspect_config_tree(source);
++    const bool existed = fs::exists(fs::symlink_status(destination));
++    const auto previous = existed ? inspect_config_tree(destination) : ConfigTree{};
++    std::uintmax_t bytes = 0;
++    for (const auto& item : before) {
++        if (item.second.size > std::numeric_limits<std::uintmax_t>::max() - bytes)
++            throw ConfigFileError("space_insufficient");
++        bytes += item.second.size;
++    }
++    require_config_space(destination.parent_path(), bytes);
++    if (before_replace) before_replace();
++    bool saved = false, temp_created = false;
+     try {
++        if (!fs::create_directory(temp)) throw ConfigFileError("previous_copy", destination.u8string());
++        temp_created = true;
+         fs::copy(source, temp, fs::copy_options::recursive);
+-        if (fs::exists(destination)) {
++        auto staged = inspect_config_tree(temp);
++        if (staged.size() != before.size() || inspect_config_tree(source) != before)
++            throw ConfigFileError("config_changed");
++        for (const auto& item : before) {
++            auto found = staged.find(item.first);
++            if (found == staged.end() || found->second.directory != item.second.directory ||
++                found->second.size != item.second.size ||
++                (!item.second.directory && !config_files_equal(source / item.first, temp / item.first)))
++                throw ConfigFileError("config_changed");
++        }
++        if (inspect_config_tree(source) != before ||
++            existed != fs::exists(fs::symlink_status(destination)) ||
++            (existed && inspect_config_tree(destination) != previous)) throw ConfigFileError("config_changed");
++        if (existed) {
+             fs::rename(destination, backup);
+             saved = true;
+         }
+@@ -84,11 +209,11 @@
+         if (saved) {
+             std::error_code restore_error;
+             fs::rename(backup, destination, restore_error);
+-            if (restore_error)
+-                throw ConfigFileError("restore_failed", backup.u8string());
++            if (restore_error) throw ConfigFileError("restore_failed", backup.u8string());
+         }
+         std::error_code cleanup_error;
+-        fs::remove_all(temp, cleanup_error);
++        if (temp_created) fs::remove_all(temp, cleanup_error);
++        if (cleanup_error) throw ConfigFileError("staging_cleanup_failed", temp.u8string());
+         throw;
+     }
+     if (saved) {
 --- a/src/core/file_ops.h
 +++ b/src/core/file_ops.h
-@@ -5,6 +5,7 @@
+@@ -2,11 +2,16 @@
+ #include <filesystem>
+ #include <string>
+ #include <stdexcept>
++#include <functional>
++#include <map>
++#include <cstdint>
  
  std::string normalize_user_path(const std::string& path);
  std::string default_steam_userdata();
 +void write_file_atomic(const std::filesystem::path& path, const std::string& bytes);
  std::filesystem::path replace_config_directory(const std::filesystem::path& source,
-     const std::filesystem::path& destination);
+-    const std::filesystem::path& destination);
++    const std::filesystem::path& destination,
++    const std::function<void()>& before_replace = {});
  
+ struct ConfigFileError : std::runtime_error {
+     std::string key;
+@@ -14,3 +19,18 @@
+     explicit ConfigFileError(const std::string& message, const std::string& value = {})
+         : std::runtime_error(message), key(message), detail(value) {}
+ };
++
++struct ConfigEntry {
++    bool directory = false;
++    std::uintmax_t size = 0;
++    std::filesystem::file_time_type modified{};
++    bool operator==(const ConfigEntry& other) const {
++        return directory == other.directory && size == other.size && modified == other.modified;
++    }
++};
++using ConfigTree = std::map<std::filesystem::path, ConfigEntry>;
++bool config_path_contains(const std::filesystem::path& parent, const std::filesystem::path& child);
++void reject_config_link(const std::filesystem::path& path);
++ConfigTree inspect_config_tree(const std::filesystem::path& path);
++bool config_files_equal(const std::filesystem::path& left, const std::filesystem::path& right);
++void require_config_space(const std::filesystem::path& folder, std::uintmax_t bytes);
 --- a/src/network/steam_api.cpp
 +++ b/src/network/steam_api.cpp
-@@ -1,10 +1,5 @@
+@@ -1,34 +1,18 @@
  #include "steam_api.h"
 -#include <cpr/cpr.h>
  #include <cstring>
@@ -2324,13 +2985,22 @@
 -static const char* USER_AGENT =
 -    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 -    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
++#include <charconv>
++#include <cstdint>
  
  namespace steam_api {
  
-@@ -16,19 +11,6 @@
-     } catch (...) {
+ static const long long STEAM64_BASE = 76561197960265728LL;
+ 
+ long long steam3_to_64(const std::string& steam3_id) {
+-    try {
+-        return std::stoll(steam3_id) + STEAM64_BASE;
+-    } catch (...) {
++    std::uint32_t account = 0;
++    const auto parsed = std::from_chars(steam3_id.data(), steam3_id.data() + steam3_id.size(), account);
++    if (steam3_id.empty() || parsed.ec != std::errc{} || parsed.ptr != steam3_id.data() + steam3_id.size() || !account)
          return 0;
-     }
+-    }
 -}
 -
 -std::string fetch_profile_xml(long long steam64, int timeout_ms) {
@@ -2344,6 +3014,7 @@
 -        if (r.status_code == 200) return r.text;
 -    } catch (...) {}
 -    return {};
++    return STEAM64_BASE + account;
  }
  
  static std::string decode_xml_entities(std::string s) {
@@ -2358,7 +3029,15 @@
  }
 --- a/src/ui/avatar.cpp
 +++ b/src/ui/avatar.cpp
-@@ -40,6 +40,8 @@
+@@ -25,7 +25,6 @@
+     return tex;
+ }
+ 
+-
+ ImTextureID avatar_get(const std::string& id) {
+     auto found = textures.find(id);
+     if (found != textures.end()) return found->second;
+@@ -40,6 +39,8 @@
      }
  }
  
@@ -2379,7 +3058,56 @@
 +void avatar_request_stop();
 --- a/tests/core_checks.py
 +++ b/tests/core_checks.py
-@@ -129,7 +129,7 @@
+@@ -1,4 +1,5 @@
+ import json
++import shlex
+ import os
+ from pathlib import Path
+ import subprocess
+@@ -38,7 +39,7 @@
+ #include <system_error>
+ namespace fs = std::filesystem;
+ bool install_failure = false, restore_failure = false, save_failure = false;
+-bool copy_failure = false, cleanup_failure = false;
++bool copy_failure = false, cleanup_failure = false, copy_corruption = false, source_edit = false, destination_edit = false;
+ bool suffix(const fs::path& p, const char* s) { return p.u8string().find(s) != std::string::npos; }
+ void test_rename(const fs::path& from, const fs::path& to) {
+     if ((install_failure && suffix(from, ".dotamanager_tmp")) || (save_failure && suffix(to, ".dotamanager_backup")))
+@@ -61,6 +62,12 @@
+         throw fs::filesystem_error("Injected copy failure", from, to, std::make_error_code(std::errc::no_space_on_device));
+     }
+     fs::copy(from, to, options);
++    if (copy_corruption) std::ofstream(to / "cfg/options.txt") << "bad";
++    if (source_edit) std::ofstream(from / "cfg/options.txt") << "changed source";
++    if (destination_edit) {
++        auto original = to; original.replace_filename(to.filename().u8string().substr(0, to.filename().u8string().find(".dotamanager_tmp")));
++        std::ofstream(original / "cfg/options.txt") << "external change";
++    }
+ }
+ std::string read(const fs::path& path) { std::ifstream f(path); return {std::istreambuf_iterator<char>(f), {}}; }
+ void put(const fs::path& path, const char* text) { fs::create_directories(path.parent_path()); std::ofstream(path) << text; }
+@@ -86,6 +93,13 @@
+     auto expect_failure = [&] { bool failed = false; try { replace_config_directory(src, dst); } catch (...) { failed = true; } assert(failed); };
+     assert(replace_config_directory(src, dst).empty());
+     assert(read(dst / "cfg/options.txt") == "new" && !fs::exists(temp) && !fs::exists(backup));
++    reset(); copy_corruption = true; expect_failure(); copy_corruption = false;
++    assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
++    reset(); source_edit = true; expect_failure(); source_edit = false;
++    assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
++    put(src / "cfg/options.txt", "new");
++    reset(); destination_edit = true; expect_failure(); destination_edit = false;
++    assert(read(dst / "cfg/options.txt") == "external change" && !fs::exists(temp));
+     reset(); copy_failure = true; expect_failure(); copy_failure = false;
+     assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
+     save_failure = true; expect_failure(); save_failure = false;
+@@ -124,12 +138,13 @@
+ }
+ """)
+     compiler = os.environ.get("CXX", "c++")
++    extra_flags = shlex.split(os.environ.get("CXXFLAGS", ""))
+     executable = temp / "checks"
+-    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
++    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
      env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
      subprocess.run([str(executable), str(temp)], env=env, check=True)
      app = (root / "src/core/app.cpp").read_text()
@@ -2388,6 +3116,20 @@
      settings_source = r"""
  #include "app.h"
  #include "file_ops.h"
+@@ -164,11 +179,11 @@
+     assert(set_config_path(src_path, (fs::u8path(argv[1]) / "new_source").u8string()));
+     assert(selected_src == -1 && src_list.empty());
+     std::ofstream f(settings_path()); f << "{invalid"; f.close(); load_settings();
+-    assert(src_path[0] != 0);
++    assert(src_path[0] != 0 && status_msg == "settings_load_failed");
+     std::cout << "Settings persistence, UTF-8 paths and path length checks passed\n";
+ }
+ """
+     (temp / "settings.cpp").write_text(settings_source)
+     settings_executable = temp / "settings_checks"
+-    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
++    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
+     subprocess.run([str(settings_executable), str(temp)], env=env, check=True)
 --- /dev/null
 +++ b/src/core/file_tasks.cpp
 @@ -0,0 +1,68 @@
@@ -2473,30 +3215,38 @@
 +void file_tasks_shutdown();
 --- /dev/null
 +++ b/src/network/avatar_transport.cpp
-@@ -0,0 +1,12 @@
+@@ -0,0 +1,18 @@
 +#include "avatar_transport.h"
 +#include <cpr/cpr.h>
 +
 +std::string download_avatar(const std::string& url, const std::function<bool()>& active) {
 +    if (!active()) return {};
++    std::string bytes;
 +    auto response = cpr::Get(cpr::Url{url}, cpr::Header{{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}},
 +        cpr::Timeout{8000}, cpr::ConnectTimeout{4000},
 +        cpr::Redirect{cpr::PostRedirectFlags::POST_ALL},
++        cpr::WriteCallback{[&](const std::string_view& chunk, intptr_t) {
++            if (chunk.size() > MAX_AVATAR_BYTES - bytes.size()) return false;
++            bytes.append(chunk.data(), chunk.size());
++            return active();
++        }},
 +        cpr::ProgressCallback{[&](cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, intptr_t) { return active(); }});
 +    if (!active() || response.status_code != 200 || response.error.code != cpr::ErrorCode::OK) return {};
-+    return std::move(response.text);
++    return bytes;
 +}
 --- /dev/null
 +++ b/src/network/avatar_transport.h
-@@ -0,0 +1,5 @@
+@@ -0,0 +1,7 @@
 +#pragma once
 +#include <string>
 +#include <functional>
 +
 +std::string download_avatar(const std::string& url, const std::function<bool()>& active);
++
++inline constexpr std::size_t MAX_AVATAR_BYTES = 4 * 1024 * 1024;
 --- /dev/null
 +++ b/src/network/profile_transport.cpp
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,33 @@
 +#include "steam_api.h"
 +#include <cpr/cpr.h>
 +#include <atomic>
@@ -2511,14 +3261,21 @@
 +std::string fetch_profile_xml(long long steam64, int timeout_ms) {
 +    if (steam64 <= 0 || stopping.load()) return {};
 +    try {
++        std::string xml;
 +        auto response = cpr::Get(
 +            cpr::Url{"https://steamcommunity.com/profiles/" + std::to_string(steam64) + "?xml=1"},
 +            cpr::Header{{"User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"}, {"Accept", "text/xml,application/xml,*/*"}},
 +            cpr::Timeout{timeout_ms}, cpr::ConnectTimeout{4000},
 +            cpr::Redirect{cpr::PostRedirectFlags::POST_ALL},
++            cpr::WriteCallback{[&](const std::string_view& bytes, intptr_t) {
++                constexpr std::size_t limit = 512 * 1024;
++                if (bytes.size() > limit - xml.size()) return false;
++                xml.append(bytes.data(), bytes.size());
++                return !stopping.load();
++            }},
 +            cpr::ProgressCallback{[](cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, intptr_t) { return !stopping.load(); }});
 +        if (!stopping.load() && response.status_code == 200 && response.error.code == cpr::ErrorCode::OK)
-+            return std::move(response.text);
++            return xml;
 +    } catch (...) {}
 +    return {};
 +}
@@ -2625,3 +3382,1231 @@
 +    if not (baseline / name).is_file() or (baseline / name).read_bytes() != (project / name).read_bytes():
 +        raise SystemExit(f"AUR patch is out of date for {name}; regenerate before pushing")
 +print("Patched stable release matches the packaging implementation under test")
+--- a/src/core/backups.cpp
++++ b/src/core/backups.cpp
+@@ -16,24 +16,22 @@
+     if (account.empty() || account.find_first_not_of("0123456789") != std::string::npos)
+         throw ConfigFileError("backup_invalid");
+ }
+-bool contains(const fs::path& parent, const fs::path& child) {
+-    auto p = parent.begin(), c = child.begin();
+-    for (; p != parent.end() && c != child.end() && *p == *c; ++p, ++c) {}
+-    return p == parent.end();
+-}
+ void separate(const fs::path& a, const fs::path& b) {
+     auto left = fs::weakly_canonical(a), right = fs::weakly_canonical(b);
+-    if (contains(left, right) || contains(right, left)) throw ConfigFileError("overlap");
++    if (config_path_contains(left, right) || config_path_contains(right, left)) throw ConfigFileError("overlap");
+ }
+ void check_store(const fs::path& root, const std::string& account) {
+     check_account(account);
+-    if (fs::is_symlink(fs::symlink_status(root)) || fs::is_symlink(fs::symlink_status(root / account)))
+-        throw ConfigFileError("symlink");
++    reject_config_link(root);
++    reject_config_link(root / account);
+ }
+ json tree(const fs::path& path) {
++    reject_config_link(path);
++    reject_config_link(path.parent_path());
+     if (!fs::is_directory(fs::symlink_status(path))) throw ConfigFileError("backup_invalid");
+     json result = json::object();
+     for (const auto& entry : fs::recursive_directory_iterator(path)) {
++        reject_config_link(entry.path());
+         auto status = entry.symlink_status();
+         auto name = entry.path().lexically_relative(path).generic_u8string();
+         if (fs::is_directory(status)) result[name] = {{"directory", true}};
+@@ -44,6 +42,8 @@
+     return result;
+ }
+ json metadata(const fs::path& folder) {
++    reject_config_link(folder);
++    reject_config_link(folder / "backup.json");
+     if (!fs::is_directory(fs::symlink_status(folder)) ||
+         !fs::is_regular_file(fs::symlink_status(folder / "backup.json"))) throw ConfigFileError("backup_invalid");
+     std::ifstream stream(folder / "backup.json");
+@@ -82,6 +82,9 @@
+         check_store(root, account);
+         separate(destination, root);
+         auto before = tree(destination);
++        std::uintmax_t bytes = 0;
++        for (const auto& item : before.items()) if (item.value().contains("size")) bytes += item.value().at("size").get<std::uintmax_t>();
++        require_config_space(root, bytes);
+         auto folder = root / account;
+         fs::create_directories(folder);
+         auto id = timestamp(true);
+@@ -120,26 +123,30 @@
+             auto destination = fs::u8path(value.at("destination").get<std::string>());
+             if (!destination.is_absolute()) continue;
+             result.push_back({entry.path(), destination, account, value.at("date").get<std::string>()});
+-        } catch (const std::exception&) {}
++        } catch (const std::exception&) { throw ConfigFileError("backup_invalid", entry.path().filename().u8string()); }
+     }
+     std::sort(result.begin(), result.end(), [](const ConfigBackup& a, const ConfigBackup& b) { return a.path.filename() > b.path.filename(); });
+     return result;
+ }
+ 
+ BackupCopyResult copy_config_with_backup(const fs::path& source, const fs::path& destination,
+-    const fs::path& root, const std::string& account) {
++    const fs::path& root, const std::string& account, const ConfigPreview* preview) {
+     check_store(root, account);
+     separate(source, destination);
+     separate(source, root);
+     separate(destination, root);
+-    tree(source);
++    auto current = preview_config_transfer(source, destination);
++    if (preview) validate_config_preview(*preview, source, destination);
++    if (!current.changes) return {};
+     auto temp = destination; temp += ".dotamanager_tmp";
+     auto recovery = destination; recovery += ".dotamanager_backup";
+     if (fs::exists(fs::symlink_status(temp)) || fs::exists(fs::symlink_status(recovery)))
+         throw ConfigFileError("previous_copy", destination.u8string());
+-    if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
+     BackupCopyResult result;
+-    result.retained_backup = replace_config_directory(source, destination);
++    result.retained_backup = replace_config_directory(source, destination, [&] {
++        validate_config_preview(preview ? *preview : current, source, destination);
++        if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
++    });
+     result.cleanup_error = prune(root, account);
+     return result;
+ }
+@@ -154,9 +161,11 @@
+         fs::weakly_canonical(fs::u8path(value.at("destination").get<std::string>())) != fs::weakly_canonical(destination) ||
+         tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
+     separate(destination, root);
+-    if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
+     BackupCopyResult result;
+-    result.retained_backup = replace_config_directory(backup.path / "570", destination);
++    result.retained_backup = replace_config_directory(backup.path / "570", destination, [&] {
++        if (tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
++        if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
++    });
+     result.cleanup_error = prune(root, account);
+     return result;
+ }
+--- a/src/core/backups.h
++++ b/src/core/backups.h
+@@ -2,6 +2,7 @@
+ #include <filesystem>
+ #include <string>
+ #include <vector>
++#include "config_preview.h"
+ 
+ struct ConfigBackup {
+     std::filesystem::path path;
+@@ -19,7 +20,7 @@
+     const std::string& account);
+ BackupCopyResult copy_config_with_backup(const std::filesystem::path& source,
+     const std::filesystem::path& destination, const std::filesystem::path& root,
+-    const std::string& account);
++    const std::string& account, const ConfigPreview* preview = nullptr);
+ BackupCopyResult restore_config_backup(const ConfigBackup& backup,
+     const std::filesystem::path& destination, const std::filesystem::path& root,
+     const std::string& account);
+--- a/src/core/release_info.cpp
++++ b/src/core/release_info.cpp
+@@ -22,6 +22,7 @@
+ 
+ ReleaseInfo parse_release_info(const std::string& body, bool windows) {
+     auto release = nlohmann::json::parse(body);
++    if (release.value("prerelease", false)) throw std::runtime_error("Release is a prerelease");
+     if (release.value("draft", false)) throw std::runtime_error("Release is a draft");
+     ReleaseInfo result;
+     auto tag = release.value("tag_name", "");
+@@ -42,8 +43,11 @@
+         if (!asset.contains("digest") || !asset["digest"].is_string()) continue;
+         auto digest = asset["digest"].get<std::string>();
+         if (!std::regex_match(digest, std::regex("sha256:[0-9a-f]{64}"))) continue;
+-        auto size = asset.at("size").get<std::int64_t>();
+-        if (size <= 0 || size > 512LL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
++        const auto& encoded_size = asset.at("size");
++        if (!encoded_size.is_number_integer() || (!encoded_size.is_number_unsigned() && encoded_size.get<std::int64_t>() <= 0))
++            throw std::runtime_error("Invalid asset size");
++        auto size = encoded_size.get<std::uint64_t>();
++        if (size == 0 || size > 512ULL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
+         result.asset_name = asset_name;
+         result.download_url = url;
+         result.digest = digest.substr(7);
+--- a/src/network/update_transport.cpp
++++ b/src/network/update_transport.cpp
+@@ -4,23 +4,48 @@
+ #include <stdexcept>
+ 
+ std::string fetch_update_release(const std::function<bool()>& active) {
+-    auto response = cpr::Get(
+-        cpr::Url{"https://api.github.com/repos/OutTuna/Dota2CFGChanger/releases/tags/latest"},
+-        cpr::Header{{"User-Agent", "DotaManager"}, {"Accept", "application/vnd.github+json"}},
+-        cpr::Timeout{10000}, cpr::ConnectTimeout{4000},
+-        cpr::ProgressCallback{[&](cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, intptr_t) { return active(); }});
++
++    cpr::Session session;
++    session.SetUrl(cpr::Url{"https://api.github.com/repos/OutTuna/Dota2CFGChanger/releases/tags/latest"});
++    session.SetHeader(cpr::Header{{"User-Agent", "DotaManager"}, {"Accept", "application/vnd.github+json"}});
++    session.SetTimeout(cpr::Timeout{10000}); session.SetConnectTimeout(cpr::ConnectTimeout{4000});
++    session.SetVerifySsl(cpr::VerifySsl{true});
++    session.SetRedirect(cpr::Redirect{false});
++    session.SetProgressCallback(cpr::ProgressCallback{[&](cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, cpr::cpr_pf_arg_t, intptr_t) { return active(); }});
++    std::string body;
++    session.SetWriteCallback(cpr::WriteCallback{[&](const std::string_view& bytes, intptr_t) {
++        constexpr std::size_t limit = 2 * 1024 * 1024;
++        if (bytes.size() > limit - body.size()) return false;
++        body.append(bytes.data(), bytes.size());
++        return active();
++    }});
++    auto response = session.Get();
+     if (response.status_code != 200 || response.error.code != cpr::ErrorCode::OK)
+         throw std::runtime_error(response.status_code == 403 || response.status_code == 429 ? "GitHub API rate limit" : "GitHub request failed");
+-    return response.text;
++    return body;
+ }
+ 
+ void download_update_asset(const ReleaseInfo& release, const std::filesystem::path& partial,
+     const std::function<bool(std::uint64_t)>& progress) {
++    const auto expected = std::string(REPOSITORY_URL) + "/releases/download/latest/" + release.asset_name;
++    if ((release.asset_name != "DotaManager.exe" && release.asset_name != "Dota2_CFG_Changer-x86_64.AppImage") ||
++        release.download_url != expected) throw std::runtime_error("Unexpected update URL");
+     std::ofstream output(partial, std::ios::binary | std::ios::trunc);
+     if (!output) throw std::runtime_error("Cannot create download file");
+     std::uint64_t written = 0;
+     cpr::Session session;
+     session.SetUrl(cpr::Url{release.download_url});
++    session.SetVerifySsl(cpr::VerifySsl{true});
++    session.SetRedirect(cpr::Redirect{5L});
++    auto handle = session.GetCurlHolder()->handle;
++#if LIBCURL_VERSION_NUM >= 0x075500
++    if (curl_easy_setopt(handle, CURLOPT_PROTOCOLS_STR, "https") != CURLE_OK ||
++        curl_easy_setopt(handle, CURLOPT_REDIR_PROTOCOLS_STR, "https") != CURLE_OK)
++#else
++    if (curl_easy_setopt(handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS) != CURLE_OK ||
++        curl_easy_setopt(handle, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS) != CURLE_OK)
++#endif
++        throw std::runtime_error("Cannot enforce HTTPS for update download");
+     session.SetHeader(cpr::Header{{"User-Agent", "DotaManager"}});
+     session.SetTimeout(cpr::Timeout{300000});
+     session.SetConnectTimeout(cpr::ConnectTimeout{5000});
+--- a/tests/backup_checks.cpp
++++ b/tests/backup_checks.cpp
+@@ -66,6 +66,11 @@
+     fails([&] { copy_config_with_backup(source, destination, store, "123"); });
+     assert(read(destination / "cfg/options.txt") == "version-2");
+ #endif
++
++    auto broken = store / "123/broken"; fs::create_directory(broken);
++    write(broken / "backup.json", "{broken");
++    fails([&] { list_config_backups(store, "123"); });
++    assert(fs::exists(broken / "backup.json"));
+     fs::remove_all(root);
+     std::cout << "Backup creation, integrity, retention, restore and failure protection passed\n";
+ }
+--- a/tests/update_checks.cpp
++++ b/tests/update_checks.cpp
+@@ -31,7 +31,11 @@
+     bad = release; bad["assets"][0]["digest"] = nullptr;
+     assert(parse_release_info(bad.dump(), true).download_url.empty());
+     bad = release; bad["assets"][0]["size"] = -1; reject(bad);
++    bad = release; bad["assets"][0]["size"] = 1e300; reject(bad);
++    bad = release; bad["assets"][0]["size"] = "3"; reject(bad);
++    bad = release; bad["assets"][0]["size"] = 3.5; reject(bad);
+     bad = release; bad["draft"] = true; reject(bad);
++    bad = release; bad["prerelease"] = true; reject(bad);
+     bad = release; bad["name"] = "Latest Build (v1.10/../bad)"; reject(bad);
+     auto path = std::filesystem::temp_directory_path() / ("dotamanager-hash-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+     { std::ofstream f(path, std::ios::binary); f << "abc"; }
+--- a/tests/update_service_checks.cpp
++++ b/tests/update_service_checks.cpp
+@@ -52,9 +52,22 @@
+     assert(value.phase == UpdatePhase::Available && value.popup);
+     assert(downloads == 0);
+     updates_dismiss(); assert(!updates_snapshot().popup);
++#ifndef _WIN32
++
++    auto legacy_target = root / "updates" / value.release.version / value.release.asset_name;
++    auto legacy_partial = legacy_target; legacy_partial += ".part";
++    auto legacy_victim = root / "legacy-victim";
++    fs::create_directories(legacy_target.parent_path());
++    { std::ofstream f(legacy_victim); f << "precious"; }
++    fs::create_symlink(legacy_victim, legacy_partial);
++#endif
+     updates_download(); value = wait();
+     assert(value.phase == UpdatePhase::Downloaded && fs::exists(fs::u8path(value.downloaded_path)));
+     assert(downloads == 1);
++#ifndef _WIN32
++    assert(fs::file_size(legacy_victim) == 8 && fs::is_symlink(legacy_partial));
++    fs::remove(legacy_partial);
++#endif
+     updates_install(); value = wait();
+     while (value.phase == UpdatePhase::Installing) { std::this_thread::sleep_for(std::chrono::milliseconds(5)); value = updates_snapshot(); }
+     assert(value.phase == UpdatePhase::Failed && value.error_key == "update_install_failed");
+@@ -67,6 +80,19 @@
+     updates_check(true); wait(); updates_download(); value = wait();
+     assert(value.phase == UpdatePhase::Failed && fs::file_size(target) == 3);
+     fs::remove(target);
++#ifndef _WIN32
++    auto victim = root / "preserve";
++    { std::ofstream f(victim); f << "precious"; }
++    auto workspace = target; workspace += ".download";
++    fs::create_directory_symlink(root, workspace);
++    updates_check(true); wait(); updates_download(); value = wait();
++    assert(value.phase == UpdatePhase::Failed && fs::file_size(victim) == 8 && fs::is_symlink(workspace));
++    fs::remove(workspace);
++    fs::create_symlink(victim, target);
++    updates_check(true); wait(); updates_download(); value = wait();
++    assert(value.phase == UpdatePhase::Failed && fs::file_size(victim) == 8);
++    fs::remove(target);
++#endif
+     download_bytes = "bad"; updates_check(true); wait(); updates_download(); value = wait();
+     assert(value.phase == UpdatePhase::Failed && !fs::exists(target) && !fs::exists(partial));
+     download_bytes = "a"; updates_check(true); wait(); updates_download(); value = wait();
+--- /dev/null
++++ b/src/core/config_preview.cpp
+@@ -0,0 +1,51 @@
++#include "config_preview.h"
++#include <limits>
++
++namespace fs = std::filesystem;
++ConfigPreview preview_config_transfer(const fs::path& source, const fs::path& destination) {
++    ConfigPreview result;
++    result.source = fs::weakly_canonical(source);
++    result.destination = fs::weakly_canonical(destination);
++    if (config_path_contains(result.source, result.destination) || config_path_contains(result.destination, result.source))
++        throw ConfigFileError("overlap");
++    result.source_state = inspect_config_tree(source);
++    reject_config_link(destination); reject_config_link(destination.parent_path());
++    result.destination_exists = fs::exists(fs::symlink_status(destination));
++    if (result.destination_exists) result.destination_state = inspect_config_tree(destination);
++    result.changes = !result.destination_exists;
++    for (const auto& [name, item] : result.source_state) {
++        auto found = result.destination_state.find(name);
++        auto change = ConfigChange::Add;
++        if (found != result.destination_state.end()) {
++            const auto& previous = found->second;
++            change = item.directory == previous.directory && (item.directory ||
++                (item.size == previous.size && config_files_equal(source / name, destination / name)))
++                ? ConfigChange::Unchanged : ConfigChange::Replace;
++        }
++        if (item.size > std::numeric_limits<std::uintmax_t>::max() - result.copy_bytes)
++            throw ConfigFileError("space_insufficient");
++        result.copy_bytes += item.size;
++        result.entries.push_back({name, change, item.directory, item.size});
++        if (change != ConfigChange::Unchanged) {
++            result.changes = true;
++            if (!item.directory || (found != result.destination_state.end() && !found->second.directory)) ++result.affected_files;
++        }
++    }
++    for (const auto& [name, item] : result.destination_state) {
++        if (result.source_state.count(name)) continue;
++        result.entries.push_back({name, ConfigChange::Remove, item.directory, item.size});
++        result.changes = true;
++        if (!item.directory) ++result.affected_files;
++    }
++
++    validate_config_preview(result, source, destination);
++    return result;
++}
++
++void validate_config_preview(const ConfigPreview& preview, const fs::path& source, const fs::path& destination) {
++    if (fs::weakly_canonical(source) != preview.source || fs::weakly_canonical(destination) != preview.destination ||
++        inspect_config_tree(source) != preview.source_state ||
++        fs::exists(fs::symlink_status(destination)) != preview.destination_exists ||
++        (preview.destination_exists && inspect_config_tree(destination) != preview.destination_state))
++        throw ConfigFileError("config_changed");
++}
+--- /dev/null
++++ b/src/core/config_preview.h
+@@ -0,0 +1,24 @@
++#pragma once
++#include "file_ops.h"
++#include <vector>
++
++enum class ConfigChange { Add, Replace, Unchanged, Remove };
++struct ConfigChangeEntry {
++    std::filesystem::path relative;
++    ConfigChange change;
++    bool directory;
++    std::uintmax_t bytes;
++};
++struct ConfigPreview {
++    std::filesystem::path source, destination;
++    ConfigTree source_state, destination_state;
++    bool destination_exists = false;
++    std::vector<ConfigChangeEntry> entries;
++    std::size_t affected_files = 0;
++    std::uintmax_t copy_bytes = 0;
++    bool changes = false;
++};
++ConfigPreview preview_config_transfer(const std::filesystem::path& source,
++    const std::filesystem::path& destination);
++void validate_config_preview(const ConfigPreview& preview, const std::filesystem::path& source,
++    const std::filesystem::path& destination);
+--- /dev/null
++++ b/tests/config_safety_checks.cpp
+@@ -0,0 +1,120 @@
++#include "backups.h"
++#include "file_ops.h"
++#include "steam_api.h"
++#include "platform/update_process.h"
++#include <thread>
++#include <cassert>
++#include <chrono>
++#include <fstream>
++#include <future>
++#include <iostream>
++#include <limits>
++#ifndef _WIN32
++#include <sys/stat.h>
++#endif
++namespace fs = std::filesystem;
++void put(const fs::path& path, const std::string& data) { fs::create_directories(path.parent_path()); std::ofstream(path, std::ios::binary) << data; }
++std::string read(const fs::path& path) { std::ifstream f(path); return {std::istreambuf_iterator<char>(f), {}}; }
++template<class F> void rejects(F action, const std::string& key = {}) {
++    bool failed = false;
++    try { action(); } catch (const ConfigFileError& error) { failed = key.empty() || error.key == key; }
++    assert(failed);
++}
++int main(int argc, char** argv) {
++    const auto arguments = update_arguments(argc, argv);
++    if (arguments.size() == 5 && arguments[1] == "--hold-lock") {
++        replace_config_directory(fs::u8path(arguments[2]), fs::u8path(arguments[3]), [&] {
++            put(fs::u8path(arguments[4]), "ready");
++            for (;;) std::this_thread::sleep_for(std::chrono::milliseconds(50));
++        });
++        return 1;
++    }
++#ifdef _WIN32
++    assert(config_path_contains(fs::path(L"C:\\Steam\\userdata"), fs::path(L"c:\\steam\\USERDATA\\42")));
++#endif
++    assert(steam_api::steam3_to_64("4294967295") == 76561202255233023LL);
++    for (const auto& id : {"", "0", "-1", "+1", "42junk", " 42", "4294967296", "9223372036854775807", "../42"})
++        assert(steam_api::steam3_to_64(id) == 0);
++    auto root = fs::temp_directory_path() / ("dota-safety-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
++    auto source = root / fs::u8path("джерело/42/570");
++    auto destination = root / fs::u8path("назначение/43/570");
++    auto store = root / "backups";
++    put(source / "same", "same"); put(destination / "same", "same");
++    put(source / "replace", "new"); put(destination / "replace", "old");
++    put(source / "added", "added"); put(destination / "removed", "removed");
++    fs::create_directories(source / "empty");
++    auto preview = preview_config_transfer(source, destination);
++    assert(preview.changes && preview.affected_files == 3 && preview.copy_bytes == 12);
++    auto expect = [&](const char* name, ConfigChange change) {
++        for (const auto& entry : preview.entries) if (entry.relative == name) { assert(entry.change == change); return; }
++        assert(false);
++    };
++    expect("same", ConfigChange::Unchanged); expect("replace", ConfigChange::Replace);
++    expect("added", ConfigChange::Add); expect("removed", ConfigChange::Remove);
++    put(destination / "external", "preserve");
++    rejects([&] { copy_config_with_backup(source, destination, store, "43", &preview); }, "config_changed");
++    assert(read(destination / "external") == "preserve" && !fs::exists(store));
++    fs::remove(destination / "external");
++    preview = preview_config_transfer(source, destination);
++    copy_config_with_backup(source, destination, store, "43", &preview);
++    assert(read(destination / "replace") == "new" && !fs::exists(destination / "removed"));
++    assert(fs::is_directory(destination / "empty"));
++    auto count = list_config_backups(store, "43").size();
++    auto modified = fs::last_write_time(destination / "same");
++    preview = preview_config_transfer(source, destination);
++    assert(!preview.changes && preview.affected_files == 0);
++    copy_config_with_backup(source, destination, store, "43", &preview);
++    assert(list_config_backups(store, "43").size() == count && fs::last_write_time(destination / "same") == modified);
++
++    put(source / "same", "evil");
++    assert(preview_config_transfer(source, destination).changes);
++    rejects([&] { copy_config_with_backup(source, destination, store, "43", &preview); }, "config_changed");
++    rejects([&] { preview_config_transfer(source, source / "nested"); }, "overlap");
++    rejects([&] { require_config_space(root, std::numeric_limits<std::uintmax_t>::max()); }, "space_insufficient");
++
++    std::promise<void> entered, resume;
++    auto ready = entered.get_future(); auto proceed = resume.get_future().share();
++    auto operation = std::async(std::launch::async, [&] {
++        return replace_config_directory(source, destination, [&] { entered.set_value(); assert(proceed.wait_for(std::chrono::seconds(5)) == std::future_status::ready); });
++    });
++    assert(ready.wait_for(std::chrono::seconds(5)) == std::future_status::ready);
++    rejects([&] { replace_config_directory(source, destination); }, "operation_locked");
++    rejects([&] { copy_config_with_backup(source, destination, store, "43"); }, "operation_locked");
++    assert(list_config_backups(store, "43").size() == count);
++    resume.set_value(); operation.get();
++    auto lock = destination; lock += ".dotamanager_lock"; assert(!fs::exists(lock));
++    const auto marker = root / "lock-ready";
++    auto child = launch_update_process(fs::absolute(fs::u8path(arguments[0])),
++        {"--hold-lock", source.u8string(), destination.u8string(), marker.u8string()});
++    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
++    while (!fs::exists(marker)) {
++        assert(!update_process_exited(child, 0) && std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(5));
++    }
++    rejects([&] { replace_config_directory(source, destination); }, "operation_locked");
++    stop_update_process(child); release_update_process(child);
++    assert(fs::is_directory(lock) && read(destination / "same") == "evil");
++    rejects([&] { replace_config_directory(source, destination); }, "operation_locked");
++    fs::remove(lock); replace_config_directory(source, destination);
++#ifndef _WIN32
++    fs::create_symlink(source / "same", source / "link");
++    rejects([&] { preview_config_transfer(source, destination); }, "symlink"); fs::remove(source / "link");
++    fs::create_directory_symlink(destination.parent_path(), root / "account-alias");
++    rejects([&] { replace_config_directory(source, root / "account-alias/570"); }, "symlink");
++    auto fifo = source / "fifo"; assert(mkfifo(fifo.c_str(), 0600) == 0);
++    rejects([&] { replace_config_directory(source, destination); }, "symlink"); fs::remove(fifo);
++#endif
++
++    put(source / "conflict", "file"); put(destination / "conflict/old", "old");
++    auto conflict = preview_config_transfer(source, destination);
++    assert(conflict.changes && conflict.affected_files == 2);
++    copy_config_with_backup(source, destination, store, "43", &conflict);
++    assert(read(destination / "conflict") == "file");
++    fs::remove_all(source); fs::create_directory(source);
++    auto empty = preview_config_transfer(source, destination); assert(empty.changes);
++    copy_config_with_backup(source, destination, store, "43", &empty);
++    assert(fs::is_empty(destination));
++    rejects([&] { preview_config_transfer(root / "missing", destination); }, "source_invalid");
++    fs::remove_all(root);
++    std::cout << "Preview, stale plans, no-op transfers, locks, special files, Unicode and Steam IDs passed\n";
++}
+--- /dev/null
++++ b/tests/preview_ui_checks.cpp
+@@ -0,0 +1,53 @@
++#include "ui/ui_internal.h"
++#include "app.h"
++#include "localization.h"
++#include <imgui_internal.h>
++#include <cassert>
++#include <cmath>
++#include <iostream>
++
++AppTheme g_current_theme = AppTheme::Dark;
++ImTextureID g_bg_crimson_tex = 0;
++ImVec4 g_crimson_child_bg, g_crimson_selected_bg, g_crimson_hovered_bg, g_crimson_text;
++ThemeData g_theme_data[5];
++void ui_get_theme_palette(AppTheme, ImVec4&, ImVec4&, ImVec4&, ImVec4&) {}
++void ensure_theme_metadata_loaded() {}
++const char* ui_theme_background_image(AppTheme) { return nullptr; }
++bool ui_theme_has_palette_editor(AppTheme) { return false; }
++void ui_apply_theme(AppTheme) {}
++void ui_open_backups() {}
++int avatar_requests = 0;
++void avatar_flush_pending() {}
++ImTextureID avatar_get(const std::string&) { ++avatar_requests; return 0; }
++
++int main() {
++    for (const char* language : {"en", "ru", "uk"}) {
++        set_language(language);
++        ImGui::CreateContext();
++        auto& io = ImGui::GetIO(); io.DisplaySize = {720, 600}; io.DeltaTime = 1.f / 60.f; io.IniFilename = nullptr;
++        io.Fonts->AddFontDefault(); unsigned char* pixels; int width, height;
++        io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
++        g_copy_preview = {};
++        g_copy_preview_ready = true; g_copy_preview.changes = true;
++        for (int i = 0; i < 10000; ++i)
++            g_copy_preview.entries.push_back({std::filesystem::u8path("remote/cfg/config-" + std::to_string(i) + ".vcfg"), ConfigChange::Replace, false, 42});
++        g_confirm_src_label = "Source (42)"; g_confirm_dst_label = "Destination (43)";
++        g_confirm_copy_open = true;
++        src_list.clear(); dst_list.clear();
++        for (int i = 0; i < 10000; ++i) { src_list.push_back(std::to_string(i + 1)); dst_list.push_back(std::to_string(i + 1)); }
++        app_ui_changed(); avatar_requests = 0;
++        for (int frame = 0; frame < 5; ++frame) {
++            ImGui::NewFrame(); ui_render_main(nullptr, io.DisplaySize); ImGui::Render();
++        }
++        assert(avatar_requests < 200);
++        const auto title = std::string(tr("confirmation")) + "###confirm_copy";
++        auto* window = ImGui::FindWindowByName(title.c_str());
++        assert(window && window->Active && (window->Flags & ImGuiWindowFlags_Modal));
++        assert(window->Size.x <= io.DisplaySize.x && window->Size.y <= io.DisplaySize.y);
++        assert(std::abs(window->Pos.x + window->Size.x / 2 - io.DisplaySize.x / 2) < 2);
++
++        assert(ImGui::GetDrawData()->TotalVtxCount < 10000);
++        ImGui::DestroyContext();
++    }
++    std::cout << "Account lists and transfer preview fit EN/RU/UA and clip 10000 entries\n";
++}
+--- /dev/null
++++ b/tests/transfer_benchmark.cpp
+@@ -0,0 +1,31 @@
++#include "backups.h"
++#include <chrono>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <vector>
++#include <algorithm>
++namespace fs = std::filesystem;
++int main(int argc, char** argv) {
++    if (argc != 2) return 2;
++    const fs::path root = fs::u8path(argv[1]);
++    for (const char* scenario : {"identical", "changed"}) {
++        auto folder = root / scenario;
++        auto source = folder / "source/570", destination = folder / "destination/570", backups = folder / "backups";
++        fs::create_directories(source); fs::create_directories(destination);
++        const std::string data(4096, 'x');
++        for (int i = 0; i < 128; ++i) {
++            std::ofstream(source / std::to_string(i)) << data;
++            std::ofstream(destination / std::to_string(i)) << data;
++        }
++        std::vector<double> samples;
++        for (int i = 0; i < 7; ++i) {
++            if (std::string(scenario) == "changed") std::ofstream(source / "0") << std::string(4096, static_cast<char>('a' + i));
++            const auto start = std::chrono::steady_clock::now();
++            copy_config_with_backup(source, destination, backups, "42");
++            samples.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
++        }
++        std::sort(samples.begin(), samples.end());
++        std::cout << scenario << "_median_ms=" << samples[samples.size() / 2] << "\n";
++    }
++}
+--- a/src/core/checksum.cpp
++++ b/src/core/checksum.cpp
+@@ -13,7 +13,7 @@
+ 
+ std::string file_sha256(const std::filesystem::path& path) {
+     std::ifstream input(path, std::ios::binary);
+-    if (!input) throw std::runtime_error("Cannot read download");
++    if (!input) throw std::runtime_error("Cannot read file");
+     std::array<unsigned char, 32> digest{};
+     std::array<char, 65536> buffer{};
+ #ifdef _WIN32
+@@ -39,9 +39,9 @@
+ #else
+         if (EVP_DigestUpdate(context.get(), buffer.data(), static_cast<std::size_t>(count)) != 1)
+ #endif
+-            throw std::runtime_error("Cannot hash download");
++            throw std::runtime_error("Cannot hash file");
+     }
+-    if (input.bad()) throw std::runtime_error("Cannot read download");
++    if (input.bad()) throw std::runtime_error("Cannot read file");
+ #ifdef _WIN32
+     if (BCryptFinishHash(context.hash, digest.data(), static_cast<ULONG>(digest.size()), 0) < 0)
+ #else
+--- a/cmake/AppVersion.h.in
++++ b/cmake/AppVersion.h.in
+@@ -2,3 +2,5 @@
+ #ifndef DOTA_APP_VERSION
+ #define DOTA_APP_VERSION "@APP_VERSION_STRING@"
+ #endif
++
++#define DOTA_RELEASE_CHANNEL "@APP_RELEASE_CHANNEL@"
+--- /dev/null
++++ b/tests/prerelease_checks.py
+@@ -0,0 +1,51 @@
++import json
++import os
++from pathlib import Path
++import subprocess
++import tempfile
++import unittest
++
++root = Path(__file__).resolve().parents[1]
++
++class PrereleaseChecks(unittest.TestCase):
++    def test_alpha_workflow_has_no_stable_publisher(self):
++        workflow = (root / '.github/workflows/build.yaml').read_text()
++        self.assertNotIn('gh release delete', workflow)
++        self.assertNotIn('git push origin', workflow)
++        self.assertNotIn('--latest=true', workflow)
++        self.assertIn('branches: [ "alpha" ]', workflow)
++        self.assertIn("if: github.ref == 'refs/heads/alpha'", workflow)
++
++    def test_release_channel_isolation(self):
++        with tempfile.TemporaryDirectory(prefix='dota-release-') as directory:
++            folder = Path(directory)
++            (folder / 'bin').mkdir()
++            gh = folder / 'bin/gh'
++            gh.write_text('#!/usr/bin/env python3\nimport json, os, sys\nfrom pathlib import Path\nPath(os.environ["CAPTURE"]).write_text(json.dumps(sys.argv[1:]))\n')
++            gh.chmod(0o700)
++            for file in ('DotaManager-Windows/DotaManager.exe', 'DotaManager-Linux/test.AppImage'):
++                path = folder / file
++                path.parent.mkdir(exist_ok=True)
++                path.write_bytes(b'fixture')
++            capture = folder / 'arguments.json'
++            for channel in ('alpha',):
++                env = dict(os.environ, PATH=str(folder / 'bin') + os.pathsep + os.environ['PATH'],
++                           RELEASE_CHANNEL=channel, GITHUB_REF='refs/heads/' + channel, VERSION='v1.24',
++                           GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='2', GITHUB_SHA='a' * 40, CAPTURE=str(capture))
++                subprocess.run(['bash', str(root / 'scripts/publish-prerelease.sh')], cwd=folder, env=env, check=True)
++                args = json.loads(capture.read_text())
++                self.assertEqual(args[:3], ['release', 'create', channel + '-v1.24-123-2'])
++                self.assertIn('--prerelease', args)
++                self.assertIn('--latest=false', args)
++                self.assertNotIn('latest', args)
++                self.assertNotIn('delete', args)
++                for override in ({'RELEASE_CHANNEL': 'stable'}, {'RELEASE_CHANNEL': 'beta'}, {'GITHUB_REF': 'refs/heads/main'},
++                                 {'VERSION': 'latest'}, {'GITHUB_SHA': '../bad'}):
++                    capture.unlink(missing_ok=True)
++                    result = subprocess.run(['bash', str(root / 'scripts/publish-prerelease.sh')], cwd=folder,
++                                            env=dict(env, **override), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
++                    self.assertNotEqual(result.returncode, 0, override)
++                    self.assertFalse(capture.exists())
++
++if __name__ == '__main__':
++    unittest.main()
+--- a/resources/icons/app_icon.h
++++ b/resources/icons/app_icon.h
+@@ -131,4 +131,4 @@
+     0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFE,0xFE,0xFE,0xFF,0xFD,0xFD,0xFD,0xFF,
+     0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFD,0xFD,0xFD,0xFF,0xFC,0xFC,0xFC,0xFF,0xFC,0xFC,0xFC,0xFF,0xFD,0xFD,0xFD,0xFF,
+     0xF7,0xF7,0xF7,0xFF,0xD3,0xD3,0xD3,0xFF,0x82,0x82,0x82,0xFF,0x1A,0x1A,0x1A,0xFF,0x00,0x00,0x00,0xFF,0x03,0x03,0x03,0xFF,0x00,0x00,0x00,0xFF,0x00,0x00,0x00,0xFF,
+-};
+\ No newline at end of file
++};
+--- a/resources/windows/app.rc.in
++++ b/resources/windows/app.rc.in
+@@ -1,12 +1,3 @@
+-// Auto-configured by CMake (configure_file) from app.rc.in -- do not edit
+-// the generated copy directly, edit this template instead.
+-//
+-// A .exe with no icon, no manifest and no VERSIONINFO at all (just raw
+-// code) is itself a small heuristic signal to some AV engines -- "real"
+-// applications almost always carry this metadata; its total absence is
+-// common in hastily-assembled malware droppers. None of this guarantees
+-// avoiding a false positive, but it's a legitimate, low-cost signal to add.
+-
+ #include <winresrc.h>
+ 
+ IDI_ICON1 ICON "@CMAKE_SOURCE_DIR@/resources/icons/Icon.ico"
+--- a/src/platform/platform.cpp
++++ b/src/platform/platform.cpp
+@@ -186,7 +186,6 @@
+     return result;
+ }
+ 
+-
+ bool open_external(const std::string& value) {
+     if (value.empty()) return false;
+ #ifdef _WIN32
+--- a/tests/appimage_checks.py
++++ b/tests/appimage_checks.py
+@@ -11,7 +11,6 @@
+ )
+ abi = importlib.util.module_from_spec(spec)
+ spec.loader.exec_module(abi)
+-
+ 
+ class AppImageChecks(unittest.TestCase):
+     def test_only_runtime_requirements_are_checked(self):
+@@ -58,6 +57,5 @@
+             with self.assertRaisesRegex(RuntimeError, "No ELF files"):
+                 abi.check(Path(tmp))
+ 
+-
+ if __name__ == "__main__":
+     unittest.main()
+--- a/tests/appimage_update_checks.py
++++ b/tests/appimage_update_checks.py
+@@ -8,7 +8,6 @@
+ import tempfile
+ import time
+ 
+-
+ def wait_until(condition, description, seconds=30):
+     deadline = time.monotonic() + seconds
+     while time.monotonic() < deadline:
+@@ -16,7 +15,6 @@
+             return
+         time.sleep(0.1)
+     raise RuntimeError(description)
+-
+ 
+ def check(image):
+     with tempfile.TemporaryDirectory(prefix="dotamanager-restart-") as tmp:
+@@ -69,6 +67,5 @@
+                 process.wait()
+             print((folder / "helper.log").read_text() if (folder / "helper.log").exists() else "")
+ 
+-
+ if __name__ == "__main__":
+     check(Path(sys.argv[1]).resolve())
+--- /dev/null
++++ b/scripts/publish-prerelease.sh
+@@ -0,0 +1,24 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++fail() { echo "$1" >&2; exit 1; }
++case "${RELEASE_CHANNEL:?Missing channel}" in
++  alpha) channel_title=Alpha ;;
++  *) echo 'Only the alpha channel is allowed' >&2; exit 1 ;;
++esac
++[[ "${GITHUB_REF:?Missing ref}" == "refs/heads/$RELEASE_CHANNEL" ]] || fail "Invalid prerelease input or missing artifact"
++[[ "${VERSION:?Missing version}" =~ ^v[0-9]+\.[0-9]+$ ]] || fail "Invalid prerelease input or missing artifact"
++[[ "${GITHUB_RUN_ID:?Missing run ID}" =~ ^[0-9]+$ ]] || fail "Invalid prerelease input or missing artifact"
++[[ "${GITHUB_RUN_ATTEMPT:?Missing run attempt}" =~ ^[0-9]+$ ]] || fail "Invalid prerelease input or missing artifact"
++[[ "${GITHUB_SHA:?Missing commit}" =~ ^[0-9a-f]{40}$ ]] || fail "Invalid prerelease input or missing artifact"
++[[ -f DotaManager-Windows/DotaManager.exe ]] || fail "Invalid prerelease input or missing artifact"
++shopt -s nullglob
++images=(DotaManager-Linux/*.AppImage)
++[[ ${#images[@]} -eq 1 ]] || fail "Invalid prerelease input or missing artifact"
++tag="${RELEASE_CHANNEL}-${VERSION}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
++gh release create "$tag" \
++  --target "$GITHUB_SHA" \
++  --title "${channel_title} Build ($VERSION, CI $GITHUB_RUN_ID.$GITHUB_RUN_ATTEMPT)" \
++  --prerelease --latest=false \
++  --notes "Testing build from $RELEASE_CHANNEL at $GITHUB_SHA. Not offered by stable automatic updates." \
++  DotaManager-Windows/DotaManager.exe "${images[0]}"
+--- /dev/null
++++ b/scripts/benchmark-core.py
+@@ -0,0 +1,51 @@
++import json
++import os
++from pathlib import Path
++import platform
++import subprocess
++import sys
++import tempfile
++import time
++
++project = Path(__file__).resolve().parents[1]
++reference, json_include, crypto = sys.argv[1:]
++files = ['src/core/backups.cpp', 'src/core/backups.h', 'src/core/file_ops.cpp',
++         'src/core/file_ops.h', 'src/core/checksum.cpp', 'src/core/checksum.h']
++result = {'baseline_ref': reference, 'machine': platform.machine(),
++          'compiler': subprocess.check_output([os.environ.get('CXX', 'c++'), '--version'], text=True).splitlines()[0],
++          'fixture': '128 x 4096 bytes, 7 operations per scenario, warm filesystem cache, median', 'measurements': {}}
++with tempfile.TemporaryDirectory(prefix='dota-benchmark-') as directory:
++    temporary = Path(directory)
++    for name in ['baseline', 'working']:
++        source = project
++        if name == 'baseline':
++            source = temporary / 'baseline'
++            for file in files:
++                path = source / file
++                path.parent.mkdir(parents=True, exist_ok=True)
++                path.write_bytes(subprocess.check_output(['git', 'show', reference + ':' + file], cwd=project))
++        executable = temporary / (name + '-benchmark')
++        command = [os.environ.get('CXX', 'c++'), '-O2', '-DNDEBUG', '-std=c++17',
++                   '-I' + str(source / 'src/core'), '-I' + json_include,
++                   '-I' + str(Path(crypto) / 'include'), '-L' + str(Path(crypto) / 'lib'),
++                   str(project / 'tests/transfer_benchmark.cpp')]
++        command += [str(source / file) for file in files if file.endswith('.cpp')]
++        if name == 'working':
++            command += [str(project / 'src/core/config_preview.cpp')]
++        command += ['-lcrypto', '-o', str(executable)]
++        subprocess.run(command, check=True)
++        fixture = temporary / (name + '-fixture')
++        started = time.monotonic()
++        process = subprocess.Popen([str(executable), str(fixture)], stdout=subprocess.PIPE, text=True)
++        _, status, usage = os.wait4(process.pid, 0)
++        process.returncode = os.waitstatus_to_exitcode(status)
++        output = process.stdout.read()
++        process.stdout.close()
++        if process.returncode:
++            raise RuntimeError(name + ' benchmark failed')
++        result['measurements'][name] = {key: float(value) for key, value in
++                                       (line.split('=') for line in output.splitlines())}
++        result['measurements'][name].update(process_wall_seconds=time.monotonic() - started,
++            process_user_seconds=usage.ru_utime, process_system_seconds=usage.ru_stime,
++            process_peak_rss_bytes=usage.ru_maxrss * (1 if sys.platform == 'darwin' else 1024))
++print(json.dumps(result, indent=2))
+--- a/.github/workflows/build.yaml
++++ b/.github/workflows/build.yaml
+@@ -1,8 +1,8 @@
+-name: Build & Release (Windows + Linux)
++name: Alpha CI (Windows + Linux)
+ 
+ on:
+   push:
+-    branches: [ "main" ]
++    branches: [ "alpha" ]
+     paths-ignore:
+       - "README.md"
+       - "LICENSE"
+@@ -16,9 +16,8 @@
+         type: boolean
+         default: false
+ 
+-# Two overlapping runs would race on tags / the "latest" release.
+ concurrency:
+-  group: release
++  group: release-${{ github.ref }}
+   cancel-in-progress: false
+ 
+ permissions:
+@@ -29,10 +28,14 @@
+     runs-on: ubuntu-24.04
+     outputs:
+       version: ${{ steps.version.outputs.version }}
++      channel: ${{ steps.channel.outputs.channel }}
+     steps:
+       - uses: actions/checkout@v7.0.1
+         with:
+           fetch-depth: 0
++      - name: Select distribution channel
++        id: channel
++        run: echo "channel=alpha" >> "$GITHUB_OUTPUT"
+       - name: Compute version
+         id: version
+         env:
+@@ -61,7 +64,7 @@
+           path: build/_deps
+           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
+       - name: Configure CMake
+-        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
++        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}" "-DAPP_RELEASE_CHANNEL=${{ needs.compute-version.outputs.channel }}"
+       - name: Build
+         run: cmake --build build --config Release --parallel
+       - name: Regression tests
+@@ -77,8 +80,6 @@
+     needs: compute-version
+     runs-on: ubuntu-22.04
+     env:
+-      # linuxdeploy and its plugin are themselves AppImages; runners have no
+-      # FUSE, so run them by self-extraction instead of mounting.
+       APPIMAGE_EXTRACT_AND_RUN: "1"
+       ARCH: x86_64
+       CCACHE_DIR: ${{ github.workspace }}/.ccache
+@@ -124,7 +125,7 @@
+           key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
+           restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
+       - name: Configure CMake
+-        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
++        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}" "-DAPP_RELEASE_CHANNEL=${{ needs.compute-version.outputs.channel }}"
+ 
+       - name: Build
+         run: cmake --build build --config Release -j"$(nproc)"
+@@ -133,6 +134,7 @@
+         run: |
+           ctest --test-dir build --output-on-failure
+           python3 tests/core_checks.py build/_deps/json-src/include
++          python3 tests/prerelease_checks.py
+ 
+       - name: Compiler cache statistics
+         run: ccache --show-stats
+@@ -143,7 +145,6 @@
+           base=https://github.com/linuxdeploy
+           wget -q -O "$HOME/ld/linuxdeploy" \
+             "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+-          # linuxdeploy finds the plugin by this exact name on PATH
+           wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
+             "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
+           chmod +x "$HOME/ld/"*
+@@ -221,44 +222,18 @@
+           fi
+           bash scripts/check-appimage.sh "${images[0]}"
+ 
+-  release:
++  prerelease:
++    if: github.ref == 'refs/heads/alpha'
+     needs: [compute-version, build-windows, build-linux, check-appimage]
+     runs-on: ubuntu-24.04
+     env:
+       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+     steps:
+       - uses: actions/checkout@v7.0.1
+-        with:
+-          fetch-depth: 0
+-
+-      - name: Download all artifacts
++      - name: Download prerelease artifacts
+         uses: actions/download-artifact@v8.0.1
+-
+-      - name: Tag and release
++      - name: Publish isolated prerelease
+         env:
++          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
+           VERSION: ${{ needs.compute-version.outputs.version }}
+-        run: |
+-          git config user.name "github-actions[bot]"
+-          git config user.email "github-actions[bot]@users.noreply.github.com"
+-
+-          APPIMAGE_FILE=$(find DotaManager-Linux -name "*.AppImage" -type f | head -n1)
+-          if [ -z "$APPIMAGE_FILE" ]; then
+-            echo "Error: AppImage not found"
+-            ls -la DotaManager-Linux/
+-            exit 1
+-          fi
+-
+-          git tag "$VERSION"
+-          git push origin "$VERSION"
+-
+-          # --cleanup-tag also removes the old "latest" git tag, otherwise the
+-          # new release would stay pinned to a stale commit.
+-          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+-
+-          gh release create latest \
+-            --target "$GITHUB_SHA" \
+-            --title "Latest Build ($VERSION)" \
+-            --latest=true \
+-            --notes "Automated build $VERSION from commit $GITHUB_SHA" \
+-            DotaManager-Windows/DotaManager.exe \
+-            "$APPIMAGE_FILE"
++        run: bash scripts/publish-prerelease.sh
+--- a/scripts/check-appimage-abi.py
++++ b/scripts/check-appimage-abi.py
+@@ -5,7 +5,6 @@
+ import sys
+ 
+ LIMITS = {"GLIBC": (2, 35), "GLIBCXX": (3, 4, 30), "CXXABI": (1, 3, 13)}
+-
+ 
+ def required_versions(output):
+     in_needs = False
+@@ -16,7 +15,6 @@
+         if in_needs:
+             versions.extend(re.findall(r"Name: ((?:GLIBCXX|GLIBC|CXXABI)_[\w.]+)", line))
+     return versions
+-
+ 
+ def check(root):
+     checked = set()
+@@ -49,6 +47,5 @@
+         raise RuntimeError("\n".join(failures))
+     print(f"ABI check passed for {len(checked)} ELF files")
+ 
+-
+ if __name__ == "__main__":
+     check(Path(sys.argv[1]).resolve())
+--- a/scripts/check-cmake-configure.sh
++++ b/scripts/check-cmake-configure.sh
+@@ -1,22 +1,4 @@
+ #!/usr/bin/env bash
+-# Test-point #2: does `cmake -S . -B build` even configure cleanly.
+-#
+-# This will NOT catch everything the Windows build in CI does (MSVC-
+-# specific code, the .rc icon step, an actual link), but it catches a
+-# large class of CMakeLists.txt mistakes in seconds, on any OS, without
+-# needing to push and wait for the windows-latest runner: unknown/typo'd
+-# CMake options, missing FetchContent sources, wrong target names, a
+-# forced boolean cache variable that contradicts another one, etc. -- the
+-# same category of bug as the CURL_USE_OPENSSL / CURL_USE_SCHANNEL
+-# regression from the previous patch, which this exact check would have
+-# caught immediately, locally, instead of failing silently at runtime.
+-#
+-# For a deeper check (does it actually compile and link), see
+-# check-full-build-linux.sh -- slower, and only proves the Linux/
+-# non-Windows code paths, but it's the closest thing to a real build you
+-# can run without a Windows machine.
+-#
+-# Usage: ./scripts/check-cmake-configure.sh
+ 
+ set -euo pipefail
+ cd "$(dirname "$0")/.."
+--- a/scripts/check-full-build-linux.sh
++++ b/scripts/check-full-build-linux.sh
+@@ -1,23 +1,4 @@
+ #!/usr/bin/env bash
+-# Test-point #3 (slow, thorough): actually compile and link the project.
+-#
+-# This can only be run on Linux/macOS -- it does NOT exercise the
+-# Windows-only code paths (WinAPI folder picker, the .rc icon resource,
+-# MSVC-specific quirks), so it is not a substitute for the real CI build.
+-# What it DOES catch, entirely locally and in a few minutes instead of a
+-# CI round-trip: every C++ syntax/type error in the shared (non-#ifdef
+-# _WIN32) code, missing includes, and link errors -- including things
+-# like the earlier "undefined reference to glGenTextures" regression
+-# (OpenGL wasn't linked on non-Windows) and the CURL_USE_SCHANNEL /
+-# CURL_USE_OPENSSL conflict, both of which this exact script reproduced
+-# during development of this patch.
+-#
+-# Requires (Debian/Ubuntu package names): cmake build-essential
+-# libgl1-mesa-dev xorg-dev libssl-dev. Pass --install-deps to have the
+-# script apt-get install them for you (needs sudo/root).
+-#
+-# Usage:
+-#   ./scripts/check-full-build-linux.sh [--install-deps]
+ 
+ set -euo pipefail
+ cd "$(dirname "$0")/.."
+--- a/scripts/check-version-logic.sh
++++ b/scripts/check-version-logic.sh
+@@ -1,14 +1,4 @@
+ #!/usr/bin/env bash
+-# Test-point #4: does the version-bump logic itself do the right thing.
+-#
+-# Builds a disposable, throwaway git repo (NOT your real one -- this
+-# never touches the repo you run it from) with a few scripted commit
+-# histories, and checks that scripts/compute-next-version.sh bumps
+-# minor/major exactly when expected. Run this after touching
+-# scripts/compute-next-version.sh, or any time you're not sure whether a
+-# given commit message would trigger a major bump.
+-#
+-# Usage: ./scripts/check-version-logic.sh
+ 
+ set -euo pipefail
+ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+@@ -31,6 +21,8 @@
+     git config user.email "test@example.com"
+     echo "init" > file.txt && git add file.txt && git commit -qm "chore: init"
+     git tag v1.4
++    git tag alpha-v99.99-123-1
++    git tag beta-v99.99-123-1
+ 
+     for msg in "${commit_messages[@]}"; do
+       echo "$msg" >> file.txt
+@@ -72,8 +64,6 @@
+ run_case "[major] literal marker" "v2.0" \
+   "big rewrite of the avatar cache [major]"
+ 
+-# The "no tag exists yet" case needs its own repo with no v1.4 baseline
+-# tag at all, so it's set up by hand instead of via run_case.
+ repo="$SANDBOX/no_tag_yet"
+ git init -q "$repo"
+ (
+--- a/scripts/check-workflow.sh
++++ b/scripts/check-workflow.sh
+@@ -1,19 +1,4 @@
+ #!/usr/bin/env bash
+-# Test-point #1: validate every .github/workflows/*.y*ml file the way
+-# GitHub itself does, *before* pushing.
+-#
+-# Plain YAML parsers (python -c "import yaml") only catch broken YAML
+-# syntax. They will NOT catch most of what actually causes GitHub to show
+-# a workflow run that fails instantly with a red X and ~0s duration --
+-# that's almost always a *schema*/*expression* problem (bad "on:" block,
+-# unknown context, wrong input type, typo'd action version, etc.), which
+-# needs a tool that actually understands the GitHub Actions schema.
+-# actionlint (https://github.com/rhysd/actionlint) is that tool, and it's
+-# the same category of checker GitHub's own backend runs before starting
+-# a job.
+-#
+-# Usage: ./scripts/check-workflow.sh
+-# Exit code: 0 if clean, non-zero if actionlint found anything.
+ 
+ set -euo pipefail
+ cd "$(dirname "$0")/.."
+--- a/scripts/compute-next-version.sh
++++ b/scripts/compute-next-version.sh
+@@ -1,27 +1,4 @@
+ #!/usr/bin/env bash
+-# Computes the next vMAJOR.MINOR tag for this repo.
+-#
+-# Version scheme: vMAJOR.MINOR (e.g. v1.4). A normal run bumps MINOR
+-# (v1.4 -> v1.5). A MAJOR bump (v1.4 -> v2.0, MINOR resets to 0) happens
+-# when any commit since the last tag:
+-#   - contains a "BREAKING CHANGE:" footer (conventional commits), or
+-#   - has a conventional-commit "!" marker, e.g. "feat!: ..." / "fix(ui)!: ...", or
+-#   - contains the literal marker "[major]" anywhere in the message
+-# or when FORCE_MAJOR=true is set in the environment (this is what the
+-# workflow_dispatch "force_major" input maps to in CI).
+-# If no vX.Y tag exists yet in the repo, this starts fresh at v1.0.
+-#
+-# Usage:
+-#   ./scripts/compute-next-version.sh              # dry run, prints to stdout
+-#   FORCE_MAJOR=true ./scripts/compute-next-version.sh
+-#   GITHUB_OUTPUT=/path/to/file ./scripts/compute-next-version.sh
+-#     (as used from CI: writes version=... / is_major=... there instead)
+-#
+-# This script is deliberately the single source of truth for the version
+-# logic -- both the CI workflow and a developer running it locally call
+-# the exact same code, so "does the next version look right" is something
+-# you can check with one local command instead of pushing and watching
+-# Actions.
+ 
+ set -euo pipefail
+ 
+@@ -76,9 +53,7 @@
+   echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+   echo "is_major=$IS_MAJOR"   >> "$GITHUB_OUTPUT"
+ else
+-  # Local/dry-run mode: print machine-readable result to stdout so it can
+-  # also be piped/parsed if needed, on top of the human-readable log lines
+-  # above (which go to stderr, so they don't get mixed into stdout output).
++
+   echo "version=$NEW_VERSION"
+   echo "is_major=$IS_MAJOR"
+ fi
+--- /dev/null
++++ b/scripts/refresh-aur-patch.py
+@@ -0,0 +1,38 @@
++from pathlib import Path
++import difflib
++import hashlib
++import re
++import sys
++
++project = Path(__file__).resolve().parents[1]
++baseline = Path(sys.argv[1]).resolve()
++recipe = project / "packaging/aur"
++parts = []
++for name in (recipe / "source-files.txt").read_text(encoding="utf-8").splitlines():
++    old, new = baseline / name, project / name
++    before = old.read_text(encoding="utf-8").splitlines(keepends=True) if old.exists() else []
++    after = new.read_text(encoding="utf-8").splitlines(keepends=True)
++    for line in difflib.unified_diff(before, after,
++        fromfile="a/" + name if old.exists() else "/dev/null", tofile="b/" + name):
++        parts.append(line)
++        if not line.endswith("\n"):
++            parts.append("\n\\ No newline at end of file\n")
++patch = recipe / "packaging-support.patch"
++patch_text = "".join(parts)
++digest = hashlib.sha256(patch_text.encode("utf-8")).hexdigest()
++pkgbuild = recipe / "PKGBUILD"
++text = pkgbuild.read_text(encoding="utf-8")
++text, count = re.subn(r"(?m)^            '[^']+'\)$", "            '" + digest + "')", text)
++if count != 1:
++    raise SystemExit("Expected the last SHA-256 entry to describe the packaging patch")
++metadata = recipe / ".SRCINFO"
++info = metadata.read_text(encoding="utf-8")
++checksums = list(re.finditer(r"(?m)^(\s*sha256sums = )[^\n]+$", info))
++if not checksums:
++    raise SystemExit("Missing patch checksum in .SRCINFO")
++last = checksums[-1]
++info = info[:last.start()] + last.group(1) + digest + info[last.end():]
++for path, contents in ((patch, patch_text), (pkgbuild, text), (metadata, info)):
++    with path.open("w", encoding="utf-8", newline="\n") as stream:
++        stream.write(contents)
++print("Patch and patch checksums refreshed")
+--- a/scripts/run-all-checks.sh
++++ b/scripts/run-all-checks.sh
+@@ -1,17 +1,4 @@
+ #!/usr/bin/env bash
+-# Runs every local test-point in order, fast-to-slow, and prints a
+-# summary. Meant to replace "push -> wait for Actions -> read log ->
+-# fix -> push again" with something you can run on your own machine.
+-#
+-#   ./scripts/run-all-checks.sh            # everything except the full build
+-#   ./scripts/run-all-checks.sh --full      # also do the full Linux compile+link
+-#
+-# Individual checks (see comments in each file for what they catch and
+-# why):
+-#   scripts/check-workflow.sh          - actionlint on .github/workflows/
+-#   scripts/check-version-logic.sh     - unit-tests the version bump rules
+-#   scripts/check-cmake-configure.sh   - does `cmake configure` succeed
+-#   scripts/check-full-build-linux.sh  - full compile+link (slow, opt-in)
+ 
+ set -uo pipefail
+ cd "$(dirname "$0")/.."
+--- /dev/null
++++ b/.github/workflows/sanitizers.yaml
+@@ -0,0 +1,46 @@
++name: Core sanitizers
++
++on:
++  push:
++    branches: [alpha]
++  pull_request:
++    paths:
++      - 'CMakeLists.txt'
++      - 'cmake/**'
++      - 'src/**'
++      - 'tests/**'
++      - 'resources/**'
++      - '.github/workflows/sanitizers.yaml'
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++jobs:
++  address-undefined:
++    runs-on: ubuntu-22.04
++    timeout-minutes: 20
++    env:
++      ASAN_OPTIONS: detect_leaks=1
++      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
++    steps:
++      - uses: actions/checkout@v7.0.1
++      - name: Install build dependencies
++        run: |
++          sudo apt-get update
++          sudo apt-get install -y --no-install-recommends \
++            build-essential cmake libgl1-mesa-dev libx11-dev libxrandr-dev \
++            libxinerama-dev libxcursor-dev libxi-dev libssl-dev
++      - name: Configure sanitizers
++        run: |
++          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDOTAMANAGER_BUILD_TESTS=ON \
++            '-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' \
++            '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
++      - name: Build
++        run: cmake --build build --parallel 2
++      - name: Regression and fault-injection tests
++        env:
++          CXXFLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer
++        run: |
++          ctest --test-dir build --output-on-failure
++          python3 tests/core_checks.py build/_deps/json-src/include
