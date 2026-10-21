@@ -138,9 +138,11 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("source_path"));
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.src_folder.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g_success.src_folder.c_str());
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("destination_path"));
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.dst_folder.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g_success.dst_folder.c_str());
 
     ImGui::Spacing();
     ImGui::Spacing();

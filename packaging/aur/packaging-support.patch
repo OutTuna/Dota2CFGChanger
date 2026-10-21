@@ -423,6 +423,15 @@
    "ready": "Ready",
    "source": "Source config folder",
    "destination": "Destination account folder",
+@@ -17,7 +20,7 @@
+   "text": "Text",
+   "reset": "Reset",
+   "confirmation": "Confirm replacement",
+-  "copy_warning": "The destination account’s Dota 2 config will be replaced. Its current config will be backed up first. Close Dota 2 and Steam before continuing.",
++  "copy_warning": "The destination account's Dota 2 config will be replaced. Its current config will be backed up first. Close Dota 2 and Steam before continuing.",
+   "from": "From:",
+   "to": "To:",
+   "source_path": "Source path:",
 @@ -39,7 +42,7 @@
    "source_invalid": "Source config is not a directory.",
    "overlap": "Source and destination folders overlap.",
@@ -2275,7 +2284,8 @@
 +    }
      ImGui::Spacing();
  
-     if (ImGui::Button(tr("cancel"), { 120, 0 })) {
+-    if (ImGui::Button(tr("cancel"), { 120, 0 })) {
++    if (ImGui::Button(tr("cancel"), { 120, 0 }) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
          g_confirm_copy_open = false;
 +        ImGui::CloseCurrentPopup();
      }
@@ -2343,6 +2353,18 @@
  
      ImGui::Spacing();
      ImGui::PushStyleColor(ImGuiCol_Separator, { 0.55f, 0.55f, 0.60f, 0.20f });
+@@ -140,9 +138,11 @@
+     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("source_path"));
+     ImGui::SameLine();
+     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.src_folder.c_str());
++    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g_success.src_folder.c_str());
+     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("destination_path"));
+     ImGui::SameLine();
+     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.dst_folder.c_str());
++    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g_success.dst_folder.c_str());
+ 
+     ImGui::Spacing();
+     ImGui::Spacing();
 --- a/src/ui/theme.cpp
 +++ b/src/ui/theme.cpp
 @@ -552,11 +552,17 @@
@@ -3967,7 +3989,7 @@
 +}
 --- /dev/null
 +++ b/tests/preview_ui_checks.cpp
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,57 @@
 +#include "ui/ui_internal.h"
 +#include "app.h"
 +#include "localization.h"
@@ -4017,6 +4039,10 @@
 +        assert(std::abs(window->Pos.x + window->Size.x / 2 - io.DisplaySize.x / 2) < 2);
 +
 +        assert(ImGui::GetDrawData()->TotalVtxCount < 10000);
++        io.AddKeyEvent(ImGuiKey_Escape, true);
++        ImGui::NewFrame(); ui_render_main(nullptr, io.DisplaySize); ImGui::Render();
++        assert(!g_confirm_copy_open);
++        assert(!g_copy_preview_ready);
 +        ImGui::DestroyContext();
 +    }
 +    std::cout << "Account lists and transfer preview fit EN/RU/UA and clip 10000 entries\n";

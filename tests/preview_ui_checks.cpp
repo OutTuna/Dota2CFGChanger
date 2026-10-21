@@ -47,6 +47,10 @@ int main() {
         assert(std::abs(window->Pos.x + window->Size.x / 2 - io.DisplaySize.x / 2) < 2);
 
         assert(ImGui::GetDrawData()->TotalVtxCount < 10000);
+        io.AddKeyEvent(ImGuiKey_Escape, true);
+        ImGui::NewFrame(); ui_render_main(nullptr, io.DisplaySize); ImGui::Render();
+        assert(!g_confirm_copy_open);
+        assert(!g_copy_preview_ready);
         ImGui::DestroyContext();
     }
     std::cout << "Account lists and transfer preview fit EN/RU/UA and clip 10000 entries\n";
