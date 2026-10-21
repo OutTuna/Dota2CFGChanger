@@ -75,3 +75,4 @@ scripts/run-all-checks.sh
 tests/windows_crash_checks.py
 tests/windows_release_checks.py
 tests/update_install_checks.cpp
+tests/windows_update_crash_checks.py

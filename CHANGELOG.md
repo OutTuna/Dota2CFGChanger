@@ -31,6 +31,7 @@ No stable application version was manually changed. Alpha branch CI publishes is
 
 - Exercise native Windows junctions, symlinks, sharing violations, denied-read ACLs, three process-kill transfer stages and manual recovery; add real helper startup-failure rollback on test application copies.
 - Make stale-preview metadata regression deterministic on NTFS and record native MSVC build/test and idle measurements.
+- Validate process interruption after saving the old executable, installing the new file and confirming startup before cleanup; document manual recovery when both versions remain.
 
 - Add safety, concurrency/crash-lock and large-list/preview layout regressions; extend fault-injection, updater, avatar and localization checks.
 - Add portable/process-integration CTest labels and an ASan/UBSan workflow without changing release publication.

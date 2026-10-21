@@ -4336,7 +4336,7 @@
        - name: Compute version
          id: version
          env:
-@@ -61,11 +64,16 @@
+@@ -61,11 +64,18 @@
            path: build/_deps
            key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
        - name: Configure CMake
@@ -4352,10 +4352,12 @@
 +          python tests/windows_release_checks.py build/Release/DotaManager.exe
 +          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 +          python tests/windows_crash_checks.py
++          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
++          python tests/windows_update_crash_checks.py build
        - name: Upload Artifact
          uses: actions/upload-artifact@v7.0.1
          with:
-@@ -77,8 +85,6 @@
+@@ -77,8 +87,6 @@
      needs: compute-version
      runs-on: ubuntu-22.04
      env:
@@ -4364,7 +4366,7 @@
        APPIMAGE_EXTRACT_AND_RUN: "1"
        ARCH: x86_64
        CCACHE_DIR: ${{ github.workspace }}/.ccache
-@@ -124,7 +130,7 @@
+@@ -124,7 +132,7 @@
            key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
            restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
        - name: Configure CMake
@@ -4373,7 +4375,7 @@
  
        - name: Build
          run: cmake --build build --config Release -j"$(nproc)"
-@@ -133,6 +139,7 @@
+@@ -133,6 +141,7 @@
          run: |
            ctest --test-dir build --output-on-failure
            python3 tests/core_checks.py build/_deps/json-src/include
@@ -4381,7 +4383,7 @@
  
        - name: Compiler cache statistics
          run: ccache --show-stats
-@@ -143,7 +150,6 @@
+@@ -143,7 +152,6 @@
            base=https://github.com/linuxdeploy
            wget -q -O "$HOME/ld/linuxdeploy" \
              "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
@@ -4389,7 +4391,7 @@
            wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
              "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
            chmod +x "$HOME/ld/"*
-@@ -221,44 +227,18 @@
+@@ -221,44 +229,18 @@
            fi
            bash scripts/check-appimage.sh "${images[0]}"
  
@@ -4852,7 +4854,7 @@
 +print("Standalone PE dependencies passed: " + ", ".join(dependencies))
 --- a/tests/update_install_checks.cpp
 +++ b/tests/update_install_checks.cpp
-@@ -21,6 +21,10 @@
+@@ -21,7 +21,12 @@
  int main(int argc, char** argv) {
      auto arguments = update_arguments(argc, argv);
      if (arguments.size() == 3 && arguments[1] == "--apply-update") return update_helper_dispatch(arguments);
@@ -4861,9 +4863,11 @@
 +        return 0;
 +    }
      if (arguments.size() == 3 && arguments[1] == "--update-started") {
++        if (fs::exists(fs::u8path(arguments[2]).parent_path() / "fail-startup")) return 7;
          update_install_confirm_started(arguments);
          write(fs::u8path(arguments[2]).parent_path() / "child-opened", "started");
-@@ -89,6 +93,24 @@
+         std::this_thread::sleep_for(std::chrono::seconds(3));
+@@ -89,6 +94,30 @@
      }
      assert(file_sha256(target) == file_sha256(executable));
      std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -4872,13 +4876,19 @@
 +    const auto failed_target = failed_folder / "application.exe";
 +    auto failed_staged = failed_target; failed_staged += ".update-new";
 +    fs::copy_file(executable, failed_target);
-+    write(failed_staged, "verified payload that is not an executable");
++    fs::copy_file(executable, failed_staged);
++    write(failed_folder / "fail-startup", "exit before startup confirmation");
 +    parent = launch_update_process(executable, {"--test-parent", failed_folder.u8string()});
 +    assert(update_process_exited(parent, 15000));
 +    release_update_process(parent);
 +    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
 +    while (!fs::exists(failed_folder / "rollback-started")) {
-+        assert(std::chrono::steady_clock::now() < deadline);
++        if (std::chrono::steady_clock::now() >= deadline) {
++            std::cerr << "Startup rollback timed out: target=" << fs::exists(failed_target)
++                << ", staged=" << fs::exists(failed_staged) << '\n';
++            if (fs::exists(failed_folder / "error.txt")) std::cerr << read(failed_folder / "error.txt") << '\n';
++            return 1;
++        }
 +        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 +    }
 +    assert(file_sha256(failed_target) == file_sha256(executable));
@@ -4888,3 +4898,126 @@
      fs::remove_all(root);
      std::cout << "Executable replacement, rollback, corrupt updates and helper restart passed\n";
  }
+--- /dev/null
++++ b/tests/windows_update_crash_checks.py
+@@ -0,0 +1,120 @@
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++import tempfile
++import time
++
++if os.name != "nt" or len(sys.argv) != 2:
++    raise SystemExit("Run from an x64 MSVC developer shell: python tests/windows_update_crash_checks.py <build>")
++
++project = Path(__file__).resolve().parents[1]
++build = Path(sys.argv[1]).resolve()
++library = build / "Release/dotamanager_core.lib"
++if not library.is_file():
++    raise SystemExit("Build the MSVC Release core first")
++cache = (build / "CMakeCache.txt").read_text(encoding="utf-8")
++json_source = next((line.split("=", 1)[1] for line in cache.splitlines()
++                    if line.startswith("nlohmann_json_SOURCE_DIR:")), "")
++json_include = Path(json_source) / "include" if json_source else build / "_deps/json-src/include"
++if not (json_include / "nlohmann/json.hpp").is_file():
++    raise SystemExit("Cannot find the configured nlohmann/json headers")
++
++with tempfile.TemporaryDirectory(prefix="dota-update-crash-") as directory:
++    root = Path(directory)
++    (root / "hooks.h").write_text(r'''
++#include <filesystem>
++void crash_rename(const std::filesystem::path&, const std::filesystem::path&);
++void crash_rename(const std::filesystem::path&, const std::filesystem::path&, std::error_code&);
++bool crash_remove(const std::filesystem::path&, std::error_code&);
++''')
++    source = (project / "src/core/update_install.cpp").read_text(encoding="utf-8")
++    (root / "instrumented.cpp").write_text('#include "hooks.h"\n' + source.replace(
++        "fs::rename(", "crash_rename(").replace("fs::remove(", "crash_remove("), encoding="utf-8")
++    (root / "driver.cpp").write_text(r'''
++#include "update_install.h"
++#include "checksum.h"
++#include <fstream>
++#include <iostream>
++#include <thread>
++#include <chrono>
++namespace fs = std::filesystem;
++fs::path fixture;
++std::wstring phase;
++void pause_at(const wchar_t* value) {
++    if (phase != value) return;
++    std::ofstream(fixture / "ready") << "ready";
++    for (;;) std::this_thread::sleep_for(std::chrono::milliseconds(10));
++}
++void crash_rename(const fs::path& a, const fs::path& b) {
++    fs::rename(a, b);
++    pause_at(b.extension() == ".update-old" ? L"saved" : L"installed");
++}
++void crash_rename(const fs::path& a, const fs::path& b, std::error_code& error) { fs::rename(a, b, error); }
++bool crash_remove(const fs::path& path, std::error_code& error) {
++    if (path.extension() == ".update-old") pause_at(L"acknowledged");
++    return fs::remove(path, error);
++}
++int wmain(int argc, wchar_t** argv) {
++    if (argc != 3) return 3;
++    fixture = argv[1]; phase = argv[2];
++    const auto target = fixture / "application.exe";
++    auto staged = target; staged += ".update-new";
++    ReleaseInfo release;
++    release.size = fs::file_size(staged); release.digest = file_sha256(staged);
++    try {
++        replace_update_executable(staged, target, release, [] {
++            std::ofstream(fixture / "launch-confirmed") << "confirmed";
++            return true;
++        });
++    } catch (const std::exception& error) { std::cout << error.what(); return 2; }
++    return 0;
++}
++''', encoding="utf-8")
++    executable = root / "update_crash_checks.exe"
++    subprocess.run(["cl", "/nologo", "/std:c++17", "/O2", "/MT", "/utf-8", "/EHsc",
++                    "/I" + str(project / "src"), "/I" + str(project / "src/core"),
++                    "/I" + str(project / "src/platform"), "/I" + str(build / "generated"),
++                    "/I" + str(json_include),
++                    str(root / "instrumented.cpp"), str(root / "driver.cpp"), str(library),
++                    "/Fe:" + str(executable), "/link", "bcrypt.lib", "advapi32.lib",
++                    "shell32.lib", "ole32.lib", "user32.lib"], cwd=root, check=True)
++    for phase in ("saved", "installed", "acknowledged"):
++        fixture = root / (phase + " пробел Unicode")
++        fixture.mkdir()
++        target = fixture / "application.exe"
++        staged = fixture / "application.exe.update-new"
++        backup = fixture / "application.exe.update-old"
++        target.write_bytes(b"old application bytes")
++        staged.write_bytes(b"new application bytes")
++        child = subprocess.Popen([str(executable), str(fixture), phase])
++        try:
++            deadline = time.monotonic() + 10
++            while not (fixture / "ready").exists():
++                assert child.poll() is None, phase
++                assert time.monotonic() < deadline, phase
++                time.sleep(0.01)
++        finally:
++            child.kill()
++            child.wait(timeout=5)
++        assert backup.read_bytes() == b"old application bytes", phase
++        if phase == "saved":
++            assert not target.exists() and staged.read_bytes() == b"new application bytes"
++        else:
++            assert target.read_bytes() == b"new application bytes" and not staged.exists()
++        assert (fixture / "launch-confirmed").exists() == (phase == "acknowledged")
++        preserved = fixture / "preserved"
++        preserved.mkdir()
++        for path in (target, staged, backup):
++            if path.exists():
++                shutil.copy2(path, preserved / path.name)
++        if target.exists():
++            target.rename(fixture / "new-before-recovery")
++        backup.rename(target)
++        assert target.read_bytes() == b"old application bytes"
++        if not staged.exists():
++            staged.write_bytes(b"new application bytes")
++        subprocess.run([str(executable), str(fixture), "none"], check=True)
++        assert target.read_bytes() == b"new application bytes" and not backup.exists()
++        print(phase + ": real process kill in replacement transaction, preserved old bytes, manual recovery and retry passed")

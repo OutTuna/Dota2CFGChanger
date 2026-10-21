@@ -74,6 +74,8 @@ jobs:
           python tests/windows_release_checks.py build/Release/DotaManager.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/windows_crash_checks.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/windows_update_crash_checks.py build
       - name: Upload Artifact
         uses: actions/upload-artifact@v7.0.1
         with:
