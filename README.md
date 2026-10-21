@@ -252,6 +252,14 @@ This tests core logic and headless ImGui layout, not a macOS release or Windows/
 
 On Windows, use `python` instead if that is the command for your Python 3 installation.
 
+From an x64 MSVC developer shell, also validate the standalone executable and
+interrupted transfers using temporary fixtures:
+
+```powershell
+python tests/windows_release_checks.py build/Release/DotaManager.exe
+python tests/windows_crash_checks.py
+```
+
 | Workflow | Validation |
 | --- | --- |
 | [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, version checks and AppImage validation on Ubuntu 22.04 / 24.04. |
