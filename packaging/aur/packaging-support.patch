@@ -4114,7 +4114,7 @@
 +#define DOTA_RELEASE_CHANNEL "@APP_RELEASE_CHANNEL@"
 --- /dev/null
 +++ b/tests/prerelease_checks.py
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,107 @@
 +import json
 +import os
 +from pathlib import Path
@@ -4125,13 +4125,69 @@
 +root = Path(__file__).resolve().parents[1]
 +
 +class PrereleaseChecks(unittest.TestCase):
-+    def test_alpha_workflow_has_no_stable_publisher(self):
++    def test_workflow_separates_stable_and_alpha_publishers(self):
 +        workflow = (root / '.github/workflows/build.yaml').read_text()
-+        self.assertNotIn('gh release delete', workflow)
-+        self.assertNotIn('git push origin', workflow)
-+        self.assertNotIn('--latest=true', workflow)
-+        self.assertIn('branches: [ "alpha" ]', workflow)
-+        self.assertIn("if: github.ref == 'refs/heads/alpha'", workflow)
++        self.assertIn('branches: [ "main", "alpha", "aur-packaging" ]', workflow)
++        stable = workflow.split('\n  release:\n', 1)[1].split('\n  prerelease:\n', 1)[0]
++        alpha = workflow.split('\n  prerelease:\n', 1)[1]
++        self.assertIn("if: github.ref == 'refs/heads/main'", stable)
++        self.assertIn('--latest=true', stable)
++        self.assertIn("if: github.ref == 'refs/heads/alpha'", alpha)
++        self.assertIn('bash scripts/publish-prerelease.sh', alpha)
++        self.assertNotIn('gh release delete', alpha)
++        self.assertNotIn('git push origin', alpha)
++        self.assertNotIn('--latest=true', alpha)
++
++    def test_channel_selection(self):
++        workflow = (root / '.github/workflows/build.yaml').read_text()
++        selection = workflow.split('      - name: Select distribution channel\n', 1)[1].split('      - name: Compute version\n', 1)[0]
++        script = '\n'.join(line[10:] for line in selection.split('        run: |\n', 1)[1].splitlines())
++        with tempfile.TemporaryDirectory(prefix='dota-channel-') as directory:
++            output = Path(directory) / 'output'
++            for branch, channel in [('main', 'stable'), ('alpha', 'alpha'), ('aur-packaging', 'stable'), ('other', None)]:
++                output.unlink(missing_ok=True)
++                result = subprocess.run(['bash', '-c', script], env=dict(os.environ, GITHUB_REF='refs/heads/' + branch, GITHUB_OUTPUT=str(output)), capture_output=True)
++                if channel:
++                    self.assertEqual(result.returncode, 0)
++                    self.assertEqual(output.read_text().strip(), 'channel=' + channel)
++                else:
++                    self.assertNotEqual(result.returncode, 0)
++                    self.assertFalse(output.exists())
++
++    def test_stable_publisher_keeps_update_contract(self):
++        workflow = (root / '.github/workflows/build.yaml').read_text()
++        stable = workflow.split('\n  release:\n', 1)[1].split('\n  prerelease:\n', 1)[0]
++        script = '\n'.join(line[10:] for line in stable.split('        run: |\n', 1)[1].splitlines())
++        with tempfile.TemporaryDirectory(prefix='dota-stable-release-') as directory:
++            folder = Path(directory)
++            (folder / 'bin').mkdir()
++            capture = folder / 'commands.jsonl'
++            for command in ('git', 'gh'):
++                mock = folder / 'bin' / command
++                mock.write_text('#!/usr/bin/env python3\nimport json, os, sys\nwith open(os.environ["CAPTURE"], "a") as output:\n output.write(json.dumps(["' + command + '"] + sys.argv[1:]) + "\\n")\n')
++                mock.chmod(0o700)
++            for file in ('DotaManager-Windows/DotaManager.exe', 'DotaManager-Linux/test.AppImage'):
++                path = folder / file
++                path.parent.mkdir(exist_ok=True)
++                path.write_bytes(b'fixture')
++            env = dict(os.environ, MOCK_BIN=str(folder / 'bin'), RELEASE_CHANNEL='stable', GITHUB_REF='refs/heads/main', VERSION='v1.24', GITHUB_SHA='a' * 40, CAPTURE=str(capture))
++            script = 'export PATH="$(cd "$MOCK_BIN" && pwd):$PATH"\n' + script
++            subprocess.run(['bash', '-c', script], cwd=folder, env=env, check=True)
++            calls = [json.loads(line) for line in capture.read_text().splitlines()]
++            self.assertIn(['git', 'tag', 'v1.24'], calls)
++            self.assertIn(['git', 'push', 'origin', 'v1.24'], calls)
++            self.assertIn(['gh', 'release', 'delete', 'latest', '--yes', '--cleanup-tag'], calls)
++            published = next(call for call in calls if call[:4] == ['gh', 'release', 'create', 'latest'])
++            self.assertIn('--latest=true', published)
++            self.assertNotIn('--prerelease', published)
++            self.assertEqual(published[published.index('--title') + 1], 'Latest Build (v1.24)')
++            self.assertEqual(published[published.index('--target') + 1], 'a' * 40)
++            self.assertEqual(published[-2:], ['DotaManager-Windows/DotaManager.exe', 'DotaManager-Linux/test.AppImage'])
++            for override in ({'GITHUB_REF': 'refs/heads/alpha'}, {'RELEASE_CHANNEL': 'alpha'}, {'VERSION': 'latest'}, {'GITHUB_SHA': '../bad'}):
++                capture.unlink(missing_ok=True)
++                result = subprocess.run(['bash', '-c', script], cwd=folder, env=dict(env, **override), capture_output=True)
++                self.assertNotEqual(result.returncode, 0)
++                self.assertFalse(capture.exists())
 +
 +    def test_release_channel_isolation(self):
 +        with tempfile.TemporaryDirectory(prefix='dota-release-') as directory:
@@ -4325,14 +4381,12 @@
 +print(json.dumps(result, indent=2))
 --- a/.github/workflows/build.yaml
 +++ b/.github/workflows/build.yaml
-@@ -1,8 +1,8 @@
--name: Build & Release (Windows + Linux)
-+name: Alpha CI (Windows + Linux)
+@@ -2,7 +2,7 @@
  
  on:
    push:
 -    branches: [ "main" ]
-+    branches: [ "alpha" ]
++    branches: [ "main", "alpha", "aur-packaging" ]
      paths-ignore:
        - "README.md"
        - "LICENSE"
@@ -4347,7 +4401,7 @@
    cancel-in-progress: false
  
  permissions:
-@@ -29,10 +28,14 @@
+@@ -29,10 +28,20 @@
      runs-on: ubuntu-24.04
      outputs:
        version: ${{ steps.version.outputs.version }}
@@ -4358,11 +4412,17 @@
            fetch-depth: 0
 +      - name: Select distribution channel
 +        id: channel
-+        run: echo "channel=alpha" >> "$GITHUB_OUTPUT"
++        run: |
++          case "$GITHUB_REF" in
++            refs/heads/alpha) channel=alpha ;;
++            refs/heads/main|refs/heads/aur-packaging) channel=stable ;;
++            *) echo "Unsupported distribution branch" >&2; exit 1 ;;
++          esac
++          echo "channel=$channel" >> "$GITHUB_OUTPUT"
        - name: Compute version
          id: version
          env:
-@@ -61,11 +64,18 @@
+@@ -61,11 +70,18 @@
            path: build/_deps
            key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
        - name: Configure CMake
@@ -4383,7 +4443,7 @@
        - name: Upload Artifact
          uses: actions/upload-artifact@v7.0.1
          with:
-@@ -77,8 +87,6 @@
+@@ -77,8 +93,6 @@
      needs: compute-version
      runs-on: ubuntu-22.04
      env:
@@ -4392,7 +4452,7 @@
        APPIMAGE_EXTRACT_AND_RUN: "1"
        ARCH: x86_64
        CCACHE_DIR: ${{ github.workspace }}/.ccache
-@@ -124,7 +132,7 @@
+@@ -124,7 +138,7 @@
            key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
            restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
        - name: Configure CMake
@@ -4401,7 +4461,7 @@
  
        - name: Build
          run: cmake --build build --config Release -j"$(nproc)"
-@@ -133,6 +141,7 @@
+@@ -133,6 +147,7 @@
          run: |
            ctest --test-dir build --output-on-failure
            python3 tests/core_checks.py build/_deps/json-src/include
@@ -4409,7 +4469,7 @@
  
        - name: Compiler cache statistics
          run: ccache --show-stats
-@@ -143,7 +152,6 @@
+@@ -143,7 +158,6 @@
            base=https://github.com/linuxdeploy
            wget -q -O "$HOME/ld/linuxdeploy" \
              "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
@@ -4417,34 +4477,36 @@
            wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
              "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
            chmod +x "$HOME/ld/"*
-@@ -221,44 +229,18 @@
-           fi
+@@ -222,6 +236,7 @@
            bash scripts/check-appimage.sh "${images[0]}"
  
--  release:
-+  prerelease:
-+    if: github.ref == 'refs/heads/alpha'
+   release:
++    if: github.ref == 'refs/heads/main'
      needs: [compute-version, build-windows, build-linux, check-appimage]
      runs-on: ubuntu-24.04
      env:
-       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-     steps:
+@@ -230,35 +245,45 @@
        - uses: actions/checkout@v7.0.1
--        with:
--          fetch-depth: 0
+         with:
+           fetch-depth: 0
 -
--      - name: Download all artifacts
-+      - name: Download prerelease artifacts
+       - name: Download all artifacts
          uses: actions/download-artifact@v8.0.1
 -
--      - name: Tag and release
-+      - name: Publish isolated prerelease
+       - name: Tag and release
          env:
 +          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
            VERSION: ${{ needs.compute-version.outputs.version }}
--        run: |
--          git config user.name "github-actions[bot]"
--          git config user.email "github-actions[bot]@users.noreply.github.com"
+         run: |
++          set -euo pipefail
++          [[ "$GITHUB_REF" == "refs/heads/main" && "$RELEASE_CHANNEL" == "stable" ]] || exit 1
++          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+$ && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
++          [[ -f DotaManager-Windows/DotaManager.exe ]] || exit 1
++          shopt -s nullglob
++          images=(DotaManager-Linux/*.AppImage)
++          [[ ${#images[@]} -eq 1 ]] || exit 1
+           git config user.name "github-actions[bot]"
+           git config user.email "github-actions[bot]@users.noreply.github.com"
 -
 -          APPIMAGE_FILE=$(find DotaManager-Linux -name "*.AppImage" -type f | head -n1)
 -          if [ -z "$APPIMAGE_FILE" ]; then
@@ -4453,20 +4515,36 @@
 -            exit 1
 -          fi
 -
--          git tag "$VERSION"
--          git push origin "$VERSION"
+           git tag "$VERSION"
+           git push origin "$VERSION"
 -
 -          # --cleanup-tag also removes the old "latest" git tag, otherwise the
 -          # new release would stay pinned to a stale commit.
--          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
 -
--          gh release create latest \
--            --target "$GITHUB_SHA" \
--            --title "Latest Build ($VERSION)" \
--            --latest=true \
--            --notes "Automated build $VERSION from commit $GITHUB_SHA" \
--            DotaManager-Windows/DotaManager.exe \
+           gh release create latest \
+             --target "$GITHUB_SHA" \
+             --title "Latest Build ($VERSION)" \
+             --latest=true \
+             --notes "Automated build $VERSION from commit $GITHUB_SHA" \
+             DotaManager-Windows/DotaManager.exe \
 -            "$APPIMAGE_FILE"
++            "${images[0]}"
++
++  prerelease:
++    if: github.ref == 'refs/heads/alpha'
++    needs: [compute-version, build-windows, build-linux, check-appimage]
++    runs-on: ubuntu-24.04
++    env:
++      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++    steps:
++      - uses: actions/checkout@v7.0.1
++      - name: Download prerelease artifacts
++        uses: actions/download-artifact@v8.0.1
++      - name: Publish isolated prerelease
++        env:
++          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
++          VERSION: ${{ needs.compute-version.outputs.version }}
 +        run: bash scripts/publish-prerelease.sh
 --- a/scripts/check-appimage-abi.py
 +++ b/scripts/check-appimage-abi.py
