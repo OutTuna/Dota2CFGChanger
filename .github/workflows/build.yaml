@@ -1,8 +1,8 @@
-name: Alpha CI (Windows + Linux)
+name: Build & Release (Windows + Linux)
 
 on:
   push:
-    branches: [ "alpha" ]
+    branches: [ "main", "alpha", "aur-packaging" ]
     paths-ignore:
       - "README.md"
       - "LICENSE"
@@ -35,7 +35,13 @@ jobs:
           fetch-depth: 0
       - name: Select distribution channel
         id: channel
-        run: echo "channel=alpha" >> "$GITHUB_OUTPUT"
+        run: |
+          case "$GITHUB_REF" in
+            refs/heads/alpha) channel=alpha ;;
+            refs/heads/main|refs/heads/aur-packaging) channel=stable ;;
+            *) echo "Unsupported distribution branch" >&2; exit 1 ;;
+          esac
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
       - name: Compute version
         id: version
         env:
@@ -228,6 +234,43 @@ jobs:
             exit 1
           fi
           bash scripts/check-appimage.sh "${images[0]}"
+
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: [compute-version, build-windows, build-linux, check-appimage]
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8.0.1
+      - name: Tag and release
+        env:
+          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
+          VERSION: ${{ needs.compute-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" && "$RELEASE_CHANNEL" == "stable" ]] || exit 1
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+$ && "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ -f DotaManager-Windows/DotaManager.exe ]] || exit 1
+          shopt -s nullglob
+          images=(DotaManager-Linux/*.AppImage)
+          [[ ${#images[@]} -eq 1 ]] || exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest \
+            --target "$GITHUB_SHA" \
+            --title "Latest Build ($VERSION)" \
+            --latest=true \
+            --notes "Automated build $VERSION from commit $GITHUB_SHA" \
+            DotaManager-Windows/DotaManager.exe \
+            "${images[0]}"
 
   prerelease:
     if: github.ref == 'refs/heads/alpha'
