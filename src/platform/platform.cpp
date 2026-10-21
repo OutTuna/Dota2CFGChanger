@@ -186,7 +186,6 @@ FontPaths find_font_paths() {
     return result;
 }
 
-
 bool open_external(const std::string& value) {
     if (value.empty()) return false;
 #ifdef _WIN32

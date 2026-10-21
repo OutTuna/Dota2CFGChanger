@@ -22,6 +22,7 @@ bool newer_version(const std::string& candidate, const std::string& current) {
 
 ReleaseInfo parse_release_info(const std::string& body, bool windows) {
     auto release = nlohmann::json::parse(body);
+    if (release.value("prerelease", false)) throw std::runtime_error("Release is a prerelease");
     if (release.value("draft", false)) throw std::runtime_error("Release is a draft");
     ReleaseInfo result;
     auto tag = release.value("tag_name", "");
@@ -42,8 +43,11 @@ ReleaseInfo parse_release_info(const std::string& body, bool windows) {
         if (!asset.contains("digest") || !asset["digest"].is_string()) continue;
         auto digest = asset["digest"].get<std::string>();
         if (!std::regex_match(digest, std::regex("sha256:[0-9a-f]{64}"))) continue;
-        auto size = asset.at("size").get<std::int64_t>();
-        if (size <= 0 || size > 512LL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
+        const auto& encoded_size = asset.at("size");
+        if (!encoded_size.is_number_integer() || (!encoded_size.is_number_unsigned() && encoded_size.get<std::int64_t>() <= 0))
+            throw std::runtime_error("Invalid asset size");
+        auto size = encoded_size.get<std::uint64_t>();
+        if (size == 0 || size > 512ULL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
         result.asset_name = asset_name;
         result.download_url = url;
         result.digest = digest.substr(7);

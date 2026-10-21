@@ -21,7 +21,12 @@ ReleaseInfo info(const fs::path& file) {
 int main(int argc, char** argv) {
     auto arguments = update_arguments(argc, argv);
     if (arguments.size() == 3 && arguments[1] == "--apply-update") return update_helper_dispatch(arguments);
+    if (arguments.size() == 3 && arguments[1] == "--update-error") {
+        write(fs::u8path(arguments[2]).parent_path() / "rollback-started", "restored");
+        return 0;
+    }
     if (arguments.size() == 3 && arguments[1] == "--update-started") {
+        if (fs::exists(fs::u8path(arguments[2]).parent_path() / "fail-startup")) return 7;
         update_install_confirm_started(arguments);
         write(fs::u8path(arguments[2]).parent_path() / "child-opened", "started");
         std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -89,6 +94,30 @@ int main(int argc, char** argv) {
     }
     assert(file_sha256(target) == file_sha256(executable));
     std::this_thread::sleep_for(std::chrono::seconds(3));
+    const auto failed_folder = root / fs::u8path("failed startup пробел");
+    fs::create_directory(failed_folder);
+    const auto failed_target = failed_folder / "application.exe";
+    auto failed_staged = failed_target; failed_staged += ".update-new";
+    fs::copy_file(executable, failed_target);
+    fs::copy_file(executable, failed_staged);
+    write(failed_folder / "fail-startup", "exit before startup confirmation");
+    parent = launch_update_process(executable, {"--test-parent", failed_folder.u8string()});
+    assert(update_process_exited(parent, 15000));
+    release_update_process(parent);
+    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (!fs::exists(failed_folder / "rollback-started")) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::cerr << "Startup rollback timed out: target=" << fs::exists(failed_target)
+                << ", staged=" << fs::exists(failed_staged) << '\n';
+            if (fs::exists(failed_folder / "error.txt")) std::cerr << read(failed_folder / "error.txt") << '\n';
+            return 1;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    assert(file_sha256(failed_target) == file_sha256(executable));
+    assert(read(failed_folder / "error.txt").find("previous application restored") != std::string::npos);
+    assert(!fs::exists(failed_staged) && !fs::exists(fs::u8path(failed_target.u8string() + ".update-old")));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
     fs::remove_all(root);
     std::cout << "Executable replacement, rollback, corrupt updates and helper restart passed\n";
 }

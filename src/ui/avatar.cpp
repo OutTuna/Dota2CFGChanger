@@ -25,7 +25,6 @@ static GLuint upload_texture(const std::vector<unsigned char>& pixels, int w, in
     return tex;
 }
 
-
 ImTextureID avatar_get(const std::string& id) {
     auto found = textures.find(id);
     if (found != textures.end()) return found->second;

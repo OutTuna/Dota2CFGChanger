@@ -32,7 +32,7 @@ if not checksums:
     raise SystemExit("Missing patch checksum in .SRCINFO")
 last = checksums[-1]
 info = info[:last.start()] + last.group(1) + digest + info[last.end():]
-patch.write_text(patch_text, encoding="utf-8", newline="\n")
-pkgbuild.write_text(text, encoding="utf-8", newline="\n")
-metadata.write_text(info, encoding="utf-8", newline="\n")
+for path, contents in ((patch, patch_text), (pkgbuild, text), (metadata, info)):
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(contents)
 print("Patch and patch checksums refreshed")

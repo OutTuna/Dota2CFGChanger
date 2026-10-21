@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include "config_preview.h"
 
 struct ConfigBackup {
     std::filesystem::path path;
@@ -19,7 +20,7 @@ std::vector<ConfigBackup> list_config_backups(const std::filesystem::path& root,
     const std::string& account);
 BackupCopyResult copy_config_with_backup(const std::filesystem::path& source,
     const std::filesystem::path& destination, const std::filesystem::path& root,
-    const std::string& account);
+    const std::string& account, const ConfigPreview* preview = nullptr);
 BackupCopyResult restore_config_backup(const ConfigBackup& backup,
     const std::filesystem::path& destination, const std::filesystem::path& root,
     const std::string& account);
