@@ -20,7 +20,7 @@
   "text": "Text",
   "reset": "Reset",
   "confirmation": "Confirm replacement",
-  "copy_warning": "The destination account’s Dota 2 config will be replaced. Its current config will be backed up first. Close Dota 2 and Steam before continuing.",
+  "copy_warning": "The destination account's Dota 2 config will be replaced. Its current config will be backed up first. Close Dota 2 and Steam before continuing.",
   "from": "From:",
   "to": "To:",
   "source_path": "Source path:",

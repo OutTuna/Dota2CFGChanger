@@ -122,7 +122,7 @@ void render_confirm_copy_popup(ImVec2 ds) {
     }
     ImGui::Spacing();
 
-    if (ImGui::Button(tr("cancel"), { 120, 0 })) {
+    if (ImGui::Button(tr("cancel"), { 120, 0 }) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         g_confirm_copy_open = false;
         ImGui::CloseCurrentPopup();
     }
