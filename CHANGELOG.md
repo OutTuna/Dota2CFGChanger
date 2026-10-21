@@ -6,6 +6,8 @@ No stable application version was manually changed. Alpha branch CI publishes is
 
 ### Safety
 
+- Make the intended static MSVC runtime effective through CMake 3.15 policy behavior; verify standalone EXE dependencies before alpha artifact upload.
+
 - Verify staged configuration contents and recheck source/destination state before replacement.
 - Serialize writes to a destination across application processes; retain stale locks for explicit crash recovery.
 - Reject non-regular filesystem entries, linked account directories and Windows reparse points at checked components; compare Windows path components without case sensitivity.
@@ -26,6 +28,9 @@ No stable application version was manually changed. Alpha branch CI publishes is
 - Publish alpha CI artifacts under unique prerelease tags with `--latest=false`; never replace stable `latest`.
 
 ### Verification and documentation
+
+- Exercise native Windows junctions, symlinks, sharing violations, denied-read ACLs, three process-kill transfer stages and manual recovery; add real helper startup-failure rollback on test application copies.
+- Make stale-preview metadata regression deterministic on NTFS and record native MSVC build/test and idle measurements.
 
 - Add safety, concurrency/crash-lock and large-list/preview layout regressions; extend fault-injection, updater, avatar and localization checks.
 - Add portable/process-integration CTest labels and an ASan/UBSan workflow without changing release publication.

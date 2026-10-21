@@ -72,3 +72,6 @@ scripts/compute-next-version.sh
 scripts/refresh-aur-patch.py
 scripts/run-all-checks.sh
 .github/workflows/sanitizers.yaml
+tests/windows_crash_checks.py
+tests/windows_release_checks.py
+tests/update_install_checks.cpp

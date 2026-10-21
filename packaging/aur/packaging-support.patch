@@ -1,5 +1,11 @@
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.14)
++cmake_minimum_required(VERSION 3.15)
+ 
+ project(DotaManager)
+ 
 @@ -12,6 +12,11 @@
  string(REGEX REPLACE "^v" "" APP_VERSION_STRING "${APP_VERSION}")
  if(NOT APP_VERSION_STRING MATCHES "^[0-9]+[.][0-9]+([.][0-9]+)?([.][0-9]+)?$")
@@ -3740,7 +3746,7 @@
 +    const std::filesystem::path& destination);
 --- /dev/null
 +++ b/tests/config_safety_checks.cpp
-@@ -0,0 +1,120 @@
+@@ -0,0 +1,218 @@
 +#include "backups.h"
 +#include "file_ops.h"
 +#include "steam_api.h"
@@ -3752,18 +3758,61 @@
 +#include <future>
 +#include <iostream>
 +#include <limits>
++#include <vector>
++#include <algorithm>
 +#ifndef _WIN32
 +#include <sys/stat.h>
++#else
++#define WIN32_LEAN_AND_MEAN
++#ifndef NOMINMAX
++#define NOMINMAX
++#endif
++#include <windows.h>
++#include <winioctl.h>
++#include <sddl.h>
 +#endif
 +namespace fs = std::filesystem;
 +void put(const fs::path& path, const std::string& data) { fs::create_directories(path.parent_path()); std::ofstream(path, std::ios::binary) << data; }
 +std::string read(const fs::path& path) { std::ifstream f(path); return {std::istreambuf_iterator<char>(f), {}}; }
++#ifdef _WIN32
++void junction(const fs::path& link, const fs::path& target) {
++    fs::create_directory(link);
++    auto handle = CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
++        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
++    assert(handle != INVALID_HANDLE_VALUE);
++    struct MountPoint {
++        DWORD tag;
++        WORD length, reserved, substitute_offset, substitute_length, print_offset, print_length;
++        WCHAR paths[32768];
++    } data{};
++    const auto printable = fs::absolute(target).make_preferred().native();
++    const auto substitute = L"\\??\\" + printable;
++    data.tag = IO_REPARSE_TAG_MOUNT_POINT;
++    data.substitute_length = static_cast<WORD>(substitute.size() * sizeof(WCHAR));
++    data.print_offset = data.substitute_length + sizeof(WCHAR);
++    data.print_length = static_cast<WORD>(printable.size() * sizeof(WCHAR));
++    std::copy(substitute.begin(), substitute.end(), data.paths);
++    std::copy(printable.begin(), printable.end(), data.paths + substitute.size() + 1);
++    data.length = 8 + data.print_offset + data.print_length + sizeof(WCHAR);
++    DWORD returned = 0;
++    const bool created = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, &data, data.length + 8,
++        nullptr, 0, &returned, nullptr) != FALSE;
++    if (!created) std::cerr << "Junction creation failed: " << GetLastError() << '\n';
++    CloseHandle(handle);
++    assert(created);
++}
++#endif
 +template<class F> void rejects(F action, const std::string& key = {}) {
 +    bool failed = false;
-+    try { action(); } catch (const ConfigFileError& error) { failed = key.empty() || error.key == key; }
++    try { action(); } catch (const ConfigFileError& error) {
++        failed = key.empty() || error.key == key;
++        if (!failed) std::cerr << "Expected " << key << ", received " << error.key << '\n';
++    }
++    if (!failed) std::cerr << "Expected rejection: " << key << '\n';
 +    assert(failed);
 +}
 +int main(int argc, char** argv) {
++    std::cout << std::unitbuf;
 +    const auto arguments = update_arguments(argc, argv);
 +    if (arguments.size() == 5 && arguments[1] == "--hold-lock") {
 +        replace_config_directory(fs::u8path(arguments[2]), fs::u8path(arguments[3]), [&] {
@@ -3809,7 +3858,9 @@
 +    copy_config_with_backup(source, destination, store, "43", &preview);
 +    assert(list_config_backups(store, "43").size() == count && fs::last_write_time(destination / "same") == modified);
 +
++    auto previous_time = fs::last_write_time(source / "same");
 +    put(source / "same", "evil");
++    fs::last_write_time(source / "same", previous_time + std::chrono::seconds(2));
 +    assert(preview_config_transfer(source, destination).changes);
 +    rejects([&] { copy_config_with_backup(source, destination, store, "43", &preview); }, "config_changed");
 +    rejects([&] { preview_config_transfer(source, source / "nested"); }, "overlap");
@@ -3839,6 +3890,59 @@
 +    assert(fs::is_directory(lock) && read(destination / "same") == "evil");
 +    rejects([&] { replace_config_directory(source, destination); }, "operation_locked");
 +    fs::remove(lock); replace_config_directory(source, destination);
++#ifdef _WIN32
++    auto alias = root / "account alias";
++    junction(alias, destination.parent_path());
++    rejects([&] { replace_config_directory(source, alias / "570"); }, "symlink");
++    fs::remove(alias);
++    junction(source / "junction", destination);
++    rejects([&] { preview_config_transfer(source, destination); }, "symlink");
++    fs::remove(source / "junction");
++    std::cout << "Windows junctions rejected\n";
++    const auto symbolic = source / "symbolic";
++    if (CreateSymbolicLinkW(symbolic.c_str(), (destination / "same").c_str(), 2)) {
++        rejects([&] { preview_config_transfer(source, destination); }, "symlink");
++        fs::remove(symbolic);
++        std::cout << "Windows symbolic link rejected\n";
++    } else {
++        std::cout << "SKIP Windows symbolic link creation: " << GetLastError() << '\n';
++    }
++    auto held = CreateFileW((source / "same").c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
++    assert(held != INVALID_HANDLE_VALUE);
++    bool denied = false;
++    try { replace_config_directory(source, destination); }
++    catch (const fs::filesystem_error&) { denied = true; }
++    CloseHandle(held);
++    assert(denied && read(destination / "same") == "evil" && !fs::exists(lock));
++    held = CreateFileW((destination / "same").c_str(), GENERIC_READ, FILE_SHARE_READ,
++        nullptr, OPEN_EXISTING, 0, nullptr);
++    assert(held != INVALID_HANDLE_VALUE);
++    denied = false;
++    try { replace_config_directory(source, destination); }
++    catch (const fs::filesystem_error&) { denied = true; }
++    CloseHandle(held);
++    assert(denied && read(destination / "same") == "evil" && !fs::exists(lock));
++    assert(!fs::exists(fs::path(destination.native() + L".dotamanager_tmp")));
++    const auto protected_file = source / "same";
++    DWORD descriptor_size = 0;
++    GetFileSecurityW(protected_file.c_str(), DACL_SECURITY_INFORMATION, nullptr, 0, &descriptor_size);
++    std::vector<BYTE> original_security(descriptor_size);
++    assert(GetFileSecurityW(protected_file.c_str(), DACL_SECURITY_INFORMATION,
++        reinterpret_cast<PSECURITY_DESCRIPTOR>(original_security.data()), descriptor_size, &descriptor_size));
++    PSECURITY_DESCRIPTOR restricted = nullptr;
++    assert(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(D;;FR;;;WD)",
++        SDDL_REVISION_1, &restricted, nullptr));
++    assert(SetFileSecurityW(protected_file.c_str(), DACL_SECURITY_INFORMATION, restricted));
++    LocalFree(restricted);
++    denied = false;
++    try { replace_config_directory(source, destination); }
++    catch (const fs::filesystem_error&) { denied = true; }
++    const bool restored_acl = SetFileSecurityW(protected_file.c_str(), DACL_SECURITY_INFORMATION,
++        reinterpret_cast<PSECURITY_DESCRIPTOR>(original_security.data())) != FALSE;
++    assert(restored_acl && denied && read(destination / "same") == "evil" && !fs::exists(lock));
++    std::cout << "Windows denied-read ACL preserved destination\n";
++    std::cout << "Windows junctions and sharing violations preserved destination\n";
++#endif
 +#ifndef _WIN32
 +    fs::create_symlink(source / "same", source / "link");
 +    rejects([&] { preview_config_transfer(source, destination); }, "symlink"); fs::remove(source / "link");
@@ -4232,7 +4336,7 @@
        - name: Compute version
          id: version
          env:
-@@ -61,7 +64,7 @@
+@@ -61,11 +64,16 @@
            path: build/_deps
            key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
        - name: Configure CMake
@@ -4241,7 +4345,17 @@
        - name: Build
          run: cmake --build build --config Release --parallel
        - name: Regression tests
-@@ -77,8 +80,6 @@
+-        run: ctest --test-dir build --build-config Release --output-on-failure
++        run: |
++          ctest --test-dir build --build-config Release --output-on-failure
++          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
++          python tests/windows_release_checks.py build/Release/DotaManager.exe
++          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
++          python tests/windows_crash_checks.py
+       - name: Upload Artifact
+         uses: actions/upload-artifact@v7.0.1
+         with:
+@@ -77,8 +85,6 @@
      needs: compute-version
      runs-on: ubuntu-22.04
      env:
@@ -4250,7 +4364,7 @@
        APPIMAGE_EXTRACT_AND_RUN: "1"
        ARCH: x86_64
        CCACHE_DIR: ${{ github.workspace }}/.ccache
-@@ -124,7 +125,7 @@
+@@ -124,7 +130,7 @@
            key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
            restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
        - name: Configure CMake
@@ -4259,7 +4373,7 @@
  
        - name: Build
          run: cmake --build build --config Release -j"$(nproc)"
-@@ -133,6 +134,7 @@
+@@ -133,6 +139,7 @@
          run: |
            ctest --test-dir build --output-on-failure
            python3 tests/core_checks.py build/_deps/json-src/include
@@ -4267,7 +4381,7 @@
  
        - name: Compiler cache statistics
          run: ccache --show-stats
-@@ -143,7 +145,6 @@
+@@ -143,7 +150,6 @@
            base=https://github.com/linuxdeploy
            wget -q -O "$HOME/ld/linuxdeploy" \
              "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
@@ -4275,7 +4389,7 @@
            wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
              "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
            chmod +x "$HOME/ld/"*
-@@ -221,44 +222,18 @@
+@@ -221,44 +227,18 @@
            fi
            bash scripts/check-appimage.sh "${images[0]}"
  
@@ -4610,3 +4724,167 @@
 +        run: |
 +          ctest --test-dir build --output-on-failure
 +          python3 tests/core_checks.py build/_deps/json-src/include
+--- /dev/null
++++ b/tests/windows_crash_checks.py
+@@ -0,0 +1,105 @@
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++import time
++
++if os.name != "nt":
++    raise SystemExit("Run from an x64 MSVC developer shell on Windows")
++
++project = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory(prefix="dota-windows-crash-") as directory:
++    root = Path(directory)
++    header = root / "hooks.h"
++    header.write_text(r'''
++#include <filesystem>
++void crash_copy(const std::filesystem::path&, const std::filesystem::path&, std::filesystem::copy_options);
++void crash_rename(const std::filesystem::path&, const std::filesystem::path&);
++void crash_rename(const std::filesystem::path&, const std::filesystem::path&, std::error_code&);
++''')
++    source = (project / "src/core/file_ops.cpp").read_text(encoding="utf-8")
++    (root / "instrumented.cpp").write_text('#include "hooks.h"\n' + source.replace(
++        "fs::copy(", "crash_copy(").replace("fs::rename(", "crash_rename("), encoding="utf-8")
++    (root / "driver.cpp").write_text(r'''
++#include "file_ops.h"
++#include <fstream>
++#include <iostream>
++#include <thread>
++#include <chrono>
++namespace fs = std::filesystem;
++fs::path fixture;
++std::wstring phase;
++void pause_at(const wchar_t* value) {
++    if (phase != value) return;
++    std::ofstream(fixture / "ready") << "ready";
++    for (;;) std::this_thread::sleep_for(std::chrono::milliseconds(10));
++}
++void crash_copy(const fs::path& a, const fs::path& b, fs::copy_options options) {
++    fs::copy(a, b, options);
++    pause_at(L"staged");
++}
++void crash_rename(const fs::path& a, const fs::path& b) {
++    fs::rename(a, b);
++    pause_at(b.filename() == "570.dotamanager_backup" ? L"saved" : L"installed");
++}
++void crash_rename(const fs::path& a, const fs::path& b, std::error_code& error) { fs::rename(a, b, error); }
++int wmain(int argc, wchar_t** argv) {
++    if (argc != 3) return 3;
++    fixture = argv[1]; phase = argv[2];
++    try { replace_config_directory(fixture / "source/570", fixture / "destination/570"); }
++    catch (const ConfigFileError& error) { std::cout << error.key; return 2; }
++    return 0;
++}
++''', encoding="utf-8")
++    executable = root / "crash_checks.exe"
++    subprocess.run(["cl", "/nologo", "/std:c++17", "/O2", "/MT", "/utf-8", "/EHsc",
++                    "/I" + str(project / "src/core"), str(root / "instrumented.cpp"),
++                    str(root / "driver.cpp"), "/Fe:" + str(executable), "/link", "advapi32.lib"],
++                   cwd=root, check=True)
++    for phase in ("staged", "saved", "installed"):
++        fixture = root / (phase + " пробел Unicode")
++        source = fixture / "source/570"
++        destination = fixture / "destination/570"
++        temporary = destination.with_name("570.dotamanager_tmp")
++        backup = destination.with_name("570.dotamanager_backup")
++        lock = destination.with_name("570.dotamanager_lock")
++        source.mkdir(parents=True)
++        destination.mkdir(parents=True)
++        (source / "config").write_bytes(b"new")
++        (destination / "config").write_bytes(b"old")
++        child = subprocess.Popen([str(executable), str(fixture), phase])
++        try:
++            deadline = time.monotonic() + 10
++            while not (fixture / "ready").exists():
++                assert child.poll() is None, phase
++                assert time.monotonic() < deadline, phase
++                time.sleep(0.01)
++            contender = subprocess.run([str(executable), str(fixture), "none"], capture_output=True)
++            assert contender.returncode == 2 and contender.stdout == b"operation_locked", phase
++        finally:
++            child.kill()
++            child.wait(timeout=5)
++        assert lock.is_dir(), phase
++        old = backup if backup.exists() else destination
++        assert (old / "config").read_bytes() == b"old", phase
++        if phase == "saved":
++            assert not destination.exists() and temporary.is_dir()
++        if phase == "installed":
++            assert (destination / "config").read_bytes() == b"new" and not temporary.exists()
++        recovery = fixture / "preserved"
++        recovery.mkdir()
++        for path in (destination, temporary, backup):
++            if path.exists():
++                shutil.copytree(path, recovery / path.name)
++        if backup.exists():
++            if destination.exists():
++                destination.rename(fixture / "installed-before-recovery")
++            backup.rename(destination)
++        if temporary.exists():
++            temporary.rename(fixture / "staging-before-recovery")
++        assert (destination / "config").read_bytes() == b"old", phase
++        lock.rmdir()
++        subprocess.run([str(executable), str(fixture), "none"], check=True)
++        assert (destination / "config").read_bytes() == b"new" and not lock.exists(), phase
++        print(phase + ": process kill, competing process, preserved old state, manual recovery and retry passed")
+--- /dev/null
++++ b/tests/windows_release_checks.py
+@@ -0,0 +1,15 @@
++from pathlib import Path
++import re
++import subprocess
++import sys
++
++executable = Path(sys.argv[1]).resolve()
++result = subprocess.run(["dumpbin", "/dependents", str(executable)],
++                        capture_output=True, text=True, check=True)
++dependencies = re.findall(r"^\s+([^\s]+\.dll)\s*$", result.stdout, re.MULTILINE | re.IGNORECASE)
++if not dependencies:
++    raise SystemExit("No PE dependencies found; inspect dumpbin output")
++runtime = [name for name in dependencies if re.match(r"(?:msvcp|vcruntime|concrt|ucrtbased)\d*", name, re.IGNORECASE)]
++if runtime:
++    raise SystemExit("Standalone release requires redistributable DLLs: " + ", ".join(runtime))
++print("Standalone PE dependencies passed: " + ", ".join(dependencies))
+--- a/tests/update_install_checks.cpp
++++ b/tests/update_install_checks.cpp
+@@ -21,6 +21,10 @@
+ int main(int argc, char** argv) {
+     auto arguments = update_arguments(argc, argv);
+     if (arguments.size() == 3 && arguments[1] == "--apply-update") return update_helper_dispatch(arguments);
++    if (arguments.size() == 3 && arguments[1] == "--update-error") {
++        write(fs::u8path(arguments[2]).parent_path() / "rollback-started", "restored");
++        return 0;
++    }
+     if (arguments.size() == 3 && arguments[1] == "--update-started") {
+         update_install_confirm_started(arguments);
+         write(fs::u8path(arguments[2]).parent_path() / "child-opened", "started");
+@@ -89,6 +93,24 @@
+     }
+     assert(file_sha256(target) == file_sha256(executable));
+     std::this_thread::sleep_for(std::chrono::seconds(3));
++    const auto failed_folder = root / fs::u8path("failed startup пробел");
++    fs::create_directory(failed_folder);
++    const auto failed_target = failed_folder / "application.exe";
++    auto failed_staged = failed_target; failed_staged += ".update-new";
++    fs::copy_file(executable, failed_target);
++    write(failed_staged, "verified payload that is not an executable");
++    parent = launch_update_process(executable, {"--test-parent", failed_folder.u8string()});
++    assert(update_process_exited(parent, 15000));
++    release_update_process(parent);
++    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
++    while (!fs::exists(failed_folder / "rollback-started")) {
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(50));
++    }
++    assert(file_sha256(failed_target) == file_sha256(executable));
++    assert(read(failed_folder / "error.txt").find("previous application restored") != std::string::npos);
++    assert(!fs::exists(failed_staged) && !fs::exists(fs::u8path(failed_target.u8string() + ".update-old")));
++    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+     fs::remove_all(root);
+     std::cout << "Executable replacement, rollback, corrupt updates and helper restart passed\n";
+ }
