@@ -6,7 +6,6 @@ import sys
 
 LIMITS = {"GLIBC": (2, 35), "GLIBCXX": (3, 4, 30), "CXXABI": (1, 3, 13)}
 
-
 def required_versions(output):
     in_needs = False
     versions = []
@@ -16,7 +15,6 @@ def required_versions(output):
         if in_needs:
             versions.extend(re.findall(r"Name: ((?:GLIBCXX|GLIBC|CXXABI)_[\w.]+)", line))
     return versions
-
 
 def check(root):
     checked = set()
@@ -48,7 +46,6 @@ def check(root):
     if failures:
         raise RuntimeError("\n".join(failures))
     print(f"ABI check passed for {len(checked)} ELF files")
-
 
 if __name__ == "__main__":
     check(Path(sys.argv[1]).resolve())

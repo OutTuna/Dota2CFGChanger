@@ -14,11 +14,13 @@
 #include <thread>
 #include <condition_variable>
 #include <chrono>
+#include <memory>
 
 namespace {
 std::thread scan_worker;
 std::atomic<bool> stop_scan{false};
 std::atomic<bool> stopping_app{false};
+unsigned long long preview_generation = 0;
 struct ProfileRequest {
     bool fetching = false;
     bool success = false;
@@ -103,7 +105,7 @@ void load_settings() {
                 fs::remove(settings_path(), cleanup_error);
             }
 #endif
-        } catch (...) {}
+        } catch (const std::exception& error) { set_status("settings_load_failed", error.what()); }
     }
     if (fs::exists(nick_cache_path())) {
         try {
@@ -111,7 +113,7 @@ void load_settings() {
             json j; f >> j;
             std::lock_guard<std::mutex> lock(g_data_mutex);
             for (auto& el : j.items()) nick_cache[el.key()] = el.value();
-        } catch (...) {}
+        } catch (const std::exception&) { set_status("profile_cache_invalid", CACHE_FILE); }
     }
     if (fs::exists(avatar_url_cache_path())) {
         try {
@@ -119,7 +121,7 @@ void load_settings() {
             json j; f >> j;
             std::lock_guard<std::mutex> lock(g_data_mutex);
             for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
-        } catch (...) {}
+        } catch (const std::exception&) { set_status("profile_cache_invalid", AVATAR_URL_CACHE_FILE); }
     }
     ++g_cache_generation;
     app_ui_changed();
@@ -293,6 +295,9 @@ static void scan_thread() {
             std::string fname = it->path().filename().u8string();
             if (!fname.empty() &&
                 std::all_of(fname.begin(), fname.end(), [](unsigned char c) { return ::isdigit(c); })) {
+                if (!steam_api::steam3_to_64(fname)) continue;
+                try { reject_config_link(it->path()); }
+                catch (const ConfigFileError&) { if (scan_error.empty()) scan_error = it->path().u8string(); continue; }
                 all_ids.push_back(fname);
                 list.push_back(fname);
             }
@@ -338,7 +343,38 @@ static void scan_thread() {
     ui_events::request_redraw();
 }
 
-void copy_config() {
+void cancel_copy_preview() {
+    ++preview_generation;
+    g_copy_preview_ready = false;
+    g_copy_preview = {};
+}
+
+void prepare_copy_preview() {
+    cancel_copy_preview();
+    const auto request = preview_generation;
+    std::filesystem::path source, destination;
+    {
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        int s = selected_src.load(), d = selected_dst.load();
+        if (s < 0 || d < 0 || s >= static_cast<int>(src_list.size()) || d >= static_cast<int>(dst_list.size())) return;
+        source = fs::u8path(src_path) / src_list[s] / DOTA_ID;
+        destination = fs::u8path(dst_path) / dst_list[d] / DOTA_ID;
+    }
+    file_tasks_start([source, destination, request]() -> FileTaskCompletion {
+        try {
+            auto preview = preview_config_transfer(source, destination);
+            return [preview = std::move(preview), request]() mutable {
+                if (request != preview_generation) return;
+                g_copy_preview = std::move(preview);
+                g_copy_preview_ready = true;
+            };
+        } catch (const ConfigFileError& error) { set_status(error.key, error.detail); }
+        catch (const std::exception& error) { set_status("error", error.what()); }
+        return {};
+    });
+}
+
+void copy_config(const ConfigPreview* preview) {
     if (g_scanning.load() || file_tasks_busy()) return;
     int s_idx = selected_src.load();
     int d_idx = selected_dst.load();
@@ -357,7 +393,8 @@ void copy_config() {
         destination_path = dst_path;
     }
 
-    if (!file_tasks_start([s_id, d_id, s_nick, d_nick, source_path, destination_path]() -> FileTaskCompletion {
+    const auto expected = preview ? std::make_shared<ConfigPreview>(*preview) : nullptr;
+    if (!file_tasks_start([s_id, d_id, s_nick, d_nick, source_path, destination_path, expected]() -> FileTaskCompletion {
         set_status("working");
         try {
             fs::path src = fs::u8path(source_path) / s_id / DOTA_ID;
@@ -371,7 +408,7 @@ void copy_config() {
                 return {};
             }
 
-            auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id);
+            auto result = copy_config_with_backup(src, dst, fs::u8path(config_dir()) / "backups", d_id, expected.get());
             if (!result.retained_backup.empty()) set_status("backup_retained", result.retained_backup.u8string());
             else if (!result.cleanup_error.empty()) set_status("backup_cleanup_failed", result.cleanup_error);
             else set_status("copy_success", d_id);

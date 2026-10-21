@@ -1,4 +1,5 @@
 import json
+import shlex
 import os
 from pathlib import Path
 import subprocess
@@ -38,7 +39,7 @@ void test_copy(const std::filesystem::path&, const std::filesystem::path&, std::
 #include <system_error>
 namespace fs = std::filesystem;
 bool install_failure = false, restore_failure = false, save_failure = false;
-bool copy_failure = false, cleanup_failure = false;
+bool copy_failure = false, cleanup_failure = false, copy_corruption = false, source_edit = false, destination_edit = false;
 bool suffix(const fs::path& p, const char* s) { return p.u8string().find(s) != std::string::npos; }
 void test_rename(const fs::path& from, const fs::path& to) {
     if ((install_failure && suffix(from, ".dotamanager_tmp")) || (save_failure && suffix(to, ".dotamanager_backup")))
@@ -61,6 +62,12 @@ void test_copy(const fs::path& from, const fs::path& to, fs::copy_options option
         throw fs::filesystem_error("Injected copy failure", from, to, std::make_error_code(std::errc::no_space_on_device));
     }
     fs::copy(from, to, options);
+    if (copy_corruption) std::ofstream(to / "cfg/options.txt") << "bad";
+    if (source_edit) std::ofstream(from / "cfg/options.txt") << "changed source";
+    if (destination_edit) {
+        auto original = to; original.replace_filename(to.filename().u8string().substr(0, to.filename().u8string().find(".dotamanager_tmp")));
+        std::ofstream(original / "cfg/options.txt") << "external change";
+    }
 }
 std::string read(const fs::path& path) { std::ifstream f(path); return {std::istreambuf_iterator<char>(f), {}}; }
 void put(const fs::path& path, const char* text) { fs::create_directories(path.parent_path()); std::ofstream(path) << text; }
@@ -86,6 +93,13 @@ int main(int argc, char** argv) {
     auto expect_failure = [&] { bool failed = false; try { replace_config_directory(src, dst); } catch (...) { failed = true; } assert(failed); };
     assert(replace_config_directory(src, dst).empty());
     assert(read(dst / "cfg/options.txt") == "new" && !fs::exists(temp) && !fs::exists(backup));
+    reset(); copy_corruption = true; expect_failure(); copy_corruption = false;
+    assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
+    reset(); source_edit = true; expect_failure(); source_edit = false;
+    assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
+    put(src / "cfg/options.txt", "new");
+    reset(); destination_edit = true; expect_failure(); destination_edit = false;
+    assert(read(dst / "cfg/options.txt") == "external change" && !fs::exists(temp));
     reset(); copy_failure = true; expect_failure(); copy_failure = false;
     assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
     save_failure = true; expect_failure(); save_failure = false;
@@ -124,8 +138,9 @@ int main(int argc, char** argv) {
 }
 """)
     compiler = os.environ.get("CXX", "c++")
+    extra_flags = shlex.split(os.environ.get("CXXFLAGS", ""))
     executable = temp / "checks"
-    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
+    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
     env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
     subprocess.run([str(executable), str(temp)], env=env, check=True)
     app = (root / "src/core/app.cpp").read_text()
@@ -164,11 +179,11 @@ int main(int argc, char** argv) {
     assert(set_config_path(src_path, (fs::u8path(argv[1]) / "new_source").u8string()));
     assert(selected_src == -1 && src_list.empty());
     std::ofstream f(settings_path()); f << "{invalid"; f.close(); load_settings();
-    assert(src_path[0] != 0);
+    assert(src_path[0] != 0 && status_msg == "settings_load_failed");
     std::cout << "Settings persistence, UTF-8 paths and path length checks passed\n";
 }
 """
     (temp / "settings.cpp").write_text(settings_source)
     settings_executable = temp / "settings_checks"
-    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
+    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
     subprocess.run([str(settings_executable), str(temp)], env=env, check=True)

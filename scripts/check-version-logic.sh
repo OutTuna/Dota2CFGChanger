@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# Test-point #4: does the version-bump logic itself do the right thing.
-#
-# Builds a disposable, throwaway git repo (NOT your real one -- this
-# never touches the repo you run it from) with a few scripted commit
-# histories, and checks that scripts/compute-next-version.sh bumps
-# minor/major exactly when expected. Run this after touching
-# scripts/compute-next-version.sh, or any time you're not sure whether a
-# given commit message would trigger a major bump.
-#
-# Usage: ./scripts/check-version-logic.sh
 
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,6 +21,8 @@ run_case() {
     git config user.email "test@example.com"
     echo "init" > file.txt && git add file.txt && git commit -qm "chore: init"
     git tag v1.4
+    git tag alpha-v99.99-123-1
+    git tag beta-v99.99-123-1
 
     for msg in "${commit_messages[@]}"; do
       echo "$msg" >> file.txt
@@ -72,8 +64,6 @@ run_case "scoped conventional-commit ! marker" "v2.0" \
 run_case "[major] literal marker" "v2.0" \
   "big rewrite of the avatar cache [major]"
 
-# The "no tag exists yet" case needs its own repo with no v1.4 baseline
-# tag at all, so it's set up by hand instead of via run_case.
 repo="$SANDBOX/no_tag_yet"
 git init -q "$repo"
 (

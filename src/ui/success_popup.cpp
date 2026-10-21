@@ -3,6 +3,7 @@
 #include "localization.h"
 #include <GLFW/glfw3.h>
 #include <cmath>
+#include <algorithm>
 
 void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     if (!g_success.show) return;
@@ -11,7 +12,7 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     const float CLOSE_DUR = 0.25f;
 
     if (!g_success.closing) {
-        g_success.anim_t += delta_time;
+        g_success.anim_t = std::min(OPEN_DUR, g_success.anim_t + delta_time);
     } else {
         g_success.close_t += delta_time;
         if (g_success.close_t >= CLOSE_DUR) {
@@ -44,7 +45,7 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     const float pop_x2 = cx + sw * 0.5f;
     const float pop_y2 = cy + sh * 0.5f;
 
-    const float time = (float)glfwGetTime();
+    const float time = g_success.anim_t;
     const float pulse = 0.5f + 0.5f * sinf(time * 2.8f);
 
     ImGui::SetNextWindowPos({ 0, 0 });
@@ -137,9 +138,11 @@ void ui_render_success_popup(ImFont* font_big, ImVec2 ds, float delta_time) {
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("source_path"));
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.src_folder.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g_success.src_folder.c_str());
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", tr("destination_path"));
     ImGui::SameLine();
     ImGui::TextColored({ 0.55f, 0.55f, 0.60f, 1 }, "%s", g_success.dst_folder.c_str());
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g_success.dst_folder.c_str());
 
     ImGui::Spacing();
     ImGui::Spacing();
