@@ -48,6 +48,14 @@ before manual recovery; if the executable is missing, recover `.update-old` to i
 original name. Use the official release page to replace the executable if unsure.
 Do not run an unverified `.update-new` file.
 
+If both the executable and `.update-old` exist, keep both before choosing which
+version to restore. A process can stop after replacement but before startup
+confirmation or old-file cleanup. The mere presence of the new executable does
+not prove successful startup. After preserving the files and closing every helper,
+move the new executable aside and recover `.update-old` under the original name
+to return to the previous version. Preserve or move any remaining `.update-new`
+before retrying, so the updater does not mistake it for an active transaction.
+
 A failed download can leave `<asset>.download/` inside the versioned updates
 cache. After closing all instances, preserve any diagnostic information and remove
 that incomplete workspace before retrying. Never remove an active download.

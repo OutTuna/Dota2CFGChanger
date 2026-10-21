@@ -26,6 +26,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (arguments.size() == 3 && arguments[1] == "--update-started") {
+        if (fs::exists(fs::u8path(arguments[2]).parent_path() / "fail-startup")) return 7;
         update_install_confirm_started(arguments);
         write(fs::u8path(arguments[2]).parent_path() / "child-opened", "started");
         std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -98,13 +99,19 @@ int main(int argc, char** argv) {
     const auto failed_target = failed_folder / "application.exe";
     auto failed_staged = failed_target; failed_staged += ".update-new";
     fs::copy_file(executable, failed_target);
-    write(failed_staged, "verified payload that is not an executable");
+    fs::copy_file(executable, failed_staged);
+    write(failed_folder / "fail-startup", "exit before startup confirmation");
     parent = launch_update_process(executable, {"--test-parent", failed_folder.u8string()});
     assert(update_process_exited(parent, 15000));
     release_update_process(parent);
     deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     while (!fs::exists(failed_folder / "rollback-started")) {
-        assert(std::chrono::steady_clock::now() < deadline);
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::cerr << "Startup rollback timed out: target=" << fs::exists(failed_target)
+                << ", staged=" << fs::exists(failed_staged) << '\n';
+            if (fs::exists(failed_folder / "error.txt")) std::cerr << read(failed_folder / "error.txt") << '\n';
+            return 1;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     assert(file_sha256(failed_target) == file_sha256(executable));

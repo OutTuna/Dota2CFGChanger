@@ -258,6 +258,7 @@ interrupted transfers using temporary fixtures:
 ```powershell
 python tests/windows_release_checks.py build/Release/DotaManager.exe
 python tests/windows_crash_checks.py
+python tests/windows_update_crash_checks.py build
 ```
 
 | Workflow | Validation |
