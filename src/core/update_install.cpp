@@ -2,6 +2,8 @@
 #include "checksum.h"
 #include "platform.h"
 #include "platform/update_process.h"
+#include "json_fields.h"
+#include "file_ops.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <chrono>
@@ -35,6 +37,43 @@ bool wait_ready(const fs::path& path, const UpdateProcess& process, unsigned sec
 }
 }
 
+UpdateInstallJob parse_update_install_job(const std::string& body) {
+    auto data = nlohmann::json::parse(body);
+    UpdateInstallJob job;
+    job.target = fs::u8path(data.at("target").get<std::string>());
+    job.staged = fs::u8path(data.at("staged").get<std::string>());
+    auto expected = job.target; expected += ".update-new";
+    if (!job.target.is_absolute() || job.staged != expected) throw std::runtime_error("Invalid updater paths");
+    job.release.digest = data.at("digest").get<std::string>();
+    job.release.size = json_unsigned(data.at("size"), MAX_UPDATE_BYTES);
+    job.parent = json_unsigned(data.at("parent"), maximum_update_process_id());
+    if (!job.release.size || !job.parent) throw std::runtime_error("Invalid updater size or parent");
+    return job;
+}
+
+void cleanup_update_installers() {
+    try {
+        auto root = fs::u8path(config_dir()) / "updates";
+        reject_config_link(root);
+        if (!fs::is_directory(fs::symlink_status(root))) return;
+        for (const auto& entry : fs::directory_iterator(root)) {
+            if (entry.path().filename().u8string().rfind("installer-", 0) != 0 ||
+                !fs::is_directory(entry.symlink_status())) continue;
+            reject_config_link(entry.path());
+            auto marker = entry.path() / "completed";
+            if (!fs::is_regular_file(fs::symlink_status(marker))) continue;
+            std::ifstream input(marker, std::ios::binary);
+            std::string filename;
+            std::getline(input, filename);
+            auto helper = fs::u8path(filename);
+            if (filename.empty() || helper != helper.filename() || helper == "." || helper == ".." || helper == "completed") continue;
+            std::error_code error;
+            fs::remove(entry.path() / helper, error);
+            if (!error) fs::remove_all(entry.path(), error);
+        }
+    } catch (const std::exception&) {}
+}
+
 void replace_update_executable(const fs::path& staged, const fs::path& target,
     const ReleaseInfo& release, const std::function<bool()>& launch) {
     verify(staged, release);
@@ -60,6 +99,7 @@ void replace_update_executable(const fs::path& staged, const fs::path& target,
 
 void prepare_update_install(const fs::path& downloaded, const ReleaseInfo& release,
     const std::function<bool()>& active) {
+    cleanup_update_installers();
     verify(downloaded, release);
     auto target = running_update_target();
     auto staged = target; staged += ".update-new";
@@ -108,17 +148,15 @@ int update_helper_dispatch(const std::vector<std::string>& arguments) {
     bool application_closed = false;
     try {
         std::ifstream input(job);
-        nlohmann::json data; input >> data;
+        if (!input) throw std::runtime_error("Cannot read updater job");
+        std::string body{std::istreambuf_iterator<char>(input), {}};
+        auto data = parse_update_install_job(body);
         input.close();
-        target = fs::u8path(data.at("target").get<std::string>());
-        auto staged = fs::u8path(data.at("staged").get<std::string>());
-        auto expected = target; expected += ".update-new";
-        if (!target.is_absolute() || staged != expected) throw std::runtime_error("Invalid updater paths");
-        ReleaseInfo release;
-        release.digest = data.at("digest").get<std::string>();
-        release.size = data.at("size").get<std::uint64_t>();
+        target = data.target;
+        const auto& staged = data.staged;
+        const auto& release = data.release;
         verify(staged, release);
-        parent = watch_update_parent(data.at("parent").get<std::uint64_t>());
+        parent = watch_update_parent(data.parent);
         write_text(job.parent_path() / "ready", "ready");
         if (!update_process_exited(parent, 60000)) throw std::runtime_error("Application did not close; update not installed");
         release_update_process(parent);
@@ -142,6 +180,13 @@ int update_helper_dispatch(const std::vector<std::string>& arguments) {
         fs::remove(job, ec);
         fs::remove(job.parent_path() / "ready", ec);
         fs::remove(job.parent_path() / "started", ec);
+        try {
+            if (job.filename() == "job.json" && job.parent_path().filename().u8string().rfind("installer-", 0) == 0 &&
+                fs::weakly_canonical(job.parent_path().parent_path()) == fs::weakly_canonical(fs::u8path(config_dir()) / "updates")) {
+                write_text(job.parent_path() / "completed", target.filename().u8string());
+                cleanup_update_installers();
+            }
+        } catch (const std::exception&) {}
         return 0;
     } catch (const std::exception& error) {
         std::string detail = error.what();
