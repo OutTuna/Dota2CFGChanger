@@ -1,4 +1,5 @@
 #include "release_info.h"
+#include "json_fields.h"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <regex>
@@ -43,11 +44,8 @@ ReleaseInfo parse_release_info(const std::string& body, bool windows) {
         if (!asset.contains("digest") || !asset["digest"].is_string()) continue;
         auto digest = asset["digest"].get<std::string>();
         if (!std::regex_match(digest, std::regex("sha256:[0-9a-f]{64}"))) continue;
-        const auto& encoded_size = asset.at("size");
-        if (!encoded_size.is_number_integer() || (!encoded_size.is_number_unsigned() && encoded_size.get<std::int64_t>() <= 0))
-            throw std::runtime_error("Invalid asset size");
-        auto size = encoded_size.get<std::uint64_t>();
-        if (size == 0 || size > 512ULL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
+        auto size = json_unsigned(asset.at("size"), MAX_UPDATE_BYTES);
+        if (size == 0) throw std::runtime_error("Invalid asset size");
         result.asset_name = asset_name;
         result.download_url = url;
         result.digest = digest.substr(7);
