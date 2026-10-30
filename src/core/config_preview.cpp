@@ -19,7 +19,7 @@ ConfigPreview preview_config_transfer(const fs::path& source, const fs::path& de
         if (found != result.destination_state.end()) {
             const auto& previous = found->second;
             change = item.directory == previous.directory && (item.directory ||
-                (item.size == previous.size && config_files_equal(source / name, destination / name)))
+                (item.size == previous.size && item.digest == previous.digest))
                 ? ConfigChange::Unchanged : ConfigChange::Replace;
         }
         if (item.size > std::numeric_limits<std::uintmax_t>::max() - result.copy_bytes)
