@@ -17,7 +17,7 @@ struct BackupCopyResult {
 ConfigBackup create_config_backup(const std::filesystem::path& destination,
     const std::filesystem::path& root, const std::string& account);
 std::vector<ConfigBackup> list_config_backups(const std::filesystem::path& root,
-    const std::string& account);
+    const std::string& account, std::vector<std::string>* invalid = nullptr);
 BackupCopyResult copy_config_with_backup(const std::filesystem::path& source,
     const std::filesystem::path& destination, const std::filesystem::path& root,
     const std::string& account, const ConfigPreview* preview = nullptr);
