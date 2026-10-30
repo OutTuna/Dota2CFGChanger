@@ -78,6 +78,8 @@
   "backup_restore_warning": "Restore backup from {value}? The destination config will be replaced. Its current contents will be backed up first. Close Dota 2 and Steam before continuing.",
   "backup_restored": "Backup restored for account {value}.",
   "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
+  "backup_entries_invalid": "Skipped invalid backup entries: {value}. Their files were kept.",
+  "backup_refresh_failed": "Backup restored, but the list could not be refreshed: {value}",
   "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
   "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}",
   "update_package_managed": "This installation is managed by your package manager. Update the package there; on Arch with yay or paru, run yay -Syu or paru -Syu.",
