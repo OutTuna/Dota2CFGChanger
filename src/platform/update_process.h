@@ -10,6 +10,7 @@ struct UpdateProcess {
 };
 std::filesystem::path running_update_target();
 std::uint64_t current_process_id();
+std::uint64_t maximum_update_process_id();
 UpdateProcess watch_update_parent(std::uint64_t id);
 UpdateProcess launch_update_process(const std::filesystem::path& executable,
     const std::vector<std::string>& arguments);
