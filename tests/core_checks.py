@@ -137,10 +137,14 @@ int main(int argc, char** argv) {
     std::cout << "Paths, copy failures, rollback, recovery and translations passed\n";
 }
 """)
+    crypto_flags = ["-lbcrypt", "-ladvapi32"] if os.name == "nt" else ["-lcrypto"]
+    if sys.platform == "darwin":
+        crypto_prefix = os.environ.get("OPENSSL_ROOT_DIR") or subprocess.check_output(["brew", "--prefix", "openssl"], text=True).strip()
+        crypto_flags = ["-I" + str(Path(crypto_prefix) / "include"), "-L" + str(Path(crypto_prefix) / "lib"), *crypto_flags]
     compiler = os.environ.get("CXX", "c++")
     extra_flags = shlex.split(os.environ.get("CXXFLAGS", ""))
     executable = temp / "checks"
-    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
+    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), str(root / "src/core/checksum.cpp"), *crypto_flags, "-o", str(executable)], check=True)
     env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
     subprocess.run([str(executable), str(temp)], env=env, check=True)
     app = (root / "src/core/app.cpp").read_text()
@@ -149,6 +153,8 @@ int main(int argc, char** argv) {
 #include "app.h"
 #include "file_ops.h"
 #include "localization.h"
+#include "json_fields.h"
+#include <optional>
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
@@ -185,5 +191,5 @@ int main(int argc, char** argv) {
 """
     (temp / "settings.cpp").write_text(settings_source)
     settings_executable = temp / "settings_checks"
-    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
+    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), str(root / "src/core/checksum.cpp"), *crypto_flags, "-o", str(settings_executable)], check=True)
     subprocess.run([str(settings_executable), str(temp)], env=env, check=True)
