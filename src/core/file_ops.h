@@ -24,8 +24,9 @@ struct ConfigEntry {
     bool directory = false;
     std::uintmax_t size = 0;
     std::filesystem::file_time_type modified{};
+    std::string digest;
     bool operator==(const ConfigEntry& other) const {
-        return directory == other.directory && size == other.size && modified == other.modified;
+        return directory == other.directory && size == other.size && modified == other.modified && digest == other.digest;
     }
 };
 using ConfigTree = std::map<std::filesystem::path, ConfigEntry>;
