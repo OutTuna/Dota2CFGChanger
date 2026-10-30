@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <cstdlib>
+#include <limits>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -60,8 +61,17 @@ std::uint64_t current_process_id() {
 #endif
 }
 
+std::uint64_t maximum_update_process_id() {
+#ifdef _WIN32
+    return (std::numeric_limits<DWORD>::max)();
+#else
+    return (std::numeric_limits<pid_t>::max)();
+#endif
+}
+
 UpdateProcess watch_update_parent(std::uint64_t id) {
-    if (!id || id == current_process_id()) throw std::runtime_error("Invalid updater parent process");
+    if (!id || id > maximum_update_process_id() || id == current_process_id())
+        throw std::runtime_error("Invalid updater parent process");
 #ifdef _WIN32
     HANDLE handle = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(id));
     if (!handle) throw std::runtime_error("Cannot wait for the running application");
