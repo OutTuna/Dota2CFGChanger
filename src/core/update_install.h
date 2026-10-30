@@ -4,6 +4,15 @@
 #include <functional>
 #include <vector>
 
+struct UpdateInstallJob {
+    std::filesystem::path target;
+    std::filesystem::path staged;
+    ReleaseInfo release;
+    std::uint64_t parent = 0;
+};
+UpdateInstallJob parse_update_install_job(const std::string& body);
+void cleanup_update_installers();
+
 void replace_update_executable(const std::filesystem::path& staged,
     const std::filesystem::path& target, const ReleaseInfo& release,
     const std::function<bool()>& launch);
