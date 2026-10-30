@@ -5515,7 +5515,7 @@
  #include <nlohmann/json.hpp>
  #include <fstream>
  #include <chrono>
-@@ -33,6 +35,43 @@
+@@ -33,6 +35,44 @@
      } while (std::chrono::steady_clock::now() < deadline);
      return false;
  }
@@ -5549,6 +5549,7 @@
 +            std::ifstream input(marker, std::ios::binary);
 +            std::string filename;
 +            std::getline(input, filename);
++            input.close();
 +            auto helper = fs::u8path(filename);
 +            if (filename.empty() || helper != helper.filename() || helper == "." || helper == ".." || helper == "completed") continue;
 +            std::error_code error;
@@ -5559,7 +5560,7 @@
  }
  
  void replace_update_executable(const fs::path& staged, const fs::path& target,
-@@ -60,6 +99,7 @@
+@@ -60,6 +100,7 @@
  
  void prepare_update_install(const fs::path& downloaded, const ReleaseInfo& release,
      const std::function<bool()>& active) {
@@ -5567,7 +5568,7 @@
      verify(downloaded, release);
      auto target = running_update_target();
      auto staged = target; staged += ".update-new";
-@@ -108,17 +148,15 @@
+@@ -108,17 +149,15 @@
      bool application_closed = false;
      try {
          std::ifstream input(job);
@@ -5592,7 +5593,7 @@
          write_text(job.parent_path() / "ready", "ready");
          if (!update_process_exited(parent, 60000)) throw std::runtime_error("Application did not close; update not installed");
          release_update_process(parent);
-@@ -142,6 +180,13 @@
+@@ -142,6 +181,13 @@
          fs::remove(job, ec);
          fs::remove(job.parent_path() / "ready", ec);
          fs::remove(job.parent_path() / "started", ec);
