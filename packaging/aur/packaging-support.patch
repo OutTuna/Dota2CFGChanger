@@ -113,7 +113,7 @@
      set_property(TARGET DotaManager PROPERTY WIN32_EXECUTABLE ON)
  
      if(MINGW)
-@@ -209,9 +237,45 @@
+@@ -209,59 +237,17 @@
      endif()
  endif()
  
@@ -129,89 +129,60 @@
  option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
  if(DOTAMANAGER_BUILD_TESTS)
      enable_testing()
-+    add_executable(config_safety_checks tests/config_safety_checks.cpp)
-+    target_link_libraries(config_safety_checks PRIVATE dotamanager_core)
-+    if(MSVC)
-+        target_compile_options(config_safety_checks PRIVATE /UNDEBUG /utf-8)
-+    else()
-+        target_compile_options(config_safety_checks PRIVATE -UNDEBUG)
-+    endif()
-+    add_test(NAME config_safety_checks COMMAND config_safety_checks)
-+    set_tests_properties(config_safety_checks PROPERTIES TIMEOUT 20)
-+    add_executable(ui_state_checks tests/ui_state_checks.cpp)
-+    target_link_libraries(ui_state_checks PRIVATE dotamanager_core)
-+    if(MSVC)
-+        target_compile_options(ui_state_checks PRIVATE /UNDEBUG /utf-8)
-+    else()
-+        target_compile_options(ui_state_checks PRIVATE -UNDEBUG)
-+    endif()
-+    add_test(NAME ui_state_checks COMMAND ui_state_checks)
-+    set_tests_properties(ui_state_checks PROPERTIES TIMEOUT 10)
-+    add_executable(file_tasks_checks tests/file_tasks_checks.cpp)
-+    target_link_libraries(file_tasks_checks PRIVATE dotamanager_core)
-+    if(MSVC)
-+        target_compile_options(file_tasks_checks PRIVATE /UNDEBUG /utf-8)
-+    else()
-+        target_compile_options(file_tasks_checks PRIVATE -UNDEBUG)
-+    endif()
-+    add_test(NAME file_tasks_checks COMMAND file_tasks_checks)
-+    set_tests_properties(file_tasks_checks PROPERTIES TIMEOUT 10)
-     add_executable(backup_checks tests/backup_checks.cpp)
-     target_link_libraries(backup_checks PRIVATE dotamanager_core)
-     if(MSVC)
-@@ -231,9 +295,9 @@
-     set_tests_properties(update_install_checks PROPERTIES TIMEOUT 60)
-     add_executable(version_build_checks tests/version_build_checks.cpp)
-     target_link_libraries(version_build_checks PRIVATE dotamanager_core)
+-    add_executable(backup_checks tests/backup_checks.cpp)
+-    target_link_libraries(backup_checks PRIVATE dotamanager_core)
+-    if(MSVC)
+-        target_compile_options(backup_checks PRIVATE /UNDEBUG /utf-8)
+-    else()
+-        target_compile_options(backup_checks PRIVATE -UNDEBUG)
+-    endif()
+-    add_test(NAME backup_checks COMMAND backup_checks)
+-    add_executable(update_install_checks tests/update_install_checks.cpp)
+-    target_link_libraries(update_install_checks PRIVATE dotamanager_core)
+-    if(MSVC)
+-        target_compile_options(update_install_checks PRIVATE /UNDEBUG /utf-8)
+-    else()
+-        target_compile_options(update_install_checks PRIVATE -UNDEBUG)
+-    endif()
+-    add_test(NAME update_install_checks COMMAND update_install_checks)
+-    set_tests_properties(update_install_checks PROPERTIES TIMEOUT 60)
+-    add_executable(version_build_checks tests/version_build_checks.cpp)
+-    target_link_libraries(version_build_checks PRIVATE dotamanager_core)
 -    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}")
-+    add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}" "${APP_RELEASE_CHANNEL}")
-     add_executable(update_checks tests/update_checks.cpp src/core/release_info.cpp src/core/checksum.cpp)
+-    add_executable(update_checks tests/update_checks.cpp src/core/release_info.cpp src/core/checksum.cpp)
 -    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp)
-+    add_executable(update_service_checks tests/update_service_checks.cpp src/core/updates.cpp src/core/release_info.cpp src/core/checksum.cpp src/core/file_ops.cpp)
-     add_executable(avatar_checks tests/avatar_checks.cpp)
-     target_link_libraries(avatar_checks PRIVATE dotamanager_core)
-     add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp src/ui/backups_popup.cpp
-@@ -263,5 +327,39 @@
-             add_test(NAME ${test_target} COMMAND ${test_target})
-         endif()
-     endforeach()
+-    add_executable(avatar_checks tests/avatar_checks.cpp)
+-    target_link_libraries(avatar_checks PRIVATE dotamanager_core)
+-    add_executable(update_ui_checks tests/update_ui_checks.cpp src/ui/update_popup.cpp src/ui/backups_popup.cpp
+-        ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
+-        ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
+-    target_include_directories(update_ui_checks PRIVATE ${imgui_SOURCE_DIR})
+-    target_link_libraries(update_ui_checks PRIVATE dotamanager_core)
+-    foreach(test_target update_checks update_service_checks avatar_checks update_ui_checks)
+-        target_include_directories(${test_target} PRIVATE
+-            ${EMBEDDED_THEMES_DIR}
+-            ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
+-            ${CMAKE_SOURCE_DIR}/src/network ${CMAKE_SOURCE_DIR}/src/platform)
+-        target_link_libraries(${test_target} PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
+-        if(WIN32)
+-            target_link_libraries(${test_target} PRIVATE bcrypt)
+-        else()
+-            target_link_libraries(${test_target} PRIVATE OpenSSL::Crypto)
+-        endif()
+-        if(MSVC)
+-            target_compile_options(${test_target} PRIVATE /UNDEBUG /utf-8)
+-        else()
+-            target_compile_options(${test_target} PRIVATE -UNDEBUG)
+-        endif()
+-        if(test_target STREQUAL "avatar_checks")
+-            add_test(NAME ${test_target} COMMAND ${test_target} "${CMAKE_SOURCE_DIR}/resources/themes/bg_crimson.png")
+-        else()
+-            add_test(NAME ${test_target} COMMAND ${test_target})
+-        endif()
+-    endforeach()
 -    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9")
 -endif()
-+    add_executable(preview_ui_checks tests/preview_ui_checks.cpp src/ui/panels.cpp src/ui/main_window.cpp
-+        ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
-+        ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
-+    target_include_directories(preview_ui_checks PRIVATE ${imgui_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
-+    target_link_libraries(preview_ui_checks PRIVATE dotamanager_core)
-+    if(MSVC)
-+        target_compile_options(preview_ui_checks PRIVATE /UNDEBUG /utf-8)
-+    else()
-+        target_compile_options(preview_ui_checks PRIVATE -UNDEBUG)
-+    endif()
-+    add_test(NAME preview_ui_checks COMMAND preview_ui_checks)
-+    set_tests_properties(preview_ui_checks PROPERTIES TIMEOUT 20)
-+    target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
-+    add_executable(package_update_checks tests/package_update_checks.cpp src/core/updates.cpp
-+        src/core/release_info.cpp src/core/checksum.cpp src/core/file_ops.cpp)
-+    target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
-+        ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
-+    target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
-+    target_compile_definitions(package_update_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=1)
-+    if(MSVC)
-+        target_compile_options(package_update_checks PRIVATE /UNDEBUG /utf-8)
-+        target_link_libraries(package_update_checks PRIVATE bcrypt)
-+    else()
-+        target_compile_options(package_update_checks PRIVATE -UNDEBUG)
-+        if(WIN32)
-+            target_link_libraries(package_update_checks PRIVATE bcrypt)
-+        else()
-+            target_link_libraries(package_update_checks PRIVATE OpenSSL::Crypto)
-+        endif()
-+    endif()
-+    add_test(NAME package_update_checks COMMAND package_update_checks)
-+    set_tests_properties(ui_state_checks file_tasks_checks backup_checks version_build_checks
-+        update_checks update_service_checks avatar_checks update_ui_checks preview_ui_checks package_update_checks
-+        PROPERTIES LABELS "portable")
-+    set_tests_properties(config_safety_checks update_install_checks PROPERTIES LABELS "process-integration")
++    add_subdirectory(tests)
 +endif()
 --- /dev/null
 +++ b/cmake/PackageMode.h.in
@@ -234,7 +205,7 @@
  #include "imgui.h"
  #include "backends/imgui_impl_glfw.h"
  #include "backends/imgui_impl_opengl3.h"
-@@ -9,13 +17,34 @@
+@@ -9,18 +17,40 @@
  #include "updates.h"
  #include "update_install.h"
  #include "platform/update_process.h"
@@ -276,7 +247,13 @@
  
  int main(int argc, char** argv) {
      auto arguments = update_arguments(argc, argv);
-@@ -29,11 +58,25 @@
+     int helper_result = update_helper_dispatch(arguments);
+     if (helper_result >= 0) return helper_result;
++    cleanup_update_installers();
+     load_settings();
+ 
+ #ifdef _WIN32
+@@ -29,11 +59,25 @@
  
      if (!glfwInit()) return 1;
      glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -303,7 +280,7 @@
  
      GLFWimage icon;
      icon.width  = APP_ICON_WIDTH;
-@@ -50,6 +93,7 @@
+@@ -50,6 +94,7 @@
      ui_apply_theme(static_cast<AppTheme>(g_theme.load()));
  
      ImGuiIO& io = ImGui::GetIO();
@@ -311,7 +288,7 @@
  
      FontPaths fonts = find_font_paths();
      ImFont* font_default = nullptr;
-@@ -72,11 +116,48 @@
+@@ -72,11 +117,48 @@
      if (install_error.empty()) updates_check(false);
      else updates_install_error(install_error);
      bool startup_confirmed = false;
@@ -360,7 +337,7 @@
          ImGui::NewFrame();
  
          ImVec2 ds = io.DisplaySize;
-@@ -87,8 +168,8 @@
+@@ -87,8 +169,8 @@
          ui_render_backups_popup();
  
          ImGui::Render();
@@ -370,7 +347,7 @@
          glViewport(0, 0, dw, dh);
          glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
          glClear(GL_COLOR_BUFFER_BIT);
-@@ -98,12 +179,17 @@
+@@ -98,12 +180,17 @@
              update_install_confirm_started(arguments);
              startup_confirmed = true;
          }
@@ -392,7 +369,7 @@
      ImGui_ImplOpenGL3_Shutdown();
      ImGui_ImplGlfw_Shutdown();
      ImGui::DestroyContext();
-@@ -118,4 +204,4 @@
+@@ -118,4 +205,4 @@
  
  #ifdef _WIN32
  int APIENTRY WinMain(HINSTANCE, HINSTANCE, PSTR, int) { return main(__argc, __argv); }
@@ -441,9 +418,12 @@
    "restore_failed": "Could not restore config. Previous config saved at: {value}",
    "home_missing": "HOME is not set. Choose an absolute folder path.",
    "theme_0": "Dark (default)",
-@@ -76,5 +79,25 @@
+@@ -75,6 +78,28 @@
+   "backup_restore_warning": "Restore backup from {value}? The destination config will be replaced. Its current contents will be backed up first. Close Dota 2 and Steam before continuing.",
    "backup_restored": "Backup restored for account {value}.",
    "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
++  "backup_entries_invalid": "Skipped invalid backup entries: {value}. Their files were kept.",
++  "backup_refresh_failed": "Backup restored, but the list could not be refreshed: {value}",
    "backup_invalid": "Backup is invalid or its files have changed. Nothing was restored.",
 -  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}"
 +  "backup_cleanup_failed": "Config was replaced, but old backups could not be removed: {value}",
@@ -487,9 +467,12 @@
    "restore_failed": "Не удалось восстановить конфиг. Прежний конфиг сохранён здесь: {value}",
    "home_missing": "HOME не задан. Выберите абсолютный путь к папке.",
    "theme_0": "Тёмная (по умолчанию)",
-@@ -76,5 +79,25 @@
+@@ -75,6 +78,28 @@
+   "backup_restore_warning": "Восстановить бэкап от {value}? Конфиг назначения будет заменён. Перед этим сохраним его текущую копию. Закройте Dota 2 и Steam перед продолжением.",
    "backup_restored": "Бэкап восстановлен для аккаунта {value}.",
    "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
++  "backup_entries_invalid": "Пропущено повреждённых записей бэкапов: {value}. Их файлы сохранены.",
++  "backup_refresh_failed": "Бэкап восстановлен, но обновить список не удалось: {value}",
    "backup_invalid": "Бэкап повреждён или его файлы изменены. Восстановление не выполнено.",
 -  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}"
 +  "backup_cleanup_failed": "Конфиг заменён, но удалить старые бэкапы не удалось: {value}",
@@ -533,9 +516,12 @@
    "restore_failed": "Не вдалося відновити конфіг. Попередній конфіг збережено тут: {value}",
    "home_missing": "HOME не задано. Виберіть абсолютний шлях до папки.",
    "theme_0": "Темна (типово)",
-@@ -76,5 +79,25 @@
+@@ -75,6 +78,28 @@
+   "backup_restore_warning": "Відновити бекап від {value}? Конфіг призначення буде замінено. Перед цим збережемо його поточну копію. Закрийте Dota 2 і Steam перед продовженням.",
    "backup_restored": "Бекап відновлено для акаунта {value}.",
    "backup_create_failed": "Не вдалося створити бекап. Заміну конфіга скасовано: {value}",
++  "backup_entries_invalid": "Пропущено пошкоджених записів бекапів: {value}. Їхні файли збережено.",
++  "backup_refresh_failed": "Бекап відновлено, але оновити список не вдалося: {value}",
    "backup_invalid": "Бекап пошкоджено або його файли змінено. Відновлення не виконано.",
 -  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}"
 +  "backup_cleanup_failed": "Конфіг замінено, але видалити старі бекапи не вдалося: {value}",
@@ -1148,21 +1134,23 @@
  
 --- a/src/core/app.cpp
 +++ b/src/core/app.cpp
-@@ -2,6 +2,7 @@
+@@ -2,6 +2,8 @@
  #include "backups.h"
  #include "file_ops.h"
  #include "localization.h"
 +#include "ui_events.h"
++#include "json_fields.h"
  #include <nlohmann/json.hpp>
  #include <filesystem>
  #include <fstream>
-@@ -11,10 +12,23 @@
+@@ -11,10 +13,24 @@
  #include <cstring>
  #include <cstdlib>
  #include <thread>
 +#include <condition_variable>
 +#include <chrono>
 +#include <memory>
++#include <optional>
  
  namespace {
  std::thread scan_worker;
@@ -1180,7 +1168,7 @@
  }
  
  namespace fs = std::filesystem;
-@@ -24,6 +38,7 @@
+@@ -24,6 +40,7 @@
      std::lock_guard<std::mutex> lock(g_data_mutex);
      status_msg = s;
      status_detail = detail;
@@ -1188,7 +1176,7 @@
  }
  
  bool set_config_path(char* target, const std::string& path) {
-@@ -39,6 +54,7 @@
+@@ -39,6 +56,7 @@
              if (target == dst_path) { dst_list.clear(); selected_dst = -1; }
          }
          std::memcpy(target, normalized.c_str(), normalized.size() + 1);
@@ -1196,16 +1184,76 @@
          return true;
      } catch (const ConfigFileError& e) {
          set_status(e.key, e.detail);
-@@ -89,7 +105,7 @@
+@@ -53,7 +71,17 @@
+ static fs::path nick_cache_path(){ return fs::u8path(config_dir()) / CACHE_FILE; }
+ static fs::path avatar_url_cache_path() { return fs::u8path(config_dir()) / AVATAR_URL_CACHE_FILE; }
+ 
++static std::optional<std::string> invalid_settings;
++static std::string rejected_defaults;
++static std::string settings_json() {
++    std::lock_guard<std::mutex> lock(g_data_mutex);
++    return json{{"src", std::string(src_path)}, {"dst", std::string(dst_path)},
++        {"theme", g_theme.load()}, {"language", language_code()}}.dump();
++}
++
+ void load_settings() {
++    invalid_settings.reset();
++    rejected_defaults.clear();
+     auto default_path = default_steam_userdata();
+     set_config_path(src_path, default_path);
+     set_config_path(dst_path, default_path);
+@@ -65,22 +93,31 @@
+     const bool have_settings = fs::exists(settings_path());
+ #endif
+     if (have_settings) {
++        std::string encoded;
++        bool readable = false;
+         try {
+-            json j;
+ #ifdef _WIN32
+-            if (!registry_settings.empty()) j = json::parse(registry_settings);
++            if (!registry_settings.empty()) encoded = registry_settings;
+             else {
+                 std::ifstream f(settings_path());
+-                f >> j;
++                if (!f) throw std::runtime_error("Cannot read settings");
++                encoded.assign(std::istreambuf_iterator<char>(f), {});
++                if (f.bad()) throw std::runtime_error("Cannot read settings");
+             }
+ #else
+             std::ifstream f(settings_path());
+-            f >> j;
++            if (!f) throw std::runtime_error("Cannot read settings");
++            encoded.assign(std::istreambuf_iterator<char>(f), {});
++            if (f.bad()) throw std::runtime_error("Cannot read settings");
+ #endif
++            readable = true;
++            auto j = json::parse(encoded);
+             std::string s = j.value("src", default_path);
+             std::string d = j.value("dst", default_path);
+-            g_theme = std::clamp(j.value("theme", 0), 0, 4);
+-            set_language(j.value("language", "en"));
++            auto theme = j.contains("theme") ? json_unsigned(j.at("theme"), 4) : 0;
++            auto language = j.value("language", "en");
++            g_theme = static_cast<int>(theme);
++            set_language(language);
+             set_config_path(src_path, s);
+             set_config_path(dst_path, d);
+ #ifdef _WIN32
+@@ -89,7 +126,11 @@
                  fs::remove(settings_path(), cleanup_error);
              }
  #endif
 -        } catch (...) {}
-+        } catch (const std::exception& error) { set_status("settings_load_failed", error.what()); }
++        } catch (const std::exception& error) {
++            if (readable) invalid_settings = std::move(encoded);
++            rejected_defaults = settings_json();
++            set_status("settings_load_failed", error.what());
++        }
      }
      if (fs::exists(nick_cache_path())) {
          try {
-@@ -97,7 +113,7 @@
+@@ -97,7 +138,7 @@
              json j; f >> j;
              std::lock_guard<std::mutex> lock(g_data_mutex);
              for (auto& el : j.items()) nick_cache[el.key()] = el.value();
@@ -1214,7 +1262,7 @@
      }
      if (fs::exists(avatar_url_cache_path())) {
          try {
-@@ -105,93 +121,188 @@
+@@ -105,93 +146,194 @@
              json j; f >> j;
              std::lock_guard<std::mutex> lock(g_data_mutex);
              for (auto& el : j.items()) avatar_url_cache[el.key()] = el.value();
@@ -1230,21 +1278,31 @@
      static std::mutex save_mutex;
 +    static std::string saved;
      std::lock_guard<std::mutex> save_lock(save_mutex);
-     std::string source_path, destination_path;
+-    std::string source_path, destination_path;
 -    std::map<std::string, std::string> nick_copy;
 -    std::map<std::string, std::string> avatar_copy;
-     {
-         std::lock_guard<std::mutex> lock(g_data_mutex);
-         source_path = src_path;
-         destination_path = dst_path;
+-    {
+-        std::lock_guard<std::mutex> lock(g_data_mutex);
+-        source_path = src_path;
+-        destination_path = dst_path;
 -        nick_copy = nick_cache;
 -        avatar_copy = avatar_url_cache;
-     }
+-    }
      try {
 -        json settings = {{"src", source_path},{"dst", destination_path},{"theme", g_theme.load()},{"language", language_code()}};
-+        auto settings = json{{"src", source_path}, {"dst", destination_path},
-+            {"theme", g_theme.load()}, {"language", language_code()}}.dump();
-+        if (settings == saved) return;
++        auto settings = settings_json();
++        if (!rejected_defaults.empty()) {
++            if (settings == rejected_defaults || !invalid_settings) return;
++            auto recovery = settings_path(); recovery += ".invalid";
++            reject_config_link(recovery);
++            if (fs::exists(recovery)) {
++                std::ifstream previous(recovery, std::ios::binary);
++                std::string bytes{std::istreambuf_iterator<char>(previous), {}};
++                if (!previous || bytes != *invalid_settings)
++                    throw std::runtime_error("Resolve the earlier settings recovery file: " + recovery.u8string());
++            } else write_file_atomic(recovery, *invalid_settings);
++        }
++        if (settings == saved && rejected_defaults.empty()) return;
  #ifdef _WIN32
 -        if (write_registry_settings(settings.dump())) {
 +        if (write_registry_settings(settings)) {
@@ -1259,6 +1317,8 @@
 -        { std::ofstream fc(nick_cache_path()); json jc(nick_copy); fc << jc; }
 -        { std::ofstream fa(avatar_url_cache_path()); json ja(avatar_copy); fa << ja; }
 +        saved = std::move(settings);
++        invalid_settings.reset();
++        rejected_defaults.clear();
 +    } catch (const std::exception& error) { set_status("settings_save_failed", error.what()); }
 +}
 +
@@ -1446,7 +1506,7 @@
      };
  
      std::string source_path, destination_path;
-@@ -201,34 +312,76 @@
+@@ -201,34 +343,76 @@
          destination_path = dst_path;
      }
      scan_dir(source_path, new_src);
@@ -1536,7 +1596,7 @@
      {
          std::lock_guard<std::mutex> lock(g_data_mutex);
          if (s_idx >= (int)src_list.size() || d_idx >= (int)dst_list.size()) return;
-@@ -236,53 +389,82 @@
+@@ -236,53 +420,82 @@
          d_id = dst_list[d_idx];
          s_nick = nick_cache.count(s_id) ? nick_cache[s_id] : ("ID: " + s_id);
          d_nick = nick_cache.count(d_id) ? nick_cache[d_id] : ("ID: " + d_id);
@@ -2075,7 +2135,7 @@
  #include <algorithm>
  #include <filesystem>
  
-@@ -12,22 +13,26 @@
+@@ -12,22 +13,29 @@
  bool confirming = false;
  std::string account;
  fs::path destination;
@@ -2086,8 +2146,11 @@
  fs::path root() { return fs::u8path(config_dir()) / "backups"; }
 -void refresh() {
 -    backups = list_config_backups(root(), account);
-+std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id, const fs::path& destination) {
-+    auto result = list_config_backups(folder, id);
++std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id,
++    const fs::path& destination, std::string& warning) {
++    std::vector<std::string> invalid;
++    auto result = list_config_backups(folder, id, &invalid);
++    if (!invalid.empty()) warning = tr_value("backup_entries_invalid", std::to_string(invalid.size()));
      auto target = fs::weakly_canonical(destination);
 -    backups.erase(std::remove_if(backups.begin(), backups.end(), [&](const ConfigBackup& backup) {
 +    result.erase(std::remove_if(result.begin(), result.end(), [&](const ConfigBackup& backup) {
@@ -2108,7 +2171,7 @@
      {
          std::lock_guard<std::mutex> lock(g_data_mutex);
          int index = selected_dst.load();
-@@ -35,16 +40,23 @@
+@@ -35,16 +43,27 @@
          account = dst_list[index];
          destination = fs::u8path(dst_path) / account / DOTA_ID;
      }
@@ -2121,8 +2184,12 @@
 +    selected = -1;
 +    file_tasks_start([folder = root(), id = account, target = destination]() -> FileTaskCompletion {
 +        try {
-+            auto result = find_backups(folder, id, target);
-+            return [result = std::move(result)]() mutable { backups = std::move(result); };
++            std::string warning;
++            auto result = find_backups(folder, id, target, warning);
++            return [result = std::move(result), warning = std::move(warning)]() mutable {
++                backups = std::move(result);
++                message = std::move(warning);
++            };
 +        } catch (const std::exception& error) { return failed("error", error.what()); }
 +    });
      requested = true;
@@ -2134,7 +2201,7 @@
      if (requested) { ImGui::OpenPopup(id); requested = false; }
      auto display = ImGui::GetIO().DisplaySize;
      float width = std::min(500.f, display.x - 32.f);
-@@ -53,32 +65,46 @@
+@@ -53,32 +72,50 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
      bool open = true;
@@ -2177,9 +2244,13 @@
 +                file_tasks_start([backup = backups[selected], target = destination, folder = root(), id = account]() -> FileTaskCompletion {
 +                    try {
 +                        auto result = restore_config_backup(backup, target, folder, id);
-+                        auto refreshed = find_backups(folder, id, target);
-+                        return [result, refreshed = std::move(refreshed), id]() mutable {
++                        std::vector<ConfigBackup> refreshed;
++                        std::string warning;
++                        try { refreshed = find_backups(folder, id, target, warning); }
++                        catch (const std::exception& error) { warning = tr_value("backup_refresh_failed", error.what()); }
++                        return [result, refreshed = std::move(refreshed), warning = std::move(warning), id]() mutable {
 +                            message = tr_value("backup_restored", id);
++                            if (!warning.empty()) message += "\n" + warning;
 +                            if (!result.cleanup_error.empty()) message += "\n" + tr_value("backup_cleanup_failed", result.cleanup_error);
 +                            if (!result.retained_backup.empty()) message += "\n" + tr_value("backup_retained", result.retained_backup.u8string());
 +                            {
@@ -2198,7 +2269,7 @@
              }
          } else {
              ImGui::TextWrapped("%s", tr("backup_retention"));
-@@ -94,6 +120,7 @@
+@@ -94,6 +131,7 @@
              if (ImGui::Button(tr("backup_restore"), {-1.f, 34.f})) confirming = true;
              ImGui::EndDisabled();
          }
@@ -2508,7 +2579,7 @@
      std::cout << "Avatar cache and background decoding work without a renderer\n";
 --- /dev/null
 +++ b/tests/ui_state_checks.cpp
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,256 @@
 +#include "app.h"
 +#include "ui_events.h"
 +#include <cassert>
@@ -2747,7 +2818,20 @@
 +    std::thread follower([] { assert(!ensure_profile_info("702")); });
 +    app_request_stop();
 +    pending.join(); follower.join();
++    const std::string invalid_settings = "{invalid";
++#ifdef _WIN32
++    test_settings = invalid_settings;
++#else
++    std::ofstream(root / SETTINGS_FILE) << invalid_settings;
++#endif
++    load_settings();
++    assert(status_msg == "settings_load_failed");
 +    app_shutdown();
++#ifdef _WIN32
++    assert(test_settings == invalid_settings);
++#else
++    { std::ifstream f(root / SETTINGS_FILE); std::string text{std::istreambuf_iterator<char>(f), {}}; assert(text == invalid_settings); }
++#endif
 +    { std::ifstream f(root / AVATAR_URL_CACHE_FILE); nlohmann::json value; f >> value; assert(value["700"] == "test-avatar"); }
 +    fs::remove_all(root);
 +    std::cout << "Redraw coalescing, wake lifecycle and coherent cached UI state passed\n";
@@ -2761,7 +2845,9 @@
 +void avatar_data_request_stop();
 --- a/src/core/file_ops.cpp
 +++ b/src/core/file_ops.cpp
-@@ -2,12 +2,50 @@
+@@ -1,13 +1,52 @@
+ #include "file_ops.h"
++#include "checksum.h"
  #include <cstdlib>
  #include <stdexcept>
  #include <vector>
@@ -2812,7 +2898,7 @@
  
  std::string normalize_user_path(const std::string& path) {
      if (path.empty()) return {};
-@@ -51,31 +89,118 @@
+@@ -51,31 +90,122 @@
      return candidates.front().u8string();
  }
  
@@ -2855,6 +2941,10 @@
 +            if (!fs::is_regular_file(status)) throw ConfigFileError("symlink");
 +            value.size = entry.file_size();
 +            value.modified = entry.last_write_time();
++            try { value.digest = file_sha256(entry.path()); }
++            catch (const std::exception& error) {
++                throw fs::filesystem_error(error.what(), entry.path(), std::make_error_code(std::errc::io_error));
++            }
 +        }
 +        result.emplace(entry.path().lexically_relative(path), value);
 +    }
@@ -2938,7 +3028,7 @@
 +        for (const auto& item : before) {
 +            auto found = staged.find(item.first);
 +            if (found == staged.end() || found->second.directory != item.second.directory ||
-+                found->second.size != item.second.size ||
++                found->second.size != item.second.size || found->second.digest != item.second.digest ||
 +                (!item.second.directory && !config_files_equal(source / item.first, temp / item.first)))
 +                throw ConfigFileError("config_changed");
 +        }
@@ -2949,7 +3039,7 @@
              fs::rename(destination, backup);
              saved = true;
          }
-@@ -84,11 +209,11 @@
+@@ -84,11 +214,11 @@
          if (saved) {
              std::error_code restore_error;
              fs::rename(backup, destination, restore_error);
@@ -2984,7 +3074,7 @@
  
  struct ConfigFileError : std::runtime_error {
      std::string key;
-@@ -14,3 +19,18 @@
+@@ -14,3 +19,19 @@
      explicit ConfigFileError(const std::string& message, const std::string& value = {})
          : std::runtime_error(message), key(message), detail(value) {}
  };
@@ -2993,8 +3083,9 @@
 +    bool directory = false;
 +    std::uintmax_t size = 0;
 +    std::filesystem::file_time_type modified{};
++    std::string digest;
 +    bool operator==(const ConfigEntry& other) const {
-+        return directory == other.directory && size == other.size && modified == other.modified;
++        return directory == other.directory && size == other.size && modified == other.modified && digest == other.digest;
 +    }
 +};
 +using ConfigTree = std::map<std::filesystem::path, ConfigEntry>;
@@ -3128,14 +3219,19 @@
      reset(); copy_failure = true; expect_failure(); copy_failure = false;
      assert(read(dst / "cfg/options.txt") == "old" && !fs::exists(temp));
      save_failure = true; expect_failure(); save_failure = false;
-@@ -124,12 +138,13 @@
+@@ -123,17 +137,24 @@
+     std::cout << "Paths, copy failures, rollback, recovery and translations passed\n";
  }
  """)
++    crypto_flags = ["-lbcrypt", "-ladvapi32"] if os.name == "nt" else ["-lcrypto"]
++    if sys.platform == "darwin":
++        crypto_prefix = os.environ.get("OPENSSL_ROOT_DIR") or subprocess.check_output(["brew", "--prefix", "openssl"], text=True).strip()
++        crypto_flags = ["-I" + str(Path(crypto_prefix) / "include"), "-L" + str(Path(crypto_prefix) / "lib"), *crypto_flags]
      compiler = os.environ.get("CXX", "c++")
 +    extra_flags = shlex.split(os.environ.get("CXXFLAGS", ""))
      executable = temp / "checks"
 -    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
-+    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), "-o", str(executable)], check=True)
++    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "checks.cpp"), str(temp / "file_ops_test.cpp"), str(root / "src/core/localization.cpp"), str(root / "src/core/checksum.cpp"), *crypto_flags, "-o", str(executable)], check=True)
      env = dict(os.environ, HOME=str(temp / "home"), XDG_DATA_HOME=str(temp / "data"))
      subprocess.run([str(executable), str(temp)], env=env, check=True)
      app = (root / "src/core/app.cpp").read_text()
@@ -3144,7 +3240,13 @@
      settings_source = r"""
  #include "app.h"
  #include "file_ops.h"
-@@ -164,11 +179,11 @@
+ #include "localization.h"
++#include "json_fields.h"
++#include <optional>
+ #include <nlohmann/json.hpp>
+ #include <filesystem>
+ #include <fstream>
+@@ -164,11 +185,11 @@
      assert(set_config_path(src_path, (fs::u8path(argv[1]) / "new_source").u8string()));
      assert(selected_src == -1 && src_list.empty());
      std::ofstream f(settings_path()); f << "{invalid"; f.close(); load_settings();
@@ -3156,7 +3258,7 @@
      (temp / "settings.cpp").write_text(settings_source)
      settings_executable = temp / "settings_checks"
 -    subprocess.run([compiler, "-std=c++17", "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
-+    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), "-o", str(settings_executable)], check=True)
++    subprocess.run([compiler, "-std=c++17", *extra_flags, "-I" + str(root / "src/core"), "-I" + str(root / "src/platform"), "-I" + str(root / "src/network"), "-I" + str(temp), "-I" + str(json_include), str(temp / "settings.cpp"), str(root / "src/core/file_ops.cpp"), str(root / "src/core/localization.cpp"), str(root / "src/core/checksum.cpp"), *crypto_flags, "-o", str(settings_executable)], check=True)
      subprocess.run([str(settings_executable), str(temp)], env=env, check=True)
 --- /dev/null
 +++ b/src/core/file_tasks.cpp
@@ -3412,7 +3514,15 @@
 +print("Patched stable release matches the packaging implementation under test")
 --- a/src/core/backups.cpp
 +++ b/src/core/backups.cpp
-@@ -16,24 +16,22 @@
+@@ -1,6 +1,7 @@
+ #include "backups.h"
+ #include "file_ops.h"
+ #include "checksum.h"
++#include "json_fields.h"
+ #include <nlohmann/json.hpp>
+ #include <fstream>
+ #include <algorithm>
+@@ -16,24 +17,22 @@
      if (account.empty() || account.find_first_not_of("0123456789") != std::string::npos)
          throw ConfigFileError("backup_invalid");
  }
@@ -3443,7 +3553,7 @@
          auto status = entry.symlink_status();
          auto name = entry.path().lexically_relative(path).generic_u8string();
          if (fs::is_directory(status)) result[name] = {{"directory", true}};
-@@ -44,6 +42,8 @@
+@@ -44,11 +43,13 @@
      return result;
  }
  json metadata(const fs::path& folder) {
@@ -3452,7 +3562,13 @@
      if (!fs::is_directory(fs::symlink_status(folder)) ||
          !fs::is_regular_file(fs::symlink_status(folder / "backup.json"))) throw ConfigFileError("backup_invalid");
      std::ifstream stream(folder / "backup.json");
-@@ -82,6 +82,9 @@
+     json value; stream >> value;
+-    if (value.at("format").get<int>() != 1) throw ConfigFileError("backup_invalid");
++    if (json_unsigned(value.at("format"), 1) != 1) throw ConfigFileError("backup_invalid");
+     return value;
+ }
+ std::string timestamp(bool filename) {
+@@ -82,6 +83,9 @@
          check_store(root, account);
          separate(destination, root);
          auto before = tree(destination);
@@ -3462,12 +3578,25 @@
          auto folder = root / account;
          fs::create_directories(folder);
          auto id = timestamp(true);
-@@ -120,26 +123,30 @@
+@@ -107,7 +111,9 @@
+     }
+ }
+ 
+-std::vector<ConfigBackup> list_config_backups(const fs::path& root, const std::string& account) {
++std::vector<ConfigBackup> list_config_backups(const fs::path& root, const std::string& account,
++    std::vector<std::string>* invalid) {
++    if (invalid) invalid->clear();
+     check_store(root, account);
+     auto folder = root / account;
+     if (!fs::exists(folder)) return {};
+@@ -120,26 +126,32 @@
              auto destination = fs::u8path(value.at("destination").get<std::string>());
              if (!destination.is_absolute()) continue;
              result.push_back({entry.path(), destination, account, value.at("date").get<std::string>()});
 -        } catch (const std::exception&) {}
-+        } catch (const std::exception&) { throw ConfigFileError("backup_invalid", entry.path().filename().u8string()); }
++        } catch (const std::exception&) {
++            if (invalid) invalid->push_back(entry.path().filename().u8string());
++        }
      }
      std::sort(result.begin(), result.end(), [](const ConfigBackup& a, const ConfigBackup& b) { return a.path.filename() > b.path.filename(); });
      return result;
@@ -3498,7 +3627,7 @@
      result.cleanup_error = prune(root, account);
      return result;
  }
-@@ -154,9 +161,11 @@
+@@ -154,9 +166,11 @@
          fs::weakly_canonical(fs::u8path(value.at("destination").get<std::string>())) != fs::weakly_canonical(destination) ||
          tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
      separate(destination, root);
@@ -3522,8 +3651,12 @@
  
  struct ConfigBackup {
      std::filesystem::path path;
-@@ -19,7 +20,7 @@
-     const std::string& account);
+@@ -16,10 +17,10 @@
+ ConfigBackup create_config_backup(const std::filesystem::path& destination,
+     const std::filesystem::path& root, const std::string& account);
+ std::vector<ConfigBackup> list_config_backups(const std::filesystem::path& root,
+-    const std::string& account);
++    const std::string& account, std::vector<std::string>* invalid = nullptr);
  BackupCopyResult copy_config_with_backup(const std::filesystem::path& source,
      const std::filesystem::path& destination, const std::filesystem::path& root,
 -    const std::string& account);
@@ -3533,7 +3666,13 @@
      const std::string& account);
 --- a/src/core/release_info.cpp
 +++ b/src/core/release_info.cpp
-@@ -22,6 +22,7 @@
+@@ -1,4 +1,5 @@
+ #include "release_info.h"
++#include "json_fields.h"
+ #include <nlohmann/json.hpp>
+ #include <array>
+ #include <regex>
+@@ -22,6 +23,7 @@
  
  ReleaseInfo parse_release_info(const std::string& body, bool windows) {
      auto release = nlohmann::json::parse(body);
@@ -3541,17 +3680,14 @@
      if (release.value("draft", false)) throw std::runtime_error("Release is a draft");
      ReleaseInfo result;
      auto tag = release.value("tag_name", "");
-@@ -42,8 +43,11 @@
+@@ -42,8 +44,8 @@
          if (!asset.contains("digest") || !asset["digest"].is_string()) continue;
          auto digest = asset["digest"].get<std::string>();
          if (!std::regex_match(digest, std::regex("sha256:[0-9a-f]{64}"))) continue;
 -        auto size = asset.at("size").get<std::int64_t>();
 -        if (size <= 0 || size > 512LL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
-+        const auto& encoded_size = asset.at("size");
-+        if (!encoded_size.is_number_integer() || (!encoded_size.is_number_unsigned() && encoded_size.get<std::int64_t>() <= 0))
-+            throw std::runtime_error("Invalid asset size");
-+        auto size = encoded_size.get<std::uint64_t>();
-+        if (size == 0 || size > 512ULL * 1024 * 1024) throw std::runtime_error("Invalid asset size");
++        auto size = json_unsigned(asset.at("size"), MAX_UPDATE_BYTES);
++        if (size == 0) throw std::runtime_error("Invalid asset size");
          result.asset_name = asset_name;
          result.download_url = url;
          result.digest = digest.substr(7);
@@ -3614,14 +3750,30 @@
      session.SetConnectTimeout(cpr::ConnectTimeout{5000});
 --- a/tests/backup_checks.cpp
 +++ b/tests/backup_checks.cpp
-@@ -66,6 +66,11 @@
+@@ -65,7 +65,27 @@
+     fs::create_symlink(destination / "cfg/options.txt", destination / "link");
      fails([&] { copy_config_with_backup(source, destination, store, "123"); });
      assert(read(destination / "cfg/options.txt") == "version-2");
++    fs::remove(destination / "link");
  #endif
 +
 +    auto broken = store / "123/broken"; fs::create_directory(broken);
 +    write(broken / "backup.json", "{broken");
-+    fails([&] { list_config_backups(store, "123"); });
++    assert(list_config_backups(store, "123").size() == 5);
++    std::vector<std::string> invalid;
++    list_config_backups(store, "123", &invalid);
++    assert(invalid == std::vector<std::string>{"broken"});
++    auto valid = list_config_backups(store, "123").front();
++    for (const auto& format : {"1e300", "1.5", "-1", "18446744073709551615", "true", "null", "\"1\""}) {
++        auto text = read(valid.path / "backup.json");
++        auto position = text.find("\"format\": 1");
++        assert(position != std::string::npos);
++        text.replace(position, 11, std::string("\"format\": ") + format);
++        write(broken / "backup.json", text);
++        ConfigBackup malformed{broken, destination, "123", "invalid"};
++        fails([&] { restore_config_backup(malformed, destination, store, "123"); });
++        assert(list_config_backups(store, "123").size() == 5);
++    }
 +    assert(fs::exists(broken / "backup.json"));
      fs::remove_all(root);
      std::cout << "Backup creation, integrity, retention, restore and failure protection passed\n";
@@ -3709,7 +3861,7 @@
 +        if (found != result.destination_state.end()) {
 +            const auto& previous = found->second;
 +            change = item.directory == previous.directory && (item.directory ||
-+                (item.size == previous.size && config_files_equal(source / name, destination / name)))
++                (item.size == previous.size && item.digest == previous.digest))
 +                ? ConfigChange::Unchanged : ConfigChange::Replace;
 +        }
 +        if (item.size > std::numeric_limits<std::uintmax_t>::max() - result.copy_bytes)
@@ -3768,7 +3920,7 @@
 +    const std::filesystem::path& destination);
 --- /dev/null
 +++ b/tests/config_safety_checks.cpp
-@@ -0,0 +1,218 @@
+@@ -0,0 +1,229 @@
 +#include "backups.h"
 +#include "file_ops.h"
 +#include "steam_api.h"
@@ -3879,6 +4031,17 @@
 +    assert(!preview.changes && preview.affected_files == 0);
 +    copy_config_with_backup(source, destination, store, "43", &preview);
 +    assert(list_config_backups(store, "43").size() == count && fs::last_write_time(destination / "same") == modified);
++
++    for (const auto& changed : {source / "same", destination / "same"}) {
++        auto time = fs::last_write_time(changed);
++        put(changed, "edit");
++        fs::last_write_time(changed, time);
++        rejects([&] { validate_config_preview(preview, source, destination); }, "config_changed");
++        rejects([&] { copy_config_with_backup(source, destination, store, "43", &preview); }, "config_changed");
++        assert(list_config_backups(store, "43").size() == count);
++        put(changed, "same");
++        fs::last_write_time(changed, time);
++    }
 +
 +    auto previous_time = fs::last_write_time(source / "same");
 +    put(source / "same", "evil");
@@ -4390,7 +4553,7 @@
      paths-ignore:
        - "README.md"
        - "LICENSE"
-@@ -16,9 +16,8 @@
+@@ -16,23 +16,33 @@
          type: boolean
          default: false
  
@@ -4401,14 +4564,22 @@
    cancel-in-progress: false
  
  permissions:
-@@ -29,10 +28,20 @@
+-  contents: write
++  contents: read
+ 
+ jobs:
+   compute-version:
      runs-on: ubuntu-24.04
      outputs:
        version: ${{ steps.version.outputs.version }}
+-    steps:
+-      - uses: actions/checkout@v7.0.1
+-        with:
 +      channel: ${{ steps.channel.outputs.channel }}
-     steps:
-       - uses: actions/checkout@v7.0.1
-         with:
++    steps:
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: false
            fetch-depth: 0
 +      - name: Select distribution channel
 +        id: channel
@@ -4422,7 +4593,24 @@
        - name: Compute version
          id: version
          env:
-@@ -61,11 +70,18 @@
+@@ -43,7 +53,9 @@
+     needs: compute-version
+     runs-on: windows-latest
+     steps:
+-      - uses: actions/checkout@v7.0.1
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: false
+       - name: Setup MSVC & Resource Compiler
+         shell: pwsh
+         run: ./scripts/setup-msvc.ps1
+@@ -56,18 +68,25 @@
+           $key = [System.BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
+           "id=$key" >> $env:GITHUB_OUTPUT
+       - name: Cache dependency sources and builds
+-        uses: actions/cache@v6.1.0
++        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+         with:
            path: build/_deps
            key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
        - name: Configure CMake
@@ -4441,9 +4629,12 @@
 +          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 +          python tests/windows_update_crash_checks.py build
        - name: Upload Artifact
-         uses: actions/upload-artifact@v7.0.1
+-        uses: actions/upload-artifact@v7.0.1
++        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
          with:
-@@ -77,8 +93,6 @@
+           name: DotaManager-Windows
+           path: build/Release/DotaManager.exe
+@@ -77,15 +96,15 @@
      needs: compute-version
      runs-on: ubuntu-22.04
      env:
@@ -4452,7 +4643,30 @@
        APPIMAGE_EXTRACT_AND_RUN: "1"
        ARCH: x86_64
        CCACHE_DIR: ${{ github.workspace }}/.ccache
-@@ -124,7 +138,7 @@
+       CCACHE_BASEDIR: ${{ github.workspace }}
+       CCACHE_MAXSIZE: 500M
+     steps:
+-      - uses: actions/checkout@v7.0.1
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: false
+ 
+       - name: Install Linux Dependencies
+         run: |
+@@ -113,18 +132,18 @@
+           id=$({ gcc-11 --version; cmake --version; dpkg-query -W libssl-dev libgl1-mesa-dev; } | sha256sum | cut -d' ' -f1)
+           echo "id=$id" >> "$GITHUB_OUTPUT"
+       - name: Cache dependency sources and builds
+-        uses: actions/cache@v6.1.0
++        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+         with:
+           path: build/_deps
+           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
+       - name: Cache compiler output
+-        uses: actions/cache@v6.1.0
++        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+         with:
+           path: .ccache
            key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
            restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
        - name: Configure CMake
@@ -4461,7 +4675,7 @@
  
        - name: Build
          run: cmake --build build --config Release -j"$(nproc)"
-@@ -133,6 +147,7 @@
+@@ -133,6 +152,7 @@
          run: |
            ctest --test-dir build --output-on-failure
            python3 tests/core_checks.py build/_deps/json-src/include
@@ -4469,7 +4683,7 @@
  
        - name: Compiler cache statistics
          run: ccache --show-stats
-@@ -143,7 +158,6 @@
+@@ -143,7 +163,6 @@
            base=https://github.com/linuxdeploy
            wget -q -O "$HOME/ld/linuxdeploy" \
              "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
@@ -4477,22 +4691,52 @@
            wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
              "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
            chmod +x "$HOME/ld/"*
-@@ -222,6 +236,7 @@
+@@ -178,7 +197,7 @@
+           ls -la linux-artifact/
+ 
+       - name: Upload Artifact
+-        uses: actions/upload-artifact@v7.0.1
++        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+         with:
+           name: DotaManager-Linux
+           path: linux-artifact/*.AppImage
+@@ -193,9 +212,11 @@
+     runs-on: ${{ matrix.os }}
+     timeout-minutes: 10
+     steps:
+-      - uses: actions/checkout@v7.0.1
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: false
+       - name: Download Linux artifact
+-        uses: actions/download-artifact@v8.0.1
++        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+           name: DotaManager-Linux
+           path: linux-artifact
+@@ -222,43 +243,61 @@
            bash scripts/check-appimage.sh "${images[0]}"
  
    release:
++    permissions:
++      contents: write
 +    if: github.ref == 'refs/heads/main'
      needs: [compute-version, build-windows, build-linux, check-appimage]
      runs-on: ubuntu-24.04
      env:
-@@ -230,35 +245,45 @@
-       - uses: actions/checkout@v7.0.1
-         with:
+       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+     steps:
+-      - uses: actions/checkout@v7.0.1
+-        with:
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: true
            fetch-depth: 0
 -
        - name: Download all artifacts
-         uses: actions/download-artifact@v8.0.1
+-        uses: actions/download-artifact@v8.0.1
 -
++        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
        - name: Tag and release
          env:
 +          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
@@ -4532,15 +4776,19 @@
 +            "${images[0]}"
 +
 +  prerelease:
++    permissions:
++      contents: write
 +    if: github.ref == 'refs/heads/alpha'
 +    needs: [compute-version, build-windows, build-linux, check-appimage]
 +    runs-on: ubuntu-24.04
 +    env:
 +      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 +    steps:
-+      - uses: actions/checkout@v7.0.1
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: false
 +      - name: Download prerelease artifacts
-+        uses: actions/download-artifact@v8.0.1
++        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
 +      - name: Publish isolated prerelease
 +        env:
 +          RELEASE_CHANNEL: ${{ needs.compute-version.outputs.channel }}
@@ -4781,9 +5029,70 @@
  
  set -uo pipefail
  cd "$(dirname "$0")/.."
+@@ -20,31 +7,40 @@
+ if [ "${1:-}" = "--full" ]; then
+   RUN_FULL_BUILD=true
+ fi
++BUILD_DIR="${DOTAMANAGER_CHECK_BUILD_DIR:-build-checks}"
++PYTHON="${PYTHON:-python3}"
+ 
+ declare -a NAMES=()
+ declare -a RESULTS=()
+ 
+ run_step() {
+-  local name="$1" script="$2"; shift 2
++  local name="$1"; shift
+   echo
+   echo "=== $name ==="
+-  if bash "$script" "$@"; then
++  if "$@"; then
+     NAMES+=("$name"); RESULTS+=("PASS")
++    return 0
+   else
+     NAMES+=("$name"); RESULTS+=("FAIL")
++    return 1
+   fi
+ }
+ 
+-run_step "Workflow lint (actionlint)"        scripts/check-workflow.sh
+-run_step "Version-bump logic (unit tests)"   scripts/check-version-logic.sh
+-run_step "CMake configure smoke test"        scripts/check-cmake-configure.sh
++run_step "Workflow lint (actionlint)" bash scripts/check-workflow.sh
++run_step "Version-bump logic" bash scripts/check-version-logic.sh
++run_step "AppImage ABI checks" "$PYTHON" tests/appimage_checks.py
++run_step "Prerelease isolation" "$PYTHON" tests/prerelease_checks.py
++run_step "Arch source coverage" "$PYTHON" tests/aur_source_checks.py
+ 
+-if [ "$RUN_FULL_BUILD" = true ]; then
+-  run_step "Full Linux build (compile+link)" scripts/check-full-build-linux.sh
+-else
+-  echo
+-  echo "=== Full Linux build (compile+link) ==="
+-  echo "Skipped (pass --full to run it -- it's slow the first time)."
++if run_step "Configure regression tests" cmake -S . -B "$BUILD_DIR" -DDOTAMANAGER_BUILD_TESTS=ON &&
++   run_step "Build regression tests" cmake --build "$BUILD_DIR" --config Release --target dotamanager_checks --parallel; then
++  run_step "C++ regression tests" ctest --test-dir "$BUILD_DIR" --build-config Release --output-on-failure --no-tests=error
++  if [ "${OS:-}" != "Windows_NT" ]; then
++    run_step "Copy and settings fault checks" "$PYTHON" tests/core_checks.py "${DOTAMANAGER_JSON_INCLUDE:-$BUILD_DIR/_deps/json-src/include}"
++  fi
++  if [ "$RUN_FULL_BUILD" = true ]; then
++    run_step "Application build" cmake --build "$BUILD_DIR" --config Release --target DotaManager --parallel
++  fi
+ fi
+ 
+ echo
+@@ -61,7 +57,7 @@
+ echo "==================================================="
+ 
+ if [ "$overall" = "0" ]; then
+-  echo "All checks passed -- safe to push."
++  echo "Requested checks passed. Platform-specific GUI and release checks still run in CI."
+ else
+   echo "Fix the failing check(s) above before pushing."
+ fi
 --- /dev/null
 +++ b/.github/workflows/sanitizers.yaml
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,48 @@
 +name: Core sanitizers
 +
 +on:
@@ -4810,7 +5119,9 @@
 +      ASAN_OPTIONS: detect_leaks=1
 +      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
 +    steps:
-+      - uses: actions/checkout@v7.0.1
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
++        with:
++          persist-credentials: false
 +      - name: Install build dependencies
 +        run: |
 +          sudo apt-get update
@@ -4820,13 +5131,13 @@
 +      - name: Configure sanitizers
 +        run: |
 +          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DDOTAMANAGER_BUILD_TESTS=ON \
-+            '-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' \
-+            '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
++            '-DCMAKE_C_FLAGS=-fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer' \
++            '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer'
 +      - name: Build
 +        run: cmake --build build --parallel 2
 +      - name: Regression and fault-injection tests
 +        env:
-+          CXXFLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer
++          CXXFLAGS: -fsanitize=address,undefined,float-cast-overflow -fno-omit-frame-pointer
 +        run: |
 +          ctest --test-dir build --output-on-failure
 +          python3 tests/core_checks.py build/_deps/json-src/include
@@ -4958,7 +5269,15 @@
 +print("Standalone PE dependencies passed: " + ", ".join(dependencies))
 --- a/tests/update_install_checks.cpp
 +++ b/tests/update_install_checks.cpp
-@@ -21,7 +21,12 @@
+@@ -1,5 +1,7 @@
+ #include "update_install.h"
+ #include "checksum.h"
++#include "platform.h"
++#include <cstdlib>
+ #include "platform/update_process.h"
+ #include <nlohmann/json.hpp>
+ #include <cassert>
+@@ -21,7 +23,12 @@
  int main(int argc, char** argv) {
      auto arguments = update_arguments(argc, argv);
      if (arguments.size() == 3 && arguments[1] == "--apply-update") return update_helper_dispatch(arguments);
@@ -4971,7 +5290,52 @@
          update_install_confirm_started(arguments);
          write(fs::u8path(arguments[2]).parent_path() / "child-opened", "started");
          std::this_thread::sleep_for(std::chrono::seconds(3));
-@@ -89,6 +94,30 @@
+@@ -49,11 +56,44 @@
+     auto root = fs::temp_directory_path() / ("dotamanager-install-" + std::to_string(current_process_id()));
+     fs::remove_all(root);
+     fs::create_directories(root / fs::u8path("path with spaces and кириллица"));
++#ifdef _WIN32
++    _wputenv_s(L"APPDATA", root.c_str());
++#else
++    setenv("XDG_CONFIG_HOME", root.c_str(), 1);
++#endif
++    auto updates = fs::u8path(config_dir()) / "updates";
++    auto completed = updates / "installer-completed";
++    auto interrupted = updates / "installer-interrupted";
++    auto ordinary = updates / "v1.30";
++    fs::create_directories(completed); fs::create_directories(interrupted); fs::create_directories(ordinary);
++    write(completed / "helper.exe", "old executable");
++    write(completed / "completed", "helper.exe");
++    write(interrupted / "helper.exe", "preserve for recovery");
++    write(ordinary / "completed", "helper.exe"); write(ordinary / "helper.exe", "cached release");
++    cleanup_update_installers(); cleanup_update_installers();
++    assert(!fs::exists(completed));
++    assert(read(interrupted / "helper.exe") == "preserve for recovery");
++    assert(read(ordinary / "helper.exe") == "cached release");
++    auto malformed = updates / "installer-malformed"; fs::create_directory(malformed);
++    write(malformed / "completed", "../preserved"); write(updates / "preserved", "keep");
++    cleanup_update_installers(); assert(read(updates / "preserved") == "keep" && fs::exists(malformed));
+     auto target = root / fs::u8path("path with spaces and кириллица") / "application.exe";
+     auto staged = target; staged += ".update-new";
+     auto backup = target; backup += ".update-old";
+     write(target, "old"); write(staged, "new");
+     auto release = info(staged);
++    nlohmann::json job_data = {{"target", target.u8string()}, {"staged", staged.u8string()},
++        {"digest", release.digest}, {"size", release.size}, {"parent", current_process_id()}};
++    auto parsed = parse_update_install_job(job_data.dump());
++    assert(parsed.target == target && parsed.staged == staged && parsed.release.size == release.size);
++    for (const auto* field : {"size", "parent"}) {
++        for (const auto* encoded : {"1e300", "1.5", "-1", "18446744073709551615", "true", "null", "0", "\"1\""}) {
++            auto invalid = job_data; invalid[field] = nlohmann::json::parse(encoded);
++            bool rejected = false;
++            try { parse_update_install_job(invalid.dump()); } catch (const std::exception&) { rejected = true; }
++            assert(rejected && read(target) == "old");
++        }
++    }
+     replace_update_executable(staged, target, release, [&] { assert(read(target) == "new"); assert(read(backup) == "old"); return true; });
+     assert(read(target) == "new" && !fs::exists(backup) && !fs::exists(staged));
+     write(target, "old"); write(staged, "new");
+@@ -89,6 +129,30 @@
      }
      assert(file_sha256(target) == file_sha256(executable));
      std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -5125,3 +5489,399 @@
 +        subprocess.run([str(executable), str(fixture), "none"], check=True)
 +        assert target.read_bytes() == b"new application bytes" and not backup.exists()
 +        print(phase + ": real process kill in replacement transaction, preserved old bytes, manual recovery and retry passed")
+--- /dev/null
++++ b/src/core/json_fields.h
+@@ -0,0 +1,12 @@
++#pragma once
++#include <nlohmann/json.hpp>
++#include <cstdint>
++#include <stdexcept>
++
++inline std::uint64_t json_unsigned(const nlohmann::json& value, std::uint64_t maximum) {
++    if (!value.is_number_integer() || (!value.is_number_unsigned() && value.get<std::int64_t>() < 0))
++        throw std::runtime_error("Expected a non-negative integer");
++    auto result = value.get<std::uint64_t>();
++    if (result > maximum) throw std::runtime_error("Integer is out of range");
++    return result;
++}
+--- a/src/core/update_install.cpp
++++ b/src/core/update_install.cpp
+@@ -2,6 +2,8 @@
+ #include "checksum.h"
+ #include "platform.h"
+ #include "platform/update_process.h"
++#include "json_fields.h"
++#include "file_ops.h"
+ #include <nlohmann/json.hpp>
+ #include <fstream>
+ #include <chrono>
+@@ -33,6 +35,43 @@
+     } while (std::chrono::steady_clock::now() < deadline);
+     return false;
+ }
++}
++
++UpdateInstallJob parse_update_install_job(const std::string& body) {
++    auto data = nlohmann::json::parse(body);
++    UpdateInstallJob job;
++    job.target = fs::u8path(data.at("target").get<std::string>());
++    job.staged = fs::u8path(data.at("staged").get<std::string>());
++    auto expected = job.target; expected += ".update-new";
++    if (!job.target.is_absolute() || job.staged != expected) throw std::runtime_error("Invalid updater paths");
++    job.release.digest = data.at("digest").get<std::string>();
++    job.release.size = json_unsigned(data.at("size"), MAX_UPDATE_BYTES);
++    job.parent = json_unsigned(data.at("parent"), maximum_update_process_id());
++    if (!job.release.size || !job.parent) throw std::runtime_error("Invalid updater size or parent");
++    return job;
++}
++
++void cleanup_update_installers() {
++    try {
++        auto root = fs::u8path(config_dir()) / "updates";
++        reject_config_link(root);
++        if (!fs::is_directory(fs::symlink_status(root))) return;
++        for (const auto& entry : fs::directory_iterator(root)) {
++            if (entry.path().filename().u8string().rfind("installer-", 0) != 0 ||
++                !fs::is_directory(entry.symlink_status())) continue;
++            reject_config_link(entry.path());
++            auto marker = entry.path() / "completed";
++            if (!fs::is_regular_file(fs::symlink_status(marker))) continue;
++            std::ifstream input(marker, std::ios::binary);
++            std::string filename;
++            std::getline(input, filename);
++            auto helper = fs::u8path(filename);
++            if (filename.empty() || helper != helper.filename() || helper == "." || helper == ".." || helper == "completed") continue;
++            std::error_code error;
++            fs::remove(entry.path() / helper, error);
++            if (!error) fs::remove_all(entry.path(), error);
++        }
++    } catch (const std::exception&) {}
+ }
+ 
+ void replace_update_executable(const fs::path& staged, const fs::path& target,
+@@ -60,6 +99,7 @@
+ 
+ void prepare_update_install(const fs::path& downloaded, const ReleaseInfo& release,
+     const std::function<bool()>& active) {
++    cleanup_update_installers();
+     verify(downloaded, release);
+     auto target = running_update_target();
+     auto staged = target; staged += ".update-new";
+@@ -108,17 +148,15 @@
+     bool application_closed = false;
+     try {
+         std::ifstream input(job);
+-        nlohmann::json data; input >> data;
++        if (!input) throw std::runtime_error("Cannot read updater job");
++        std::string body{std::istreambuf_iterator<char>(input), {}};
++        auto data = parse_update_install_job(body);
+         input.close();
+-        target = fs::u8path(data.at("target").get<std::string>());
+-        auto staged = fs::u8path(data.at("staged").get<std::string>());
+-        auto expected = target; expected += ".update-new";
+-        if (!target.is_absolute() || staged != expected) throw std::runtime_error("Invalid updater paths");
+-        ReleaseInfo release;
+-        release.digest = data.at("digest").get<std::string>();
+-        release.size = data.at("size").get<std::uint64_t>();
++        target = data.target;
++        const auto& staged = data.staged;
++        const auto& release = data.release;
+         verify(staged, release);
+-        parent = watch_update_parent(data.at("parent").get<std::uint64_t>());
++        parent = watch_update_parent(data.parent);
+         write_text(job.parent_path() / "ready", "ready");
+         if (!update_process_exited(parent, 60000)) throw std::runtime_error("Application did not close; update not installed");
+         release_update_process(parent);
+@@ -142,6 +180,13 @@
+         fs::remove(job, ec);
+         fs::remove(job.parent_path() / "ready", ec);
+         fs::remove(job.parent_path() / "started", ec);
++        try {
++            if (job.filename() == "job.json" && job.parent_path().filename().u8string().rfind("installer-", 0) == 0 &&
++                fs::weakly_canonical(job.parent_path().parent_path()) == fs::weakly_canonical(fs::u8path(config_dir()) / "updates")) {
++                write_text(job.parent_path() / "completed", target.filename().u8string());
++                cleanup_update_installers();
++            }
++        } catch (const std::exception&) {}
+         return 0;
+     } catch (const std::exception& error) {
+         std::string detail = error.what();
+--- a/src/core/update_install.h
++++ b/src/core/update_install.h
+@@ -3,6 +3,15 @@
+ #include <filesystem>
+ #include <functional>
+ #include <vector>
++
++struct UpdateInstallJob {
++    std::filesystem::path target;
++    std::filesystem::path staged;
++    ReleaseInfo release;
++    std::uint64_t parent = 0;
++};
++UpdateInstallJob parse_update_install_job(const std::string& body);
++void cleanup_update_installers();
+ 
+ void replace_update_executable(const std::filesystem::path& staged,
+     const std::filesystem::path& target, const ReleaseInfo& release,
+--- a/src/platform/update_process.cpp
++++ b/src/platform/update_process.cpp
+@@ -3,6 +3,7 @@
+ #include <chrono>
+ #include <thread>
+ #include <cstdlib>
++#include <limits>
+ #ifdef _WIN32
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+@@ -60,8 +61,17 @@
+ #endif
+ }
+ 
++std::uint64_t maximum_update_process_id() {
++#ifdef _WIN32
++    return (std::numeric_limits<DWORD>::max)();
++#else
++    return (std::numeric_limits<pid_t>::max)();
++#endif
++}
++
+ UpdateProcess watch_update_parent(std::uint64_t id) {
+-    if (!id || id == current_process_id()) throw std::runtime_error("Invalid updater parent process");
++    if (!id || id > maximum_update_process_id() || id == current_process_id())
++        throw std::runtime_error("Invalid updater parent process");
+ #ifdef _WIN32
+     HANDLE handle = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(id));
+     if (!handle) throw std::runtime_error("Cannot wait for the running application");
+--- a/src/platform/update_process.h
++++ b/src/platform/update_process.h
+@@ -10,6 +10,7 @@
+ };
+ std::filesystem::path running_update_target();
+ std::uint64_t current_process_id();
++std::uint64_t maximum_update_process_id();
+ UpdateProcess watch_update_parent(std::uint64_t id);
+ UpdateProcess launch_update_process(const std::filesystem::path& executable,
+     const std::vector<std::string>& arguments);
+--- /dev/null
++++ b/tests/CMakeLists.txt
+@@ -0,0 +1,126 @@
++add_executable(config_safety_checks config_safety_checks.cpp)
++target_link_libraries(config_safety_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(config_safety_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(config_safety_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME config_safety_checks COMMAND config_safety_checks)
++set_tests_properties(config_safety_checks PROPERTIES TIMEOUT 20)
++add_executable(ui_state_checks ui_state_checks.cpp)
++target_link_libraries(ui_state_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(ui_state_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(ui_state_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME ui_state_checks COMMAND ui_state_checks)
++set_tests_properties(ui_state_checks PROPERTIES TIMEOUT 10)
++add_executable(file_tasks_checks file_tasks_checks.cpp)
++target_link_libraries(file_tasks_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(file_tasks_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(file_tasks_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME file_tasks_checks COMMAND file_tasks_checks)
++set_tests_properties(file_tasks_checks PROPERTIES TIMEOUT 10)
++add_executable(backup_checks backup_checks.cpp)
++target_link_libraries(backup_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(backup_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(backup_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME backup_checks COMMAND backup_checks)
++add_executable(update_install_checks update_install_checks.cpp)
++target_link_libraries(update_install_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(update_install_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(update_install_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME update_install_checks COMMAND update_install_checks)
++set_tests_properties(update_install_checks PROPERTIES TIMEOUT 60)
++add_executable(version_build_checks version_build_checks.cpp)
++target_link_libraries(version_build_checks PRIVATE dotamanager_core)
++add_test(NAME version_build_checks COMMAND version_build_checks "${APP_VERSION_STRING}" "${APP_RELEASE_CHANNEL}")
++add_executable(update_checks update_checks.cpp ${CMAKE_SOURCE_DIR}/src/core/release_info.cpp ${CMAKE_SOURCE_DIR}/src/core/checksum.cpp)
++add_executable(update_service_checks update_service_checks.cpp ${CMAKE_SOURCE_DIR}/src/core/updates.cpp ${CMAKE_SOURCE_DIR}/src/core/release_info.cpp ${CMAKE_SOURCE_DIR}/src/core/checksum.cpp ${CMAKE_SOURCE_DIR}/src/core/file_ops.cpp)
++add_executable(avatar_checks avatar_checks.cpp)
++target_link_libraries(avatar_checks PRIVATE dotamanager_core)
++add_executable(update_ui_checks update_ui_checks.cpp ${CMAKE_SOURCE_DIR}/src/ui/update_popup.cpp ${CMAKE_SOURCE_DIR}/src/ui/backups_popup.cpp
++    ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
++    ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
++target_include_directories(update_ui_checks PRIVATE ${imgui_SOURCE_DIR})
++target_link_libraries(update_ui_checks PRIVATE dotamanager_core)
++foreach(test_target update_checks update_service_checks avatar_checks update_ui_checks)
++    target_include_directories(${test_target} PRIVATE
++        ${EMBEDDED_THEMES_DIR}
++        ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/src/core
++        ${CMAKE_SOURCE_DIR}/src/network ${CMAKE_SOURCE_DIR}/src/platform)
++    target_link_libraries(${test_target} PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
++    if(WIN32)
++        target_link_libraries(${test_target} PRIVATE bcrypt)
++    else()
++        target_link_libraries(${test_target} PRIVATE OpenSSL::Crypto)
++    endif()
++    if(MSVC)
++        target_compile_options(${test_target} PRIVATE /UNDEBUG /utf-8)
++    else()
++        target_compile_options(${test_target} PRIVATE -UNDEBUG)
++    endif()
++    if(test_target STREQUAL "avatar_checks")
++        add_test(NAME ${test_target} COMMAND ${test_target} "${CMAKE_SOURCE_DIR}/resources/themes/bg_crimson.png")
++    else()
++        add_test(NAME ${test_target} COMMAND ${test_target})
++    endif()
++endforeach()
++add_executable(preview_ui_checks preview_ui_checks.cpp ${CMAKE_SOURCE_DIR}/src/ui/panels.cpp ${CMAKE_SOURCE_DIR}/src/ui/main_window.cpp
++    ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
++    ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp)
++target_include_directories(preview_ui_checks PRIVATE ${imgui_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
++target_link_libraries(preview_ui_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(preview_ui_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(preview_ui_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME preview_ui_checks COMMAND preview_ui_checks)
++set_tests_properties(preview_ui_checks PROPERTIES TIMEOUT 20)
++target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
++add_executable(package_update_checks package_update_checks.cpp ${CMAKE_SOURCE_DIR}/src/core/updates.cpp
++    ${CMAKE_SOURCE_DIR}/src/core/release_info.cpp ${CMAKE_SOURCE_DIR}/src/core/checksum.cpp ${CMAKE_SOURCE_DIR}/src/core/file_ops.cpp)
++target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
++    ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
++target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
++target_compile_definitions(package_update_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=1)
++if(MSVC)
++    target_compile_options(package_update_checks PRIVATE /UNDEBUG /utf-8)
++    target_link_libraries(package_update_checks PRIVATE bcrypt)
++else()
++    target_compile_options(package_update_checks PRIVATE -UNDEBUG)
++    if(WIN32)
++        target_link_libraries(package_update_checks PRIVATE bcrypt)
++    else()
++        target_link_libraries(package_update_checks PRIVATE OpenSSL::Crypto)
++    endif()
++endif()
++add_test(NAME package_update_checks COMMAND package_update_checks)
++set_tests_properties(ui_state_checks file_tasks_checks backup_checks version_build_checks
++    update_checks update_service_checks avatar_checks update_ui_checks preview_ui_checks package_update_checks
++    PROPERTIES LABELS "portable")
++set_tests_properties(config_safety_checks update_install_checks PROPERTIES LABELS "process-integration")
++add_executable(settings_checks settings_checks.cpp)
++target_link_libraries(settings_checks PRIVATE dotamanager_core)
++if(MSVC)
++    target_compile_options(settings_checks PRIVATE /UNDEBUG /utf-8)
++else()
++    target_compile_options(settings_checks PRIVATE -UNDEBUG)
++endif()
++add_test(NAME settings_checks COMMAND settings_checks)
++set_tests_properties(settings_checks PROPERTIES LABELS "portable" TIMEOUT 10)
++add_custom_target(dotamanager_checks DEPENDS
++    config_safety_checks ui_state_checks file_tasks_checks backup_checks
++    update_install_checks version_build_checks update_checks update_service_checks
++    avatar_checks update_ui_checks preview_ui_checks package_update_checks settings_checks)
+--- /dev/null
++++ b/tests/settings_checks.cpp
+@@ -0,0 +1,80 @@
++#include "app.h"
++#include "file_ops.h"
++#include "localization.h"
++#include <nlohmann/json.hpp>
++#include <cassert>
++#include <chrono>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++
++namespace fs = std::filesystem;
++std::string folder;
++std::string config_dir() { return folder; }
++#ifdef _WIN32
++std::string registry;
++std::string read_registry_settings() { return registry; }
++bool write_registry_settings(const std::string& value) { registry = value; return true; }
++#endif
++namespace steam_api {
++std::string fetch_profile_xml(long long, int) { return {}; }
++void cancel_requests() {}
++}
++std::string read(const fs::path& path) {
++    std::ifstream input(path, std::ios::binary);
++    return {std::istreambuf_iterator<char>(input), {}};
++}
++void put_settings(const std::string& text) {
++#ifdef _WIN32
++    registry = text;
++#else
++    std::ofstream(fs::u8path(folder) / SETTINGS_FILE, std::ios::binary) << text;
++#endif
++}
++std::string settings() {
++#ifdef _WIN32
++    return registry;
++#else
++    return read(fs::u8path(folder) / SETTINGS_FILE);
++#endif
++}
++int main() {
++    auto root = fs::temp_directory_path() / ("dota-settings-" +
++        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
++    fs::create_directories(root); folder = root.u8string();
++    for (const auto* value : {"1e300", "1.5", "-1", "18446744073709551615", "true", "null", "5", "\"1\""}) {
++        auto text = std::string("{\"theme\":") + value + "}";
++        put_settings(text); load_settings();
++        assert(status_msg == "settings_load_failed");
++        save_settings(); assert(settings() == text);
++    }
++    put_settings("{\"theme\":4,\"language\":\"uk\"}"); load_settings();
++    assert(g_theme == 4 && std::string(language_code()) == "uk");
++#ifdef _WIN32
++    registry.clear();
++#endif
++    std::ofstream(root / SETTINGS_FILE, std::ios::binary).close();
++    load_settings(); save_settings();
++    assert(status_msg == "settings_load_failed" && read(root / SETTINGS_FILE).empty());
++    assert(set_config_path(src_path, (root / "empty-recovery").u8string()));
++    save_settings();
++    auto recovery = root / (std::string(SETTINGS_FILE) + ".invalid");
++    assert(fs::is_regular_file(recovery) && read(recovery).empty());
++    fs::remove(recovery);
++    const std::string invalid = "{invalid";
++    put_settings(invalid); load_settings(); save_settings();
++    assert(settings() == invalid);
++    assert(set_config_path(src_path, (root / "changed").u8string()));
++    save_settings();
++    assert(nlohmann::json::parse(settings()).at("src") == (root / "changed").u8string());
++    assert(read(root / (std::string(SETTINGS_FILE) + ".invalid")) == invalid);
++    put_settings("{another invalid"); load_settings();
++    assert(set_config_path(src_path, (root / "another-change").u8string()));
++    save_settings();
++    assert(status_msg == "settings_save_failed" && settings() == "{another invalid");
++    assert(read(root / (std::string(SETTINGS_FILE) + ".invalid")) == invalid);
++    load_settings(); app_shutdown();
++    assert(settings() == "{another invalid");
++    fs::remove_all(root);
++    std::cout << "Invalid numeric settings, unchanged shutdown and explicit recovery passed\n";
++}
+--- a/src/core/release_info.h
++++ b/src/core/release_info.h
+@@ -4,6 +4,7 @@
+ 
+ inline constexpr const char* REPOSITORY_URL = "https://github.com/OutTuna/Dota2CFGChanger";
+ inline constexpr const char* RELEASE_URL = "https://github.com/OutTuna/Dota2CFGChanger/releases/tag/latest";
++inline constexpr std::uint64_t MAX_UPDATE_BYTES = 512ULL * 1024 * 1024;
+ struct ReleaseInfo {
+     std::string version;
+     std::string asset_name;
