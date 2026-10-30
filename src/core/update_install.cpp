@@ -65,6 +65,7 @@ void cleanup_update_installers() {
             std::ifstream input(marker, std::ios::binary);
             std::string filename;
             std::getline(input, filename);
+            input.close();
             auto helper = fs::u8path(filename);
             if (filename.empty() || helper != helper.filename() || helper == "." || helper == ".." || helper == "completed") continue;
             std::error_code error;
