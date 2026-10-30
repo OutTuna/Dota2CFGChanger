@@ -220,6 +220,10 @@ Pass `-DAPP_VERSION=x.y` to embed a local version. The default `0.0` development
 
 ### Tests and CI
 
+Regression tests stay in `tests/` and have their own CMake configuration. They are disabled by default (`DOTAMANAGER_BUILD_TESTS=OFF`), are not linked into the application, and are not installed or included in the executable/AppImage release assets. Source archives keep the tests so contributors and package maintainers can reproduce the checks.
+
+Run the local checks with `bash scripts/run-all-checks.sh`; add `--full` to compile the GUI application too. The script runs workflow/version checks, Python checks, builds the test targets and executes CTest. `DOTAMANAGER_CHECK_BUILD_DIR` selects an existing build directory; `DOTAMANAGER_JSON_INCLUDE` overrides the JSON header path when dependency sources live elsewhere.
+
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON
 cmake --build build --config Release --parallel
@@ -241,14 +245,12 @@ For portable test work on macOS (the application itself remains unsupported), co
 with `-DDOTAMANAGER_BUILD_TESTS=ON`, then build the test targets explicitly:
 
 ```sh
-cmake --build build --target config_safety_checks ui_state_checks file_tasks_checks \
-  backup_checks update_install_checks version_build_checks update_checks \
-  update_service_checks avatar_checks update_ui_checks preview_ui_checks package_update_checks
+cmake --build build --target dotamanager_checks --parallel
 ctest --test-dir build --output-on-failure
 ```
 
 This tests core logic and headless ImGui layout, not a macOS release or Windows/Linux GUI behavior.
-`tests/core_checks.py` accepts compiler instrumentation through `CXXFLAGS`.
+`tests/core_checks.py` accepts compiler instrumentation through `CXXFLAGS` and an OpenSSL prefix through `OPENSSL_ROOT_DIR` (on macOS it otherwise uses Homebrew).
 
 On Windows, use `python` instead if that is the command for your Python 3 installation.
 
