@@ -1,6 +1,7 @@
 #include "backups.h"
 #include "file_ops.h"
 #include "checksum.h"
+#include "json_fields.h"
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <algorithm>
@@ -48,7 +49,7 @@ json metadata(const fs::path& folder) {
         !fs::is_regular_file(fs::symlink_status(folder / "backup.json"))) throw ConfigFileError("backup_invalid");
     std::ifstream stream(folder / "backup.json");
     json value; stream >> value;
-    if (value.at("format").get<int>() != 1) throw ConfigFileError("backup_invalid");
+    if (json_unsigned(value.at("format"), 1) != 1) throw ConfigFileError("backup_invalid");
     return value;
 }
 std::string timestamp(bool filename) {
@@ -110,7 +111,9 @@ ConfigBackup create_config_backup(const fs::path& destination, const fs::path& r
     }
 }
 
-std::vector<ConfigBackup> list_config_backups(const fs::path& root, const std::string& account) {
+std::vector<ConfigBackup> list_config_backups(const fs::path& root, const std::string& account,
+    std::vector<std::string>* invalid) {
+    if (invalid) invalid->clear();
     check_store(root, account);
     auto folder = root / account;
     if (!fs::exists(folder)) return {};
@@ -123,7 +126,9 @@ std::vector<ConfigBackup> list_config_backups(const fs::path& root, const std::s
             auto destination = fs::u8path(value.at("destination").get<std::string>());
             if (!destination.is_absolute()) continue;
             result.push_back({entry.path(), destination, account, value.at("date").get<std::string>()});
-        } catch (const std::exception&) { throw ConfigFileError("backup_invalid", entry.path().filename().u8string()); }
+        } catch (const std::exception&) {
+            if (invalid) invalid->push_back(entry.path().filename().u8string());
+        }
     }
     std::sort(result.begin(), result.end(), [](const ConfigBackup& a, const ConfigBackup& b) { return a.path.filename() > b.path.filename(); });
     return result;
