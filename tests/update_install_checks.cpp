@@ -1,5 +1,7 @@
 #include "update_install.h"
 #include "checksum.h"
+#include "platform.h"
+#include <cstdlib>
 #include "platform/update_process.h"
 #include <nlohmann/json.hpp>
 #include <cassert>
@@ -54,11 +56,44 @@ int main(int argc, char** argv) {
     auto root = fs::temp_directory_path() / ("dotamanager-install-" + std::to_string(current_process_id()));
     fs::remove_all(root);
     fs::create_directories(root / fs::u8path("path with spaces and кириллица"));
+#ifdef _WIN32
+    _wputenv_s(L"APPDATA", root.c_str());
+#else
+    setenv("XDG_CONFIG_HOME", root.c_str(), 1);
+#endif
+    auto updates = fs::u8path(config_dir()) / "updates";
+    auto completed = updates / "installer-completed";
+    auto interrupted = updates / "installer-interrupted";
+    auto ordinary = updates / "v1.30";
+    fs::create_directories(completed); fs::create_directories(interrupted); fs::create_directories(ordinary);
+    write(completed / "helper.exe", "old executable");
+    write(completed / "completed", "helper.exe");
+    write(interrupted / "helper.exe", "preserve for recovery");
+    write(ordinary / "completed", "helper.exe"); write(ordinary / "helper.exe", "cached release");
+    cleanup_update_installers(); cleanup_update_installers();
+    assert(!fs::exists(completed));
+    assert(read(interrupted / "helper.exe") == "preserve for recovery");
+    assert(read(ordinary / "helper.exe") == "cached release");
+    auto malformed = updates / "installer-malformed"; fs::create_directory(malformed);
+    write(malformed / "completed", "../preserved"); write(updates / "preserved", "keep");
+    cleanup_update_installers(); assert(read(updates / "preserved") == "keep" && fs::exists(malformed));
     auto target = root / fs::u8path("path with spaces and кириллица") / "application.exe";
     auto staged = target; staged += ".update-new";
     auto backup = target; backup += ".update-old";
     write(target, "old"); write(staged, "new");
     auto release = info(staged);
+    nlohmann::json job_data = {{"target", target.u8string()}, {"staged", staged.u8string()},
+        {"digest", release.digest}, {"size", release.size}, {"parent", current_process_id()}};
+    auto parsed = parse_update_install_job(job_data.dump());
+    assert(parsed.target == target && parsed.staged == staged && parsed.release.size == release.size);
+    for (const auto* field : {"size", "parent"}) {
+        for (const auto* encoded : {"1e300", "1.5", "-1", "18446744073709551615", "true", "null", "0", "\"1\""}) {
+            auto invalid = job_data; invalid[field] = nlohmann::json::parse(encoded);
+            bool rejected = false;
+            try { parse_update_install_job(invalid.dump()); } catch (const std::exception&) { rejected = true; }
+            assert(rejected && read(target) == "old");
+        }
+    }
     replace_update_executable(staged, target, release, [&] { assert(read(target) == "new"); assert(read(backup) == "old"); return true; });
     assert(read(target) == "new" && !fs::exists(backup) && !fs::exists(staged));
     write(target, "old"); write(staged, "new");
