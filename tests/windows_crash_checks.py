@@ -55,7 +55,8 @@ int wmain(int argc, wchar_t** argv) {
     executable = root / "crash_checks.exe"
     subprocess.run(["cl", "/nologo", "/std:c++17", "/O2", "/MT", "/utf-8", "/EHsc",
                     "/I" + str(project / "src/core"), str(root / "instrumented.cpp"),
-                    str(root / "driver.cpp"), "/Fe:" + str(executable), "/link", "advapi32.lib"],
+                    str(root / "driver.cpp"), str(project / "src/core/checksum.cpp"),
+                    "/Fe:" + str(executable), "/link", "advapi32.lib", "bcrypt.lib"],
                    cwd=root, check=True)
     for phase in ("staged", "saved", "installed"):
         fixture = root / (phase + " пробел Unicode")
