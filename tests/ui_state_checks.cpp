@@ -236,7 +236,20 @@ int main() {
     std::thread follower([] { assert(!ensure_profile_info("702")); });
     app_request_stop();
     pending.join(); follower.join();
+    const std::string invalid_settings = "{invalid";
+#ifdef _WIN32
+    test_settings = invalid_settings;
+#else
+    std::ofstream(root / SETTINGS_FILE) << invalid_settings;
+#endif
+    load_settings();
+    assert(status_msg == "settings_load_failed");
     app_shutdown();
+#ifdef _WIN32
+    assert(test_settings == invalid_settings);
+#else
+    { std::ifstream f(root / SETTINGS_FILE); std::string text{std::istreambuf_iterator<char>(f), {}}; assert(text == invalid_settings); }
+#endif
     { std::ifstream f(root / AVATAR_URL_CACHE_FILE); nlohmann::json value; f >> value; assert(value["700"] == "test-avatar"); }
     fs::remove_all(root);
     std::cout << "Redraw coalescing, wake lifecycle and coherent cached UI state passed\n";
