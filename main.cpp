@@ -50,6 +50,7 @@ int main(int argc, char** argv) {
     auto arguments = update_arguments(argc, argv);
     int helper_result = update_helper_dispatch(arguments);
     if (helper_result >= 0) return helper_result;
+    cleanup_update_installers();
     load_settings();
 
 #ifdef _WIN32
