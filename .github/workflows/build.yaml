@@ -68,7 +68,8 @@ jobs:
           $key = [System.BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
           "id=$key" >> $env:GITHUB_OUTPUT
       - name: Cache dependency sources and builds
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        id: windows-dependencies
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: build/_deps
           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
@@ -76,6 +77,12 @@ jobs:
         run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}" "-DAPP_RELEASE_CHANNEL=${{ needs.compute-version.outputs.channel }}"
       - name: Build
         run: cmake --build build --config Release --parallel
+      - name: Save built Windows dependencies
+        if: steps.windows-dependencies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: build/_deps
+          key: ${{ steps.windows-dependencies.outputs.cache-primary-key }}
       - name: Regression tests
         run: |
           ctest --test-dir build --build-config Release --output-on-failure
