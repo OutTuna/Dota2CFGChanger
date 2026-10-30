@@ -65,11 +65,26 @@ int main() {
     fs::create_symlink(destination / "cfg/options.txt", destination / "link");
     fails([&] { copy_config_with_backup(source, destination, store, "123"); });
     assert(read(destination / "cfg/options.txt") == "version-2");
+    fs::remove(destination / "link");
 #endif
 
     auto broken = store / "123/broken"; fs::create_directory(broken);
     write(broken / "backup.json", "{broken");
-    fails([&] { list_config_backups(store, "123"); });
+    assert(list_config_backups(store, "123").size() == 5);
+    std::vector<std::string> invalid;
+    list_config_backups(store, "123", &invalid);
+    assert(invalid == std::vector<std::string>{"broken"});
+    auto valid = list_config_backups(store, "123").front();
+    for (const auto& format : {"1e300", "1.5", "-1", "18446744073709551615", "true", "null", "\"1\""}) {
+        auto text = read(valid.path / "backup.json");
+        auto position = text.find("\"format\": 1");
+        assert(position != std::string::npos);
+        text.replace(position, 11, std::string("\"format\": ") + format);
+        write(broken / "backup.json", text);
+        ConfigBackup malformed{broken, destination, "123", "invalid"};
+        fails([&] { restore_config_backup(malformed, destination, store, "123"); });
+        assert(list_config_backups(store, "123").size() == 5);
+    }
     assert(fs::exists(broken / "backup.json"));
     fs::remove_all(root);
     std::cout << "Backup creation, integrity, retention, restore and failure protection passed\n";
