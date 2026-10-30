@@ -3,6 +3,7 @@
 #include "file_ops.h"
 #include "localization.h"
 #include "ui_events.h"
+#include "json_fields.h"
 #include <nlohmann/json.hpp>
 #include <filesystem>
 #include <fstream>
@@ -15,6 +16,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <memory>
+#include <optional>
 
 namespace {
 std::thread scan_worker;
@@ -69,7 +71,17 @@ static fs::path settings_path()  { return fs::u8path(config_dir()) / SETTINGS_FI
 static fs::path nick_cache_path(){ return fs::u8path(config_dir()) / CACHE_FILE; }
 static fs::path avatar_url_cache_path() { return fs::u8path(config_dir()) / AVATAR_URL_CACHE_FILE; }
 
+static std::optional<std::string> invalid_settings;
+static std::string rejected_defaults;
+static std::string settings_json() {
+    std::lock_guard<std::mutex> lock(g_data_mutex);
+    return json{{"src", std::string(src_path)}, {"dst", std::string(dst_path)},
+        {"theme", g_theme.load()}, {"language", language_code()}}.dump();
+}
+
 void load_settings() {
+    invalid_settings.reset();
+    rejected_defaults.clear();
     auto default_path = default_steam_userdata();
     set_config_path(src_path, default_path);
     set_config_path(dst_path, default_path);
@@ -81,22 +93,31 @@ void load_settings() {
     const bool have_settings = fs::exists(settings_path());
 #endif
     if (have_settings) {
+        std::string encoded;
+        bool readable = false;
         try {
-            json j;
 #ifdef _WIN32
-            if (!registry_settings.empty()) j = json::parse(registry_settings);
+            if (!registry_settings.empty()) encoded = registry_settings;
             else {
                 std::ifstream f(settings_path());
-                f >> j;
+                if (!f) throw std::runtime_error("Cannot read settings");
+                encoded.assign(std::istreambuf_iterator<char>(f), {});
+                if (f.bad()) throw std::runtime_error("Cannot read settings");
             }
 #else
             std::ifstream f(settings_path());
-            f >> j;
+            if (!f) throw std::runtime_error("Cannot read settings");
+            encoded.assign(std::istreambuf_iterator<char>(f), {});
+            if (f.bad()) throw std::runtime_error("Cannot read settings");
 #endif
+            readable = true;
+            auto j = json::parse(encoded);
             std::string s = j.value("src", default_path);
             std::string d = j.value("dst", default_path);
-            g_theme = std::clamp(j.value("theme", 0), 0, 4);
-            set_language(j.value("language", "en"));
+            auto theme = j.contains("theme") ? json_unsigned(j.at("theme"), 4) : 0;
+            auto language = j.value("language", "en");
+            g_theme = static_cast<int>(theme);
+            set_language(language);
             set_config_path(src_path, s);
             set_config_path(dst_path, d);
 #ifdef _WIN32
@@ -105,7 +126,11 @@ void load_settings() {
                 fs::remove(settings_path(), cleanup_error);
             }
 #endif
-        } catch (const std::exception& error) { set_status("settings_load_failed", error.what()); }
+        } catch (const std::exception& error) {
+            if (readable) invalid_settings = std::move(encoded);
+            rejected_defaults = settings_json();
+            set_status("settings_load_failed", error.what());
+        }
     }
     if (fs::exists(nick_cache_path())) {
         try {
@@ -131,16 +156,20 @@ void save_settings() {
     static std::mutex save_mutex;
     static std::string saved;
     std::lock_guard<std::mutex> save_lock(save_mutex);
-    std::string source_path, destination_path;
-    {
-        std::lock_guard<std::mutex> lock(g_data_mutex);
-        source_path = src_path;
-        destination_path = dst_path;
-    }
     try {
-        auto settings = json{{"src", source_path}, {"dst", destination_path},
-            {"theme", g_theme.load()}, {"language", language_code()}}.dump();
-        if (settings == saved) return;
+        auto settings = settings_json();
+        if (!rejected_defaults.empty()) {
+            if (settings == rejected_defaults || !invalid_settings) return;
+            auto recovery = settings_path(); recovery += ".invalid";
+            reject_config_link(recovery);
+            if (fs::exists(recovery)) {
+                std::ifstream previous(recovery, std::ios::binary);
+                std::string bytes{std::istreambuf_iterator<char>(previous), {}};
+                if (!previous || bytes != *invalid_settings)
+                    throw std::runtime_error("Resolve the earlier settings recovery file: " + recovery.u8string());
+            } else write_file_atomic(recovery, *invalid_settings);
+        }
+        if (settings == saved && rejected_defaults.empty()) return;
 #ifdef _WIN32
         if (write_registry_settings(settings)) {
             std::error_code cleanup_error;
@@ -150,6 +179,8 @@ void save_settings() {
         write_file_atomic(settings_path(), settings);
 #endif
         saved = std::move(settings);
+        invalid_settings.reset();
+        rejected_defaults.clear();
     } catch (const std::exception& error) { set_status("settings_save_failed", error.what()); }
 }
 
