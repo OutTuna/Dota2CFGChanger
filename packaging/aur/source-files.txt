@@ -76,3 +76,11 @@ tests/windows_crash_checks.py
 tests/windows_release_checks.py
 tests/update_install_checks.cpp
 tests/windows_update_crash_checks.py
+src/core/json_fields.h
+src/core/update_install.cpp
+src/core/update_install.h
+src/platform/update_process.cpp
+src/platform/update_process.h
+tests/CMakeLists.txt
+tests/settings_checks.cpp
+src/core/release_info.h
