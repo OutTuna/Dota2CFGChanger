@@ -1,4 +1,5 @@
 #include "file_ops.h"
+#include "checksum.h"
 #include <cstdlib>
 #include <stdexcept>
 #include <vector>
@@ -127,6 +128,10 @@ ConfigTree inspect_config_tree(const fs::path& path) {
             if (!fs::is_regular_file(status)) throw ConfigFileError("symlink");
             value.size = entry.file_size();
             value.modified = entry.last_write_time();
+            try { value.digest = file_sha256(entry.path()); }
+            catch (const std::exception& error) {
+                throw fs::filesystem_error(error.what(), entry.path(), std::make_error_code(std::errc::io_error));
+            }
         }
         result.emplace(entry.path().lexically_relative(path), value);
     }
@@ -193,7 +198,7 @@ fs::path replace_config_directory(const fs::path& source, const fs::path& destin
         for (const auto& item : before) {
             auto found = staged.find(item.first);
             if (found == staged.end() || found->second.directory != item.second.directory ||
-                found->second.size != item.second.size ||
+                found->second.size != item.second.size || found->second.digest != item.second.digest ||
                 (!item.second.directory && !config_files_equal(source / item.first, temp / item.first)))
                 throw ConfigFileError("config_changed");
         }
