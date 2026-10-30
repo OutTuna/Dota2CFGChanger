@@ -4604,12 +4604,13 @@
        - name: Setup MSVC & Resource Compiler
          shell: pwsh
          run: ./scripts/setup-msvc.ps1
-@@ -56,18 +68,25 @@
+@@ -56,18 +68,32 @@
            $key = [System.BitConverter]::ToString($hash).Replace('-', '').ToLowerInvariant()
            "id=$key" >> $env:GITHUB_OUTPUT
        - name: Cache dependency sources and builds
 -        uses: actions/cache@v6.1.0
-+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
++        id: windows-dependencies
++        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
          with:
            path: build/_deps
            key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
@@ -4618,6 +4619,12 @@
 +        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}" "-DAPP_RELEASE_CHANNEL=${{ needs.compute-version.outputs.channel }}"
        - name: Build
          run: cmake --build build --config Release --parallel
++      - name: Save built Windows dependencies
++        if: steps.windows-dependencies.outputs.cache-hit != 'true'
++        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
++        with:
++          path: build/_deps
++          key: ${{ steps.windows-dependencies.outputs.cache-primary-key }}
        - name: Regression tests
 -        run: ctest --test-dir build --build-config Release --output-on-failure
 +        run: |
@@ -4634,7 +4641,7 @@
          with:
            name: DotaManager-Windows
            path: build/Release/DotaManager.exe
-@@ -77,15 +96,15 @@
+@@ -77,15 +103,15 @@
      needs: compute-version
      runs-on: ubuntu-22.04
      env:
@@ -4653,7 +4660,7 @@
  
        - name: Install Linux Dependencies
          run: |
-@@ -113,18 +132,18 @@
+@@ -113,18 +139,18 @@
            id=$({ gcc-11 --version; cmake --version; dpkg-query -W libssl-dev libgl1-mesa-dev; } | sha256sum | cut -d' ' -f1)
            echo "id=$id" >> "$GITHUB_OUTPUT"
        - name: Cache dependency sources and builds
@@ -4675,7 +4682,7 @@
  
        - name: Build
          run: cmake --build build --config Release -j"$(nproc)"
-@@ -133,6 +152,7 @@
+@@ -133,6 +159,7 @@
          run: |
            ctest --test-dir build --output-on-failure
            python3 tests/core_checks.py build/_deps/json-src/include
@@ -4683,7 +4690,7 @@
  
        - name: Compiler cache statistics
          run: ccache --show-stats
-@@ -143,7 +163,6 @@
+@@ -143,7 +170,6 @@
            base=https://github.com/linuxdeploy
            wget -q -O "$HOME/ld/linuxdeploy" \
              "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
@@ -4691,7 +4698,7 @@
            wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
              "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
            chmod +x "$HOME/ld/"*
-@@ -178,7 +197,7 @@
+@@ -178,7 +204,7 @@
            ls -la linux-artifact/
  
        - name: Upload Artifact
@@ -4700,7 +4707,7 @@
          with:
            name: DotaManager-Linux
            path: linux-artifact/*.AppImage
-@@ -193,9 +212,11 @@
+@@ -193,9 +219,11 @@
      runs-on: ${{ matrix.os }}
      timeout-minutes: 10
      steps:
@@ -4714,7 +4721,7 @@
          with:
            name: DotaManager-Linux
            path: linux-artifact
-@@ -222,43 +243,61 @@
+@@ -222,43 +250,61 @@
            bash scripts/check-appimage.sh "${images[0]}"
  
    release:
@@ -5143,7 +5150,7 @@
 +          python3 tests/core_checks.py build/_deps/json-src/include
 --- /dev/null
 +++ b/tests/windows_crash_checks.py
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,106 @@
 +import os
 +from pathlib import Path
 +import shutil
@@ -5201,7 +5208,8 @@
 +    executable = root / "crash_checks.exe"
 +    subprocess.run(["cl", "/nologo", "/std:c++17", "/O2", "/MT", "/utf-8", "/EHsc",
 +                    "/I" + str(project / "src/core"), str(root / "instrumented.cpp"),
-+                    str(root / "driver.cpp"), "/Fe:" + str(executable), "/link", "advapi32.lib"],
++                    str(root / "driver.cpp"), str(project / "src/core/checksum.cpp"),
++                    "/Fe:" + str(executable), "/link", "advapi32.lib", "bcrypt.lib"],
 +                   cwd=root, check=True)
 +    for phase in ("staged", "saved", "installed"):
 +        fixture = root / (phase + " пробел Unicode")
