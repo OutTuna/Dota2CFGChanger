@@ -84,3 +84,4 @@ src/platform/update_process.h
 tests/CMakeLists.txt
 tests/settings_checks.cpp
 src/core/release_info.h
+src/platform/platform.h
