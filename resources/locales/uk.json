@@ -32,6 +32,7 @@
   "path_too_long": "Шлях задовгий; його не змінено.",
   "error": "Помилка: {value}",
   "profile_failed": "Не вдалося завантажити профіль: {value}",
+  "folder_picker_missing": "Не знайдено діалог вибору папки. Встановіть zenity або kdialog.",
   "folder_unreadable": "Не вдалося прочитати папку: {value}",
   "scan_complete": "Сканування завершено",
   "select_first": "Спочатку виберіть вихідний і цільовий акаунти.",

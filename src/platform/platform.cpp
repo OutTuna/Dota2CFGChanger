@@ -51,7 +51,8 @@ std::string config_dir() {
     return dir.u8string();
 }
 
-std::string browse_for_folder(const char* title) {
+std::string browse_for_folder(const char* title, bool* unavailable) {
+    if (unavailable) *unavailable = false;
 #ifdef _WIN32
     std::string result;
     IFileOpenDialog* pfd = nullptr;
@@ -86,7 +87,9 @@ std::string browse_for_folder(const char* title) {
     };
     for (const std::string& command : {
         "zenity --file-selection --directory --title=" + quote(title) + " 2>/dev/null",
-        "kdialog --getexistingdirectory --title " + quote(title) + " 2>/dev/null"}) {
+        "kdialog --getexistingdirectory --title " + quote(title) + " 2>/dev/null",
+        "qarma --file-selection --directory --title=" + quote(title) + " 2>/dev/null",
+        "yad --file --directory --title=" + quote(title) + " 2>/dev/null"}) {
         FILE* pipe = popen(command.c_str(), "r");
         if (!pipe) continue;
         char buffer[512];
@@ -95,8 +98,9 @@ std::string browse_for_folder(const char* title) {
         int code = pclose(pipe);
         while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) result.pop_back();
         if (code == 0 && !result.empty()) return result;
-        if (code == 256) return {};
+        if (!WIFEXITED(code) || WEXITSTATUS(code) != 127) return {};
     }
+    if (unavailable) *unavailable = true;
     return {};
 
 #else
@@ -113,7 +117,7 @@ static std::string find_first_existing(const std::vector<fs::path>& paths) {
 }
 
 #ifdef __linux__
-static FontPaths find_jetbrains_mono() {
+static FontPaths find_linux_fonts() {
     std::vector<fs::path> roots;
     const char* home = std::getenv("HOME");
     const char* data = std::getenv("XDG_DATA_HOME");
@@ -122,23 +126,35 @@ static FontPaths find_jetbrains_mono() {
     if (home && *home) roots.push_back(fs::u8path(home) / ".fonts");
     roots.push_back("/usr/local/share/fonts");
     roots.push_back("/usr/share/fonts");
+    roots.push_back("/run/current-system/sw/share/X11/fonts");
+    std::vector<fs::path> fonts;
     for (const auto& root : roots) {
-        std::vector<fs::path> fonts;
         std::error_code ec;
         fs::recursive_directory_iterator iterator(root, fs::directory_options::skip_permission_denied, ec), end;
         while (!ec && iterator != end) {
-            if (iterator->is_regular_file(ec)) fonts.push_back(iterator->path());
+            std::error_code entry_error;
+            if (iterator->is_regular_file(entry_error) && !entry_error) fonts.push_back(iterator->path());
             iterator.increment(ec);
         }
-        for (const char* name : {"JetBrainsMono-Regular.ttf", "JetBrainsMonoNL-Regular.ttf",
-            "JetBrainsMonoNerdFontMono-Regular.ttf", "JetBrainsMonoNerdFont-Regular.ttf"}) {
-            for (const auto& font : fonts) {
-                if (font.filename() != name) continue;
-                auto bold_name = std::string(name);
-                bold_name.replace(bold_name.find("-Regular.ttf"), 12, "-Bold.ttf");
-                auto bold = find_first_existing({font.parent_path() / bold_name});
-                return {font.u8string(), bold.empty() ? font.u8string() : bold};
-            }
+    }
+    struct Family { const char* regular; const char* bold; };
+    for (const Family& family : {
+        Family{"JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf"},
+        Family{"JetBrainsMonoNL-Regular.ttf", "JetBrainsMonoNL-Bold.ttf"},
+        Family{"JetBrainsMonoNerdFontMono-Regular.ttf", "JetBrainsMonoNerdFontMono-Bold.ttf"},
+        Family{"JetBrainsMonoNerdFont-Regular.ttf", "JetBrainsMonoNerdFont-Bold.ttf"},
+        Family{"DejaVuSans.ttf", "DejaVuSans-Bold.ttf"},
+        Family{"LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf"},
+        Family{"NotoSans-Regular.ttf", "NotoSans-Bold.ttf"},
+        Family{"AdwaitaSans-Regular.ttf", "AdwaitaSans-Bold.ttf"},
+        Family{"OpenSans-Regular.ttf", "OpenSans-Bold.ttf"},
+        Family{"Roboto-Regular.ttf", "Roboto-Bold.ttf"},
+        Family{"Ubuntu-R.ttf", "Ubuntu-B.ttf"},
+        Family{"FreeSans.ttf", "FreeSansBold.ttf"}}) {
+        for (const auto& font : fonts) {
+            if (font.filename() != family.regular) continue;
+            auto bold = find_first_existing({font.parent_path() / family.bold});
+            return {font.u8string(), bold.empty() ? font.u8string() : bold};
         }
     }
     return {};
@@ -146,44 +162,36 @@ static FontPaths find_jetbrains_mono() {
 #endif
 
 FontPaths find_font_paths() {
-    FontPaths result;
 #ifdef __linux__
-    result = find_jetbrains_mono();
-    if (!result.regular.empty()) return result;
-#endif
-
-#ifdef _WIN32
-    const std::vector<fs::path> regular_candidates = {
-        "C:\\Windows\\Fonts\\arial.ttf",
-        "C:\\Windows\\Fonts\\segoeui.ttf",
-        "C:\\Windows\\Fonts\\tahoma.ttf",
-    };
-
-    const std::vector<fs::path> bold_candidates = {
-        "C:\\Windows\\Fonts\\arialbd.ttf",
-        "C:\\Windows\\Fonts\\segoeuib.ttf",
-        "C:\\Windows\\Fonts\\arial.ttf",
-    };
-#else
-    const std::vector<fs::path> regular_candidates = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    };
-
-    const std::vector<fs::path> bold_candidates = {
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-    };
-#endif
-
-    result.regular = find_first_existing(regular_candidates);
-    result.bold = find_first_existing(bold_candidates);
-
+    return find_linux_fonts();
+#elif defined(_WIN32)
+    const wchar_t* windows = _wgetenv(L"WINDIR");
+    const fs::path folder = fs::path(windows && *windows ? windows : L"C:\\Windows") / "Fonts";
+    FontPaths result;
+    result.regular = find_first_existing({folder / "arial.ttf", folder / "segoeui.ttf", folder / "tahoma.ttf"});
+    result.bold = find_first_existing({folder / "arialbd.ttf", folder / "segoeuib.ttf", folder / "arial.ttf"});
     return result;
+#else
+    return {};
+#endif
+}
+
+void show_fatal_error(const std::string& detail) {
+#ifdef _WIN32
+    MessageBoxW(nullptr, fs::u8path(detail).wstring().c_str(), L"Dota 2 CFG Changer", MB_OK | MB_ICONERROR);
+#else
+    std::fprintf(stderr, "Dota 2 CFG Changer: %s\n", detail.c_str());
+    auto child = fork();
+    if (child != 0) {
+        if (child > 0) waitpid(child, nullptr, 0);
+        return;
+    }
+    auto detached = fork();
+    if (detached != 0) _exit(0);
+    execlp("zenity", "zenity", "--error", ("--text=" + detail).c_str(), static_cast<char*>(nullptr));
+    execlp("kdialog", "kdialog", "--error", detail.c_str(), static_cast<char*>(nullptr));
+    _exit(1);
+#endif
 }
 
 bool open_external(const std::string& value) {

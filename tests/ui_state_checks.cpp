@@ -145,7 +145,7 @@ int main() {
     start_scan();
     {
         std::unique_lock<std::mutex> lock(scan_mutex);
-        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
+        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load() && !g_profiles_loading.load(); }));
     }
     ui_events::set_wake(nullptr);
     const auto& scanned = app_ui_snapshot();
@@ -220,7 +220,7 @@ int main() {
     start_scan();
     {
         std::unique_lock<std::mutex> lock(scan_mutex);
-        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
+        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load() && !g_profiles_loading.load(); }));
     }
     assert(app_ui_snapshot().status == "scan_profile_warnings" && app_ui_snapshot().detail == "1");
     assert(steam_api::fetch_count == 2);

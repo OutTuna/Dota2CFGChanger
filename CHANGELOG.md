@@ -19,6 +19,11 @@ No stable application version was manually changed. Alpha branch CI publishes is
 
 ### Features and resource use
 
+- Compare configuration state by content, so a timestamp-only change no longer cancels a confirmed transfer.
+- List and restore an account's backups after its Steam `userdata` folder has moved; the target must still be that account's `570` directory.
+- Allow copying and restoring while profile names are still loading after a scan.
+- Search Linux font folders for DejaVu, Liberation, Noto, Adwaita, Open Sans, Roboto, Ubuntu and FreeSans on any distribution layout; locate Windows fonts through `WINDIR`.
+- Report a missing Linux folder picker in the status line and accept `qarma` and `yad`; show an error when the window cannot be created.
 - Background transfer preview with additions, replacements, unchanged paths, removals, file count and copy volume; revalidate before applying.
 - Skip identical transfers and unnecessary backups.
 - Search account lists, open account folders through a context menu, clip off-screen rows and enable keyboard navigation.

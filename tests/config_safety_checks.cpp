@@ -109,6 +109,13 @@ int main(int argc, char** argv) {
     copy_config_with_backup(source, destination, store, "43", &preview);
     assert(list_config_backups(store, "43").size() == count && fs::last_write_time(destination / "same") == modified);
 
+    for (const auto& touched : {source / "same", destination / "same"}) {
+        fs::last_write_time(touched, fs::last_write_time(touched) + std::chrono::seconds(7));
+        validate_config_preview(preview, source, destination);
+    }
+    copy_config_with_backup(source, destination, store, "43", &preview);
+    assert(list_config_backups(store, "43").size() == count);
+
     for (const auto& changed : {source / "same", destination / "same"}) {
         auto time = fs::last_write_time(changed);
         put(changed, "edit");

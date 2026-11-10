@@ -126,22 +126,33 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::Spacing();
 
+    const auto picker_missing = [] {
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        status_msg = "folder_picker_missing";
+        status_detail.clear();
+        app_status_changed();
+    };
     if (open_src) {
         open_src = false;
-        auto p = browse_for_folder(tr("source"));
+        bool unavailable = false;
+        auto p = browse_for_folder(tr("source"), &unavailable);
         if (!p.empty()) { set_config_path(src_path, p); save_settings(); }
+        else if (unavailable) picker_missing();
     }
     if (open_dst) {
         open_dst = false;
-        auto p = browse_for_folder(tr("destination"));
+        bool unavailable = false;
+        auto p = browse_for_folder(tr("destination"), &unavailable);
         if (!p.empty()) { set_config_path(dst_path, p); save_settings(); }
+        else if (unavailable) picker_missing();
     }
 
     if (scanning) ImGui::EndDisabled();
-    if (scanning) ImGui::BeginDisabled();
-    if (ImGui::Button(g_scanning.load() ? tr("scanning") : tr("scan"), { -1, 32 }))
+    const bool scan_active = g_scanning.load() || g_profiles_loading.load();
+    ImGui::BeginDisabled(scanning || scan_active);
+    if (ImGui::Button(scan_active ? tr("scanning") : tr("scan"), { -1, 32 }))
         start_scan();
-    if (scanning) ImGui::EndDisabled();
+    ImGui::EndDisabled();
 
     const float AVATAR_SIZE = 24.f;
     const float ROW_H = AVATAR_SIZE + 6.f;

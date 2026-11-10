@@ -32,6 +32,7 @@
   "path_too_long": "Path is too long; it was not changed.",
   "error": "Error: {value}",
   "profile_failed": "Could not load profile: {value}",
+  "folder_picker_missing": "No folder picker found. Install zenity or kdialog.",
   "folder_unreadable": "Cannot read folder: {value}",
   "scan_complete": "Scan complete",
   "select_first": "Select source and destination accounts first.",
