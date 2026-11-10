@@ -32,7 +32,16 @@ int main() {
     fails([&] { restore_config_backup(backups[0], destination, store, "123"); });
     assert(read(destination / "cfg/options.txt") == "old" && list_config_backups(store, "123").size() == 2);
     write(backups[0].path / "570/cfg/options.txt", "new");
-    fails([&] { restore_config_backup(backups[0], root / "other/123/570", store, "123"); });
+    fs::create_directories(root / "other/999");
+    fails([&] { restore_config_backup(backups[0], root / "other/999/570", store, "123"); });
+    fails([&] { restore_config_backup(backups[0], root / "other/123/571", store, "123"); });
+    assert(!fs::exists(root / "other/999/570") && !fs::exists(root / "other/123"));
+    auto relocated = root / "relocated/123/570";
+    write(relocated / "cfg/options.txt", "moved");
+    restore_config_backup(backups[0], relocated, store, "123");
+    assert(read(relocated / "cfg/options.txt") == "new");
+    fs::remove_all(store / "123" / list_config_backups(store, "123").front().path.filename());
+    assert(list_config_backups(store, "123").size() == 2);
     fails([&] { restore_config_backup(backups[0], destination, store, "456"); });
     auto blocked = root / "blocked"; write(blocked, "file");
     fails([&] { copy_config_with_backup(source, destination, blocked, "123"); });

@@ -162,8 +162,9 @@ BackupCopyResult restore_config_backup(const ConfigBackup& backup, const fs::pat
     if (backup.account != account || fs::weakly_canonical(backup.path.parent_path()) != fs::weakly_canonical(root / account))
         throw ConfigFileError("backup_invalid");
     auto value = metadata(backup.path);
+    const auto target = fs::weakly_canonical(destination);
     if (value.at("account").get<std::string>() != account ||
-        fs::weakly_canonical(fs::u8path(value.at("destination").get<std::string>())) != fs::weakly_canonical(destination) ||
+        target.filename() != "570" || target.parent_path().filename().u8string() != account ||
         tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
     separate(destination, root);
     BackupCopyResult result;

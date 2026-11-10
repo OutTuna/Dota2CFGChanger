@@ -37,6 +37,7 @@ inline std::string status_detail;
 inline std::atomic<int> selected_src{ -1 };
 inline std::atomic<int> selected_dst{ -1 };
 inline std::atomic<bool> g_scanning{ false };
+inline std::atomic<bool> g_profiles_loading{ false };
 
 inline std::atomic<unsigned long long> g_ui_generation{1};
 inline std::atomic<unsigned long long> g_account_generation{1};
@@ -93,7 +94,6 @@ void prepare_copy_preview();
 void cancel_copy_preview();
 inline ConfigPreview g_copy_preview;
 inline bool g_copy_preview_ready = false;
-std::string browse_for_folder(const char* title);
 
 void start_scan();
 void app_shutdown();

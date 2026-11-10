@@ -18,15 +18,10 @@ std::vector<ConfigBackup> backups;
 int selected = -1;
 std::string message;
 fs::path root() { return fs::u8path(config_dir()) / "backups"; }
-std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id,
-    const fs::path& destination, std::string& warning) {
+std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id, std::string& warning) {
     std::vector<std::string> invalid;
     auto result = list_config_backups(folder, id, &invalid);
     if (!invalid.empty()) warning = tr_value("backup_entries_invalid", std::to_string(invalid.size()));
-    auto target = fs::weakly_canonical(destination);
-    result.erase(std::remove_if(result.begin(), result.end(), [&](const ConfigBackup& backup) {
-        return fs::weakly_canonical(backup.destination) != target;
-    }), result.end());
     return result;
 }
 FileTaskCompletion failed(const std::string& key, const std::string& detail) {
@@ -48,10 +43,10 @@ void ui_open_backups() {
     message.clear();
     backups.clear();
     selected = -1;
-    file_tasks_start([folder = root(), id = account, target = destination]() -> FileTaskCompletion {
+    file_tasks_start([folder = root(), id = account]() -> FileTaskCompletion {
         try {
             std::string warning;
-            auto result = find_backups(folder, id, target, warning);
+            auto result = find_backups(folder, id, warning);
             return [result = std::move(result), warning = std::move(warning)]() mutable {
                 backups = std::move(result);
                 message = std::move(warning);
@@ -96,7 +91,7 @@ void ui_render_backups_popup() {
                         auto result = restore_config_backup(backup, target, folder, id);
                         std::vector<ConfigBackup> refreshed;
                         std::string warning;
-                        try { refreshed = find_backups(folder, id, target, warning); }
+                        try { refreshed = find_backups(folder, id, warning); }
                         catch (const std::exception& error) { warning = tr_value("backup_refresh_failed", error.what()); }
                         return [result, refreshed = std::move(refreshed), warning = std::move(warning), id]() mutable {
                             message = tr_value("backup_restored", id);

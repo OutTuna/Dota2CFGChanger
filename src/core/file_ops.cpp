@@ -127,7 +127,6 @@ ConfigTree inspect_config_tree(const fs::path& path) {
         if (!value.directory) {
             if (!fs::is_regular_file(status)) throw ConfigFileError("symlink");
             value.size = entry.file_size();
-            value.modified = entry.last_write_time();
             try { value.digest = file_sha256(entry.path()); }
             catch (const std::exception& error) {
                 throw fs::filesystem_error(error.what(), entry.path(), std::make_error_code(std::errc::io_error));

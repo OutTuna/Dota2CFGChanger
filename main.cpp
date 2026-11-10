@@ -18,7 +18,9 @@
 #include "update_install.h"
 #include "platform/update_process.h"
 #include "ui_events.h"
+#include "platform.h"
 #include <algorithm>
+#include <string>
 
 namespace {
 double input_until = 0;
@@ -57,14 +59,21 @@ int main(int argc, char** argv) {
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 #endif
 
-    if (!glfwInit()) return 1;
+    static std::string window_error;
+    glfwSetErrorCallback([](int, const char* description) { if (description) window_error = description; });
+    const auto window_failed = [] {
+        show_fatal_error("Cannot open the application window. A working OpenGL driver and display are required."
+            + (window_error.empty() ? std::string() : "\n" + window_error));
+        return 1;
+    };
+    if (!glfwInit()) return window_failed();
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 #ifdef __linux__
     glfwWindowHintString(GLFW_X11_CLASS_NAME, "DotaManager");
 #endif
     const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_build_version_label() + ")";
     GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
-    if (!window) return 1;
+    if (!window) { glfwTerminate(); return window_failed(); }
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
     ui_events::set_wake(glfwPostEmptyEvent);

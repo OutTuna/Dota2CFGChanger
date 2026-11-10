@@ -358,6 +358,13 @@ static void scan_thread() {
         dst_list.swap(new_dst);
         app_ui_changed();
     }
+    if (!stop_scan.load()) {
+        if (!scan_error.empty()) set_status("folder_unreadable", scan_error);
+        else set_status("scan_complete");
+    }
+    g_profiles_loading = true;
+    g_scanning = false;
+    ui_events::request_redraw();
 
     for (const auto& id : all_ids) {
         if (stop_scan.load()) break;
@@ -365,13 +372,14 @@ static void scan_thread() {
     }
 
     bool caches_saved = save_profile_caches();
-    if (!stop_scan.load() && caches_saved) {
-        if (!scan_error.empty()) set_status("folder_unreadable", scan_error);
-        else if (profile_errors) set_status("scan_profile_warnings", std::to_string(profile_errors));
-        else set_status("scan_complete");
+    if (!stop_scan.load() && caches_saved && profile_errors) {
+        std::lock_guard<std::mutex> lock(g_data_mutex);
+        if (status_msg == "scan_complete") {
+            status_msg = "scan_profile_warnings";
+            status_detail = std::to_string(profile_errors);
+            app_status_changed();
+        }
     }
-    g_scanning = false;
-    ui_events::request_redraw();
 }
 
 void cancel_copy_preview() {
@@ -465,7 +473,7 @@ void copy_config(const ConfigPreview* preview) {
 }
 
 void start_scan() {
-    if (stopping_app.load() || file_tasks_busy() || g_scanning.exchange(true)) return;
+    if (stopping_app.load() || file_tasks_busy() || g_profiles_loading.load() || g_scanning.exchange(true)) return;
     if (scan_worker.joinable()) scan_worker.join();
     stop_scan = false;
     try {
@@ -473,6 +481,7 @@ void start_scan() {
             try { scan_thread(); }
             catch (const std::exception& e) { set_status("error", e.what()); }
             g_scanning = false;
+            g_profiles_loading = false;
             ui_events::request_redraw();
         });
     } catch (const std::exception& error) {
