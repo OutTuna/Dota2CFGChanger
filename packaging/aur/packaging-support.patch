@@ -205,7 +205,7 @@
  #include "imgui.h"
  #include "backends/imgui_impl_glfw.h"
  #include "backends/imgui_impl_opengl3.h"
-@@ -9,18 +17,40 @@
+@@ -9,31 +17,76 @@
  #include "updates.h"
  #include "update_install.h"
  #include "platform/update_process.h"
@@ -217,7 +217,9 @@
 -#pragma comment(lib, "ole32.lib")
 -#endif
 +#include "ui_events.h"
++#include "platform.h"
 +#include <algorithm>
++#include <string>
 +
 +namespace {
 +double input_until = 0;
@@ -253,9 +255,18 @@
      load_settings();
  
  #ifdef _WIN32
-@@ -29,11 +59,25 @@
+     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+ #endif
  
-     if (!glfwInit()) return 1;
+-    if (!glfwInit()) return 1;
++    static std::string window_error;
++    glfwSetErrorCallback([](int, const char* description) { if (description) window_error = description; });
++    const auto window_failed = [] {
++        show_fatal_error("Cannot open the application window. A working OpenGL driver and display are required."
++            + (window_error.empty() ? std::string() : "\n" + window_error));
++        return 1;
++    };
++    if (!glfwInit()) return window_failed();
      glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 -    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_version() + ")";
 +#ifdef __linux__
@@ -263,7 +274,8 @@
 +#endif
 +    const std::string window_title = std::string("Dota 2 CFG Changer (v") + app_build_version_label() + ")";
      GLFWwindow* window = glfwCreateWindow(720, 600, window_title.c_str(), NULL, NULL);
-     if (!window) return 1;
+-    if (!window) return 1;
++    if (!window) { glfwTerminate(); return window_failed(); }
      glfwMakeContextCurrent(window);
      glfwSwapInterval(1);
 +    ui_events::set_wake(glfwPostEmptyEvent);
@@ -280,7 +292,7 @@
  
      GLFWimage icon;
      icon.width  = APP_ICON_WIDTH;
-@@ -50,6 +94,7 @@
+@@ -50,6 +103,7 @@
      ui_apply_theme(static_cast<AppTheme>(g_theme.load()));
  
      ImGuiIO& io = ImGui::GetIO();
@@ -288,7 +300,7 @@
  
      FontPaths fonts = find_font_paths();
      ImFont* font_default = nullptr;
-@@ -72,11 +117,48 @@
+@@ -72,11 +126,48 @@
      if (install_error.empty()) updates_check(false);
      else updates_install_error(install_error);
      bool startup_confirmed = false;
@@ -337,7 +349,7 @@
          ImGui::NewFrame();
  
          ImVec2 ds = io.DisplaySize;
-@@ -87,8 +169,8 @@
+@@ -87,8 +178,8 @@
          ui_render_backups_popup();
  
          ImGui::Render();
@@ -347,7 +359,7 @@
          glViewport(0, 0, dw, dh);
          glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
          glClear(GL_COLOR_BUFFER_BIT);
-@@ -98,12 +180,17 @@
+@@ -98,12 +189,17 @@
              update_install_confirm_started(arguments);
              startup_confirmed = true;
          }
@@ -369,7 +381,7 @@
      ImGui_ImplOpenGL3_Shutdown();
      ImGui_ImplGlfw_Shutdown();
      ImGui::DestroyContext();
-@@ -118,4 +205,4 @@
+@@ -118,4 +214,4 @@
  
  #ifdef _WIN32
  int APIENTRY WinMain(HINSTANCE, HINSTANCE, PSTR, int) { return main(__argc, __argv); }
@@ -409,7 +421,15 @@
    "from": "From:",
    "to": "To:",
    "source_path": "Source path:",
-@@ -39,7 +42,7 @@
+@@ -29,6 +32,7 @@
+   "path_too_long": "Path is too long; it was not changed.",
+   "error": "Error: {value}",
+   "profile_failed": "Could not load profile: {value}",
++  "folder_picker_missing": "No folder picker found. Install zenity or kdialog.",
+   "folder_unreadable": "Cannot read folder: {value}",
+   "scan_complete": "Scan complete",
+   "select_first": "Select source and destination accounts first.",
+@@ -39,7 +43,7 @@
    "source_invalid": "Source config is not a directory.",
    "overlap": "Source and destination folders overlap.",
    "previous_copy": "Previous copy files exist beside: {value}. Preserve or restore them before retrying.",
@@ -418,7 +438,7 @@
    "restore_failed": "Could not restore config. Previous config saved at: {value}",
    "home_missing": "HOME is not set. Choose an absolute folder path.",
    "theme_0": "Dark (default)",
-@@ -75,6 +78,28 @@
+@@ -75,6 +79,28 @@
    "backup_restore_warning": "Restore backup from {value}? The destination config will be replaced. Its current contents will be backed up first. Close Dota 2 and Steam before continuing.",
    "backup_restored": "Backup restored for account {value}.",
    "backup_create_failed": "Could not create a backup. Config replacement was cancelled: {value}",
@@ -458,7 +478,15 @@
    "ready": "Готово",
    "source": "Папка исходного конфига",
    "destination": "Папка целевого аккаунта",
-@@ -39,7 +42,7 @@
+@@ -29,6 +32,7 @@
+   "path_too_long": "Путь слишком длинный; он не был изменён.",
+   "error": "Ошибка: {value}",
+   "profile_failed": "Не удалось загрузить профиль: {value}",
++  "folder_picker_missing": "Не найден диалог выбора папки. Установите zenity или kdialog.",
+   "folder_unreadable": "Не удалось прочитать папку: {value}",
+   "scan_complete": "Сканирование завершено",
+   "select_first": "Сначала выберите исходный и целевой аккаунты.",
+@@ -39,7 +43,7 @@
    "source_invalid": "Исходный конфиг не является папкой.",
    "overlap": "Папки источника и назначения пересекаются.",
    "previous_copy": "Остались файлы предыдущего копирования рядом с: {value}. Сохраните или восстановите их перед повторной попыткой.",
@@ -467,7 +495,7 @@
    "restore_failed": "Не удалось восстановить конфиг. Прежний конфиг сохранён здесь: {value}",
    "home_missing": "HOME не задан. Выберите абсолютный путь к папке.",
    "theme_0": "Тёмная (по умолчанию)",
-@@ -75,6 +78,28 @@
+@@ -75,6 +79,28 @@
    "backup_restore_warning": "Восстановить бэкап от {value}? Конфиг назначения будет заменён. Перед этим сохраним его текущую копию. Закройте Dota 2 и Steam перед продолжением.",
    "backup_restored": "Бэкап восстановлен для аккаунта {value}.",
    "backup_create_failed": "Не удалось создать бэкап. Замена конфига отменена: {value}",
@@ -507,7 +535,15 @@
    "ready": "Готово",
    "source": "Папка вихідного конфігу",
    "destination": "Папка цільового акаунта",
-@@ -39,7 +42,7 @@
+@@ -29,6 +32,7 @@
+   "path_too_long": "Шлях задовгий; його не змінено.",
+   "error": "Помилка: {value}",
+   "profile_failed": "Не вдалося завантажити профіль: {value}",
++  "folder_picker_missing": "Не знайдено діалог вибору папки. Встановіть zenity або kdialog.",
+   "folder_unreadable": "Не вдалося прочитати папку: {value}",
+   "scan_complete": "Сканування завершено",
+   "select_first": "Спочатку виберіть вихідний і цільовий акаунти.",
+@@ -39,7 +43,7 @@
    "source_invalid": "Вихідний конфіг не є папкою.",
    "overlap": "Папки джерела та призначення перетинаються.",
    "previous_copy": "Залишилися файли попереднього копіювання поруч із: {value}. Збережіть або відновіть їх перед повторною спробою.",
@@ -516,7 +552,7 @@
    "restore_failed": "Не вдалося відновити конфіг. Попередній конфіг збережено тут: {value}",
    "home_missing": "HOME не задано. Виберіть абсолютний шлях до папки.",
    "theme_0": "Темна (типово)",
-@@ -75,6 +78,28 @@
+@@ -75,6 +79,28 @@
    "backup_restore_warning": "Відновити бекап від {value}? Конфіг призначення буде замінено. Перед цим збережемо його поточну копію. Закрийте Dota 2 і Steam перед продовженням.",
    "backup_restored": "Бекап відновлено для акаунта {value}.",
    "backup_create_failed": "Не вдалося створити бекап. Заміну конфіга скасовано: {value}",
@@ -955,16 +991,46 @@
      if (scanning) ImGui::BeginDisabled();
      static bool open_src = false;
      static bool open_dst = false;
-@@ -137,7 +139,7 @@
+@@ -124,22 +126,33 @@
+ 
+     ImGui::Spacing();
+ 
++    const auto picker_missing = [] {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        status_msg = "folder_picker_missing";
++        status_detail.clear();
++        app_status_changed();
++    };
+     if (open_src) {
+         open_src = false;
+-        auto p = browse_for_folder(tr("source"));
++        bool unavailable = false;
++        auto p = browse_for_folder(tr("source"), &unavailable);
+         if (!p.empty()) { set_config_path(src_path, p); save_settings(); }
++        else if (unavailable) picker_missing();
+     }
+     if (open_dst) {
+         open_dst = false;
+-        auto p = browse_for_folder(tr("destination"));
++        bool unavailable = false;
++        auto p = browse_for_folder(tr("destination"), &unavailable);
+         if (!p.empty()) { set_config_path(dst_path, p); save_settings(); }
++        else if (unavailable) picker_missing();
+     }
  
      if (scanning) ImGui::EndDisabled();
-     if (scanning) ImGui::BeginDisabled();
+-    if (scanning) ImGui::BeginDisabled();
 -    if (ImGui::Button(scanning ? tr("scanning") : tr("scan"), { -1, 32 }))
-+    if (ImGui::Button(g_scanning.load() ? tr("scanning") : tr("scan"), { -1, 32 }))
++    const bool scan_active = g_scanning.load() || g_profiles_loading.load();
++    ImGui::BeginDisabled(scanning || scan_active);
++    if (ImGui::Button(scan_active ? tr("scanning") : tr("scan"), { -1, 32 }))
          start_scan();
-     if (scanning) ImGui::EndDisabled();
+-    if (scanning) ImGui::EndDisabled();
++    ImGui::EndDisabled();
  
-@@ -149,34 +151,50 @@
+     const float AVATAR_SIZE = 24.f;
+     const float ROW_H = AVATAR_SIZE + 6.f;
+@@ -149,34 +162,50 @@
          + ImGui::GetStyle().WindowPadding.y;
      const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
  
@@ -1031,7 +1097,7 @@
              bool sel = (i == selected);
  
              ImGui::PushID(i);
-@@ -203,6 +221,13 @@
+@@ -203,6 +232,13 @@
                  selected_atomic.store(i);
              }
  
@@ -1045,7 +1111,7 @@
              if (use_custom_palette) ImGui::PopStyleColor(3);
  
              ImDrawList* dl = ImGui::GetWindowDrawList();
-@@ -250,6 +275,7 @@
+@@ -250,6 +286,7 @@
          }
  
          ImGui::EndChild();
@@ -1053,7 +1119,7 @@
      };
  
      render_account_list(local_src_list, selected_src, "##src_list");
-@@ -267,12 +293,9 @@
+@@ -267,12 +304,9 @@
          if (s < 0 || d < 0) {
              copy_config();
          } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
@@ -1069,7 +1135,7 @@
              g_confirm_copy_open = true;
          }
      }
-@@ -280,7 +303,6 @@
+@@ -280,7 +314,6 @@
      if (scanning) ImGui::EndDisabled();
      const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
      ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
@@ -1077,7 +1143,7 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
      ImGui::BeginChild("##status", {0, 32.f},
-@@ -299,16 +321,52 @@
+@@ -299,16 +332,52 @@
      if (ImGui::BeginPopupModal("Info###info", &info_open,
          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
          ImGui::TextUnformatted("OutTuna");
@@ -1506,7 +1572,7 @@
      };
  
      std::string source_path, destination_path;
-@@ -201,34 +343,76 @@
+@@ -201,34 +343,84 @@
          destination_path = dst_path;
      }
      scan_dir(source_path, new_src);
@@ -1524,10 +1590,18 @@
          selected_dst = -1;
 -        src_list = new_src;
 -        dst_list = new_dst;
+-    }
 +        src_list.swap(new_src);
 +        dst_list.swap(new_dst);
 +        app_ui_changed();
-     }
++    }
++    if (!stop_scan.load()) {
++        if (!scan_error.empty()) set_status("folder_unreadable", scan_error);
++        else set_status("scan_complete");
++    }
++    g_profiles_loading = true;
++    g_scanning = false;
++    ui_events::request_redraw();
  
      for (const auto& id : all_ids) {
          if (stop_scan.load()) break;
@@ -1536,21 +1610,23 @@
 -
 -    save_settings();
 -    if (!scan_failed) set_status("scan_complete");
-+        if (!ensure_profile_info(id)) ++profile_errors;
-+    }
-+
-+    bool caches_saved = save_profile_caches();
-+    if (!stop_scan.load() && caches_saved) {
-+        if (!scan_error.empty()) set_status("folder_unreadable", scan_error);
-+        else if (profile_errors) set_status("scan_profile_warnings", std::to_string(profile_errors));
-+        else set_status("scan_complete");
-+    }
-     g_scanning = false;
+-    g_scanning = false;
 -}
 -
 -void copy_config() {
 -    if (g_scanning.load()) return;
-+    ui_events::request_redraw();
++        if (!ensure_profile_info(id)) ++profile_errors;
++    }
++
++    bool caches_saved = save_profile_caches();
++    if (!stop_scan.load() && caches_saved && profile_errors) {
++        std::lock_guard<std::mutex> lock(g_data_mutex);
++        if (status_msg == "scan_complete") {
++            status_msg = "scan_profile_warnings";
++            status_detail = std::to_string(profile_errors);
++            app_status_changed();
++        }
++    }
 +}
 +
 +void cancel_copy_preview() {
@@ -1596,7 +1672,7 @@
      {
          std::lock_guard<std::mutex> lock(g_data_mutex);
          if (s_idx >= (int)src_list.size() || d_idx >= (int)dst_list.size()) return;
-@@ -236,53 +420,82 @@
+@@ -236,53 +428,83 @@
          d_id = dst_list[d_idx];
          s_nick = nick_cache.count(s_id) ? nick_cache[s_id] : ("ID: " + s_id);
          d_nick = nick_cache.count(d_id) ? nick_cache[d_id] : ("ID: " + d_id);
@@ -1678,7 +1754,7 @@
  
  void start_scan() {
 -    if (g_scanning.exchange(true)) return;
-+    if (stopping_app.load() || file_tasks_busy() || g_scanning.exchange(true)) return;
++    if (stopping_app.load() || file_tasks_busy() || g_profiles_loading.load() || g_scanning.exchange(true)) return;
      if (scan_worker.joinable()) scan_worker.join();
      stop_scan = false;
 -    scan_worker = std::thread([] {
@@ -1689,6 +1765,7 @@
 +            try { scan_thread(); }
 +            catch (const std::exception& e) { set_status("error", e.what()); }
 +            g_scanning = false;
++            g_profiles_loading = false;
 +            ui_events::request_redraw();
 +        });
 +    } catch (const std::exception& error) {
@@ -1730,10 +1807,12 @@
  
  constexpr int PATH_BUF_SIZE = 4096;
  
-@@ -35,6 +38,32 @@
+@@ -34,6 +37,33 @@
+ inline std::atomic<int> selected_src{ -1 };
  inline std::atomic<int> selected_dst{ -1 };
  inline std::atomic<bool> g_scanning{ false };
- 
++inline std::atomic<bool> g_profiles_loading{ false };
++
 +inline std::atomic<unsigned long long> g_ui_generation{1};
 +inline std::atomic<unsigned long long> g_account_generation{1};
 +inline std::atomic<unsigned long long> g_cache_generation{1};
@@ -1759,11 +1838,10 @@
 +    std::string detail;
 +};
 +const UiSnapshot& app_ui_snapshot();
-+
+ 
  struct SuccessPopupState {
      bool show = false;
-     bool closing = false;
-@@ -44,16 +73,28 @@
+@@ -44,16 +74,27 @@
      std::string dst_id;
      std::string src_nick;
      std::string dst_nick;
@@ -1781,6 +1859,7 @@
  void load_settings();
  void save_settings();
 -void copy_config();
+-std::string browse_for_folder(const char* title);
 +bool save_profile_caches();
 +bool ensure_profile_info(const std::string& id);
 +void copy_config(const ConfigPreview* preview = nullptr);
@@ -1788,7 +1867,6 @@
 +void cancel_copy_preview();
 +inline ConfigPreview g_copy_preview;
 +inline bool g_copy_preview_ready = false;
- std::string browse_for_folder(const char* title);
  
  void start_scan();
  void app_shutdown();
@@ -2135,7 +2213,7 @@
  #include <algorithm>
  #include <filesystem>
  
-@@ -12,22 +13,29 @@
+@@ -12,22 +13,24 @@
  bool confirming = false;
  std::string account;
  fs::path destination;
@@ -2146,18 +2224,15 @@
  fs::path root() { return fs::u8path(config_dir()) / "backups"; }
 -void refresh() {
 -    backups = list_config_backups(root(), account);
-+std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id,
-+    const fs::path& destination, std::string& warning) {
+-    auto target = fs::weakly_canonical(destination);
+-    backups.erase(std::remove_if(backups.begin(), backups.end(), [&](const ConfigBackup& backup) {
+-        return fs::weakly_canonical(backup.destination) != target;
+-    }), backups.end());
+-    selected = -1;
++std::vector<ConfigBackup> find_backups(const fs::path& folder, const std::string& id, std::string& warning) {
 +    std::vector<std::string> invalid;
 +    auto result = list_config_backups(folder, id, &invalid);
 +    if (!invalid.empty()) warning = tr_value("backup_entries_invalid", std::to_string(invalid.size()));
-     auto target = fs::weakly_canonical(destination);
--    backups.erase(std::remove_if(backups.begin(), backups.end(), [&](const ConfigBackup& backup) {
-+    result.erase(std::remove_if(result.begin(), result.end(), [&](const ConfigBackup& backup) {
-         return fs::weakly_canonical(backup.destination) != target;
--    }), backups.end());
--    selected = -1;
-+    }), result.end());
 +    return result;
 +}
 +FileTaskCompletion failed(const std::string& key, const std::string& detail) {
@@ -2171,7 +2246,7 @@
      {
          std::lock_guard<std::mutex> lock(g_data_mutex);
          int index = selected_dst.load();
-@@ -35,16 +43,27 @@
+@@ -35,16 +38,27 @@
          account = dst_list[index];
          destination = fs::u8path(dst_path) / account / DOTA_ID;
      }
@@ -2182,10 +2257,10 @@
 -    try { refresh(); }
 -    catch (const std::exception& error) { message = tr_value("error", error.what()); }
 +    selected = -1;
-+    file_tasks_start([folder = root(), id = account, target = destination]() -> FileTaskCompletion {
++    file_tasks_start([folder = root(), id = account]() -> FileTaskCompletion {
 +        try {
 +            std::string warning;
-+            auto result = find_backups(folder, id, target, warning);
++            auto result = find_backups(folder, id, warning);
 +            return [result = std::move(result), warning = std::move(warning)]() mutable {
 +                backups = std::move(result);
 +                message = std::move(warning);
@@ -2201,7 +2276,7 @@
      if (requested) { ImGui::OpenPopup(id); requested = false; }
      auto display = ImGui::GetIO().DisplaySize;
      float width = std::min(500.f, display.x - 32.f);
-@@ -53,32 +72,50 @@
+@@ -53,32 +67,50 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20.f, 18.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8.f, 10.f});
      bool open = true;
@@ -2246,7 +2321,7 @@
 +                        auto result = restore_config_backup(backup, target, folder, id);
 +                        std::vector<ConfigBackup> refreshed;
 +                        std::string warning;
-+                        try { refreshed = find_backups(folder, id, target, warning); }
++                        try { refreshed = find_backups(folder, id, warning); }
 +                        catch (const std::exception& error) { warning = tr_value("backup_refresh_failed", error.what()); }
 +                        return [result, refreshed = std::move(refreshed), warning = std::move(warning), id]() mutable {
 +                            message = tr_value("backup_restored", id);
@@ -2269,7 +2344,7 @@
              }
          } else {
              ImGui::TextWrapped("%s", tr("backup_retention"));
-@@ -94,6 +131,7 @@
+@@ -94,6 +126,7 @@
              if (ImGui::Button(tr("backup_restore"), {-1.f, 34.f})) confirming = true;
              ImGui::EndDisabled();
          }
@@ -2727,7 +2802,7 @@
 +    start_scan();
 +    {
 +        std::unique_lock<std::mutex> lock(scan_mutex);
-+        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
++        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load() && !g_profiles_loading.load(); }));
 +    }
 +    ui_events::set_wake(nullptr);
 +    const auto& scanned = app_ui_snapshot();
@@ -2802,7 +2877,7 @@
 +    start_scan();
 +    {
 +        std::unique_lock<std::mutex> lock(scan_mutex);
-+        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load(); }));
++        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load() && !g_profiles_loading.load(); }));
 +    }
 +    assert(app_ui_snapshot().status == "scan_profile_warnings" && app_ui_snapshot().detail == "1");
 +    assert(steam_api::fetch_count == 2);
@@ -2898,7 +2973,7 @@
  
  std::string normalize_user_path(const std::string& path) {
      if (path.empty()) return {};
-@@ -51,31 +90,122 @@
+@@ -51,31 +90,121 @@
      return candidates.front().u8string();
  }
  
@@ -2940,7 +3015,6 @@
 +        if (!value.directory) {
 +            if (!fs::is_regular_file(status)) throw ConfigFileError("symlink");
 +            value.size = entry.file_size();
-+            value.modified = entry.last_write_time();
 +            try { value.digest = file_sha256(entry.path()); }
 +            catch (const std::exception& error) {
 +                throw fs::filesystem_error(error.what(), entry.path(), std::make_error_code(std::errc::io_error));
@@ -3039,7 +3113,7 @@
              fs::rename(destination, backup);
              saved = true;
          }
-@@ -84,11 +214,11 @@
+@@ -84,11 +213,11 @@
          if (saved) {
              std::error_code restore_error;
              fs::rename(backup, destination, restore_error);
@@ -3074,7 +3148,7 @@
  
  struct ConfigFileError : std::runtime_error {
      std::string key;
-@@ -14,3 +19,19 @@
+@@ -14,3 +19,18 @@
      explicit ConfigFileError(const std::string& message, const std::string& value = {})
          : std::runtime_error(message), key(message), detail(value) {}
  };
@@ -3082,10 +3156,9 @@
 +struct ConfigEntry {
 +    bool directory = false;
 +    std::uintmax_t size = 0;
-+    std::filesystem::file_time_type modified{};
 +    std::string digest;
 +    bool operator==(const ConfigEntry& other) const {
-+        return directory == other.directory && size == other.size && modified == other.modified && digest == other.digest;
++        return directory == other.directory && size == other.size && digest == other.digest;
 +    }
 +};
 +using ConfigTree = std::map<std::filesystem::path, ConfigEntry>;
@@ -3627,8 +3700,14 @@
      result.cleanup_error = prune(root, account);
      return result;
  }
-@@ -154,9 +166,11 @@
-         fs::weakly_canonical(fs::u8path(value.at("destination").get<std::string>())) != fs::weakly_canonical(destination) ||
+@@ -150,13 +162,16 @@
+     if (backup.account != account || fs::weakly_canonical(backup.path.parent_path()) != fs::weakly_canonical(root / account))
+         throw ConfigFileError("backup_invalid");
+     auto value = metadata(backup.path);
++    const auto target = fs::weakly_canonical(destination);
+     if (value.at("account").get<std::string>() != account ||
+-        fs::weakly_canonical(fs::u8path(value.at("destination").get<std::string>())) != fs::weakly_canonical(destination) ||
++        target.filename() != "570" || target.parent_path().filename().u8string() != account ||
          tree(backup.path / "570") != value.at("files")) throw ConfigFileError("backup_invalid");
      separate(destination, root);
 -    if (fs::exists(fs::symlink_status(destination))) create_config_backup(destination, root, account);
@@ -3750,7 +3829,25 @@
      session.SetConnectTimeout(cpr::ConnectTimeout{5000});
 --- a/tests/backup_checks.cpp
 +++ b/tests/backup_checks.cpp
-@@ -65,7 +65,27 @@
+@@ -32,7 +32,16 @@
+     fails([&] { restore_config_backup(backups[0], destination, store, "123"); });
+     assert(read(destination / "cfg/options.txt") == "old" && list_config_backups(store, "123").size() == 2);
+     write(backups[0].path / "570/cfg/options.txt", "new");
+-    fails([&] { restore_config_backup(backups[0], root / "other/123/570", store, "123"); });
++    fs::create_directories(root / "other/999");
++    fails([&] { restore_config_backup(backups[0], root / "other/999/570", store, "123"); });
++    fails([&] { restore_config_backup(backups[0], root / "other/123/571", store, "123"); });
++    assert(!fs::exists(root / "other/999/570") && !fs::exists(root / "other/123"));
++    auto relocated = root / "relocated/123/570";
++    write(relocated / "cfg/options.txt", "moved");
++    restore_config_backup(backups[0], relocated, store, "123");
++    assert(read(relocated / "cfg/options.txt") == "new");
++    fs::remove_all(store / "123" / list_config_backups(store, "123").front().path.filename());
++    assert(list_config_backups(store, "123").size() == 2);
+     fails([&] { restore_config_backup(backups[0], destination, store, "456"); });
+     auto blocked = root / "blocked"; write(blocked, "file");
+     fails([&] { copy_config_with_backup(source, destination, blocked, "123"); });
+@@ -65,7 +74,27 @@
      fs::create_symlink(destination / "cfg/options.txt", destination / "link");
      fails([&] { copy_config_with_backup(source, destination, store, "123"); });
      assert(read(destination / "cfg/options.txt") == "version-2");
@@ -3920,7 +4017,7 @@
 +    const std::filesystem::path& destination);
 --- /dev/null
 +++ b/tests/config_safety_checks.cpp
-@@ -0,0 +1,229 @@
+@@ -0,0 +1,236 @@
 +#include "backups.h"
 +#include "file_ops.h"
 +#include "steam_api.h"
@@ -4031,6 +4128,13 @@
 +    assert(!preview.changes && preview.affected_files == 0);
 +    copy_config_with_backup(source, destination, store, "43", &preview);
 +    assert(list_config_backups(store, "43").size() == count && fs::last_write_time(destination / "same") == modified);
++
++    for (const auto& touched : {source / "same", destination / "same"}) {
++        fs::last_write_time(touched, fs::last_write_time(touched) + std::chrono::seconds(7));
++        validate_config_preview(preview, source, destination);
++    }
++    copy_config_with_backup(source, destination, store, "43", &preview);
++    assert(list_config_backups(store, "43").size() == count);
 +
 +    for (const auto& changed : {source / "same", destination / "same"}) {
 +        auto time = fs::last_write_time(changed);
@@ -4411,14 +4515,171 @@
  IDI_ICON1 ICON "@CMAKE_SOURCE_DIR@/resources/icons/Icon.ico"
 --- a/src/platform/platform.cpp
 +++ b/src/platform/platform.cpp
-@@ -186,7 +186,6 @@
-     return result;
+@@ -51,7 +51,8 @@
+     return dir.u8string();
  }
  
+-std::string browse_for_folder(const char* title) {
++std::string browse_for_folder(const char* title, bool* unavailable) {
++    if (unavailable) *unavailable = false;
+ #ifdef _WIN32
+     std::string result;
+     IFileOpenDialog* pfd = nullptr;
+@@ -86,7 +87,9 @@
+     };
+     for (const std::string& command : {
+         "zenity --file-selection --directory --title=" + quote(title) + " 2>/dev/null",
+-        "kdialog --getexistingdirectory --title " + quote(title) + " 2>/dev/null"}) {
++        "kdialog --getexistingdirectory --title " + quote(title) + " 2>/dev/null",
++        "qarma --file-selection --directory --title=" + quote(title) + " 2>/dev/null",
++        "yad --file --directory --title=" + quote(title) + " 2>/dev/null"}) {
+         FILE* pipe = popen(command.c_str(), "r");
+         if (!pipe) continue;
+         char buffer[512];
+@@ -95,8 +98,9 @@
+         int code = pclose(pipe);
+         while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) result.pop_back();
+         if (code == 0 && !result.empty()) return result;
+-        if (code == 256) return {};
+-    }
++        if (!WIFEXITED(code) || WEXITSTATUS(code) != 127) return {};
++    }
++    if (unavailable) *unavailable = true;
+     return {};
+ 
+ #else
+@@ -113,7 +117,7 @@
+ }
+ 
+ #ifdef __linux__
+-static FontPaths find_jetbrains_mono() {
++static FontPaths find_linux_fonts() {
+     std::vector<fs::path> roots;
+     const char* home = std::getenv("HOME");
+     const char* data = std::getenv("XDG_DATA_HOME");
+@@ -122,23 +126,35 @@
+     if (home && *home) roots.push_back(fs::u8path(home) / ".fonts");
+     roots.push_back("/usr/local/share/fonts");
+     roots.push_back("/usr/share/fonts");
++    roots.push_back("/run/current-system/sw/share/X11/fonts");
++    std::vector<fs::path> fonts;
+     for (const auto& root : roots) {
+-        std::vector<fs::path> fonts;
+         std::error_code ec;
+         fs::recursive_directory_iterator iterator(root, fs::directory_options::skip_permission_denied, ec), end;
+         while (!ec && iterator != end) {
+-            if (iterator->is_regular_file(ec)) fonts.push_back(iterator->path());
++            std::error_code entry_error;
++            if (iterator->is_regular_file(entry_error) && !entry_error) fonts.push_back(iterator->path());
+             iterator.increment(ec);
+         }
+-        for (const char* name : {"JetBrainsMono-Regular.ttf", "JetBrainsMonoNL-Regular.ttf",
+-            "JetBrainsMonoNerdFontMono-Regular.ttf", "JetBrainsMonoNerdFont-Regular.ttf"}) {
+-            for (const auto& font : fonts) {
+-                if (font.filename() != name) continue;
+-                auto bold_name = std::string(name);
+-                bold_name.replace(bold_name.find("-Regular.ttf"), 12, "-Bold.ttf");
+-                auto bold = find_first_existing({font.parent_path() / bold_name});
+-                return {font.u8string(), bold.empty() ? font.u8string() : bold};
+-            }
++    }
++    struct Family { const char* regular; const char* bold; };
++    for (const Family& family : {
++        Family{"JetBrainsMono-Regular.ttf", "JetBrainsMono-Bold.ttf"},
++        Family{"JetBrainsMonoNL-Regular.ttf", "JetBrainsMonoNL-Bold.ttf"},
++        Family{"JetBrainsMonoNerdFontMono-Regular.ttf", "JetBrainsMonoNerdFontMono-Bold.ttf"},
++        Family{"JetBrainsMonoNerdFont-Regular.ttf", "JetBrainsMonoNerdFont-Bold.ttf"},
++        Family{"DejaVuSans.ttf", "DejaVuSans-Bold.ttf"},
++        Family{"LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf"},
++        Family{"NotoSans-Regular.ttf", "NotoSans-Bold.ttf"},
++        Family{"AdwaitaSans-Regular.ttf", "AdwaitaSans-Bold.ttf"},
++        Family{"OpenSans-Regular.ttf", "OpenSans-Bold.ttf"},
++        Family{"Roboto-Regular.ttf", "Roboto-Bold.ttf"},
++        Family{"Ubuntu-R.ttf", "Ubuntu-B.ttf"},
++        Family{"FreeSans.ttf", "FreeSansBold.ttf"}}) {
++        for (const auto& font : fonts) {
++            if (font.filename() != family.regular) continue;
++            auto bold = find_first_existing({font.parent_path() / family.bold});
++            return {font.u8string(), bold.empty() ? font.u8string() : bold};
+         }
+     }
+     return {};
+@@ -146,46 +162,37 @@
+ #endif
+ 
+ FontPaths find_font_paths() {
++#ifdef __linux__
++    return find_linux_fonts();
++#elif defined(_WIN32)
++    const wchar_t* windows = _wgetenv(L"WINDIR");
++    const fs::path folder = fs::path(windows && *windows ? windows : L"C:\\Windows") / "Fonts";
+     FontPaths result;
+-#ifdef __linux__
+-    result = find_jetbrains_mono();
+-    if (!result.regular.empty()) return result;
+-#endif
 -
+-#ifdef _WIN32
+-    const std::vector<fs::path> regular_candidates = {
+-        "C:\\Windows\\Fonts\\arial.ttf",
+-        "C:\\Windows\\Fonts\\segoeui.ttf",
+-        "C:\\Windows\\Fonts\\tahoma.ttf",
+-    };
+-
+-    const std::vector<fs::path> bold_candidates = {
+-        "C:\\Windows\\Fonts\\arialbd.ttf",
+-        "C:\\Windows\\Fonts\\segoeuib.ttf",
+-        "C:\\Windows\\Fonts\\arial.ttf",
+-    };
+-#else
+-    const std::vector<fs::path> regular_candidates = {
+-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+-    };
+-
+-    const std::vector<fs::path> bold_candidates = {
+-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+-        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+-    };
+-#endif
+-
+-    result.regular = find_first_existing(regular_candidates);
+-    result.bold = find_first_existing(bold_candidates);
+-
++    result.regular = find_first_existing({folder / "arial.ttf", folder / "segoeui.ttf", folder / "tahoma.ttf"});
++    result.bold = find_first_existing({folder / "arialbd.ttf", folder / "segoeuib.ttf", folder / "arial.ttf"});
+     return result;
+-}
+-
++#else
++    return {};
++#endif
++}
++
++void show_fatal_error(const std::string& detail) {
++#ifdef _WIN32
++    MessageBoxW(nullptr, fs::u8path(detail).wstring().c_str(), L"Dota 2 CFG Changer", MB_OK | MB_ICONERROR);
++#else
++    std::fprintf(stderr, "Dota 2 CFG Changer: %s\n", detail.c_str());
++    auto child = fork();
++    if (child != 0) {
++        if (child > 0) waitpid(child, nullptr, 0);
++        return;
++    }
++    auto detached = fork();
++    if (detached != 0) _exit(0);
++    execlp("zenity", "zenity", "--error", ("--text=" + detail).c_str(), static_cast<char*>(nullptr));
++    execlp("kdialog", "kdialog", "--error", detail.c_str(), static_cast<char*>(nullptr));
++    _exit(1);
++#endif
++}
+ 
  bool open_external(const std::string& value) {
      if (value.empty()) return false;
- #ifdef _WIN32
 --- a/tests/appimage_checks.py
 +++ b/tests/appimage_checks.py
 @@ -11,7 +11,6 @@
@@ -5894,3 +6155,16 @@
  struct ReleaseInfo {
      std::string version;
      std::string asset_name;
+--- a/src/platform/platform.h
++++ b/src/platform/platform.h
+@@ -3,8 +3,9 @@
+ 
+ std::string exe_dir();
+ std::string config_dir();
+-std::string browse_for_folder(const char* title);
++std::string browse_for_folder(const char* title, bool* unavailable = nullptr);
+ bool open_external(const std::string& value);
++void show_fatal_error(const std::string& detail);
+ 
+ struct FontPaths {
+     std::string regular;
