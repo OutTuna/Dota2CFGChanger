@@ -19,6 +19,11 @@ No stable application version was manually changed. Alpha branch CI publishes is
 
 ### Features and resource use
 
+- Read custom themes from the settings directory, falling back to the executable's folder, and open them correctly from non-ASCII paths on Windows.
+- Show the `userdata` folder next to backups taken from another folder.
+- Try the next Linux folder picker when one fails, and lock path fields while profile names load.
+- Remove unreachable hard-coded theme copies; the embedded JSON themes were always used.
+- Allow a failed release publication to be retried after its version tag was pushed.
 - Compare configuration state by content, so a timestamp-only change no longer cancels a confirmed transfer.
 - List and restore an account's backups after its Steam `userdata` folder has moved; the target must still be that account's `570` directory.
 - Allow copying and restoring while profile names are still loading after a scan.

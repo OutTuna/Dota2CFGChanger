@@ -119,7 +119,7 @@ For a local channel build, pass `-DAPP_RELEASE_CHANNEL=alpha`.
 
 ### Settings and local data
 
-Language and theme are selected at the top right and saved automatically. A local `themes/` folder can override the embedded themes; missing or invalid resources fall back to the built-in ones.
+Language and theme are selected at the top right and saved automatically. A `themes/` folder in the settings directory (see the table below), or next to the executable, can override the embedded themes; missing or invalid resources fall back to the built-in ones.
 
 | Data | Windows | Linux |
 | --- | --- | --- |

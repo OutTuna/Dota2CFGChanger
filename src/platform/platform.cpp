@@ -85,6 +85,7 @@ std::string browse_for_folder(const char* title, bool* unavailable) {
         for (char c : value) out += c == '\'' ? "'\\''" : std::string(1, c);
         return out + "'";
     };
+    bool found = false;
     for (const std::string& command : {
         "zenity --file-selection --directory --title=" + quote(title) + " 2>/dev/null",
         "kdialog --getexistingdirectory --title " + quote(title) + " 2>/dev/null",
@@ -98,9 +99,11 @@ std::string browse_for_folder(const char* title, bool* unavailable) {
         int code = pclose(pipe);
         while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) result.pop_back();
         if (code == 0 && !result.empty()) return result;
-        if (!WIFEXITED(code) || WEXITSTATUS(code) != 127) return {};
+        if (WIFEXITED(code) && WEXITSTATUS(code) == 127) continue;
+        found = true;
+        if (WIFEXITED(code) && WEXITSTATUS(code) <= 1) return {};
     }
-    if (unavailable) *unavailable = true;
+    if (unavailable) *unavailable = !found;
     return {};
 
 #else
