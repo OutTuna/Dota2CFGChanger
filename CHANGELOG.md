@@ -24,6 +24,10 @@ No stable application version was manually changed. Alpha branch CI publishes is
 - Try the next Linux folder picker when one fails, and lock path fields while profile names load.
 - Remove unreachable hard-coded theme copies; the embedded JSON themes were always used.
 - Allow a failed release publication to be retried after its version tag was pushed.
+- Delete downloaded updates that are not newer than the running version at startup.
+- Show updater errors through the shared error dialog, which finds `zenity` or `kdialog` on `PATH`.
+- Keep the window responsive while the Linux folder picker is open.
+- Pin `linuxdeploy` and its AppImage plugin to fixed releases with SHA-256 checks.
 - Compare configuration state by content, so a timestamp-only change no longer cancels a confirmed transfer.
 - List and restore an account's backups after its Steam `userdata` folder has moved; the target must still be that account's `570` directory.
 - Allow copying and restoring while profile names are still loading after a scan.

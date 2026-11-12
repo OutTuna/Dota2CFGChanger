@@ -169,9 +169,11 @@ jobs:
           mkdir -p "$HOME/ld"
           base=https://github.com/linuxdeploy
           wget -q -O "$HOME/ld/linuxdeploy" \
-            "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+            "$base/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage"
           wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
-            "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
+            "$base/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage"
+          echo "c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  $HOME/ld/linuxdeploy" | sha256sum -c -
+          echo "992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3  $HOME/ld/linuxdeploy-plugin-appimage" | sha256sum -c -
           chmod +x "$HOME/ld/"*
           echo "$HOME/ld" >> "$GITHUB_PATH"
 

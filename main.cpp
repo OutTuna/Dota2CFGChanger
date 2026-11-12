@@ -53,6 +53,7 @@ int main(int argc, char** argv) {
     int helper_result = update_helper_dispatch(arguments);
     if (helper_result >= 0) return helper_result;
     cleanup_update_installers();
+    cleanup_update_downloads(app_version());
     load_settings();
 
 #ifdef _WIN32

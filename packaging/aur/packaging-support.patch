@@ -205,7 +205,7 @@
  #include "imgui.h"
  #include "backends/imgui_impl_glfw.h"
  #include "backends/imgui_impl_opengl3.h"
-@@ -9,31 +17,76 @@
+@@ -9,31 +17,77 @@
  #include "updates.h"
  #include "update_install.h"
  #include "platform/update_process.h"
@@ -252,6 +252,7 @@
      int helper_result = update_helper_dispatch(arguments);
      if (helper_result >= 0) return helper_result;
 +    cleanup_update_installers();
++    cleanup_update_downloads(app_version());
      load_settings();
  
  #ifdef _WIN32
@@ -292,7 +293,7 @@
  
      GLFWimage icon;
      icon.width  = APP_ICON_WIDTH;
-@@ -50,6 +103,7 @@
+@@ -50,6 +104,7 @@
      ui_apply_theme(static_cast<AppTheme>(g_theme.load()));
  
      ImGuiIO& io = ImGui::GetIO();
@@ -300,7 +301,7 @@
  
      FontPaths fonts = find_font_paths();
      ImFont* font_default = nullptr;
-@@ -72,11 +126,48 @@
+@@ -72,11 +127,48 @@
      if (install_error.empty()) updates_check(false);
      else updates_install_error(install_error);
      bool startup_confirmed = false;
@@ -349,7 +350,7 @@
          ImGui::NewFrame();
  
          ImVec2 ds = io.DisplaySize;
-@@ -87,8 +178,8 @@
+@@ -87,8 +179,8 @@
          ui_render_backups_popup();
  
          ImGui::Render();
@@ -359,7 +360,7 @@
          glViewport(0, 0, dw, dh);
          glClearColor(0.09f, 0.09f, 0.10f, 1.0f);
          glClear(GL_COLOR_BUFFER_BIT);
-@@ -98,12 +189,17 @@
+@@ -98,12 +190,17 @@
              update_install_confirm_started(arguments);
              startup_confirmed = true;
          }
@@ -381,7 +382,7 @@
      ImGui_ImplOpenGL3_Shutdown();
      ImGui_ImplGlfw_Shutdown();
      ImGui::DestroyContext();
-@@ -118,4 +214,4 @@
+@@ -118,4 +215,4 @@
  
  #ifdef _WIN32
  int APIENTRY WinMain(HINSTANCE, HINSTANCE, PSTR, int) { return main(__argc, __argv); }
@@ -994,37 +995,47 @@
      static bool open_src = false;
      static bool open_dst = false;
  
-@@ -124,22 +127,33 @@
+@@ -124,22 +127,36 @@
  
      ImGui::Spacing();
  
-+    const auto picker_missing = [] {
-+        std::lock_guard<std::mutex> lock(g_data_mutex);
-+        status_msg = "folder_picker_missing";
-+        status_detail.clear();
-+        app_status_changed();
-+    };
-     if (open_src) {
-         open_src = false;
+-    if (open_src) {
+-        open_src = false;
 -        auto p = browse_for_folder(tr("source"));
-+        bool unavailable = false;
-+        auto p = browse_for_folder(tr("source"), &unavailable);
-         if (!p.empty()) { set_config_path(src_path, p); save_settings(); }
-+        else if (unavailable) picker_missing();
-     }
-     if (open_dst) {
-         open_dst = false;
+-        if (!p.empty()) { set_config_path(src_path, p); save_settings(); }
+-    }
+-    if (open_dst) {
+-        open_dst = false;
 -        auto p = browse_for_folder(tr("destination"));
-+        bool unavailable = false;
-+        auto p = browse_for_folder(tr("destination"), &unavailable);
-         if (!p.empty()) { set_config_path(dst_path, p); save_settings(); }
+-        if (!p.empty()) { set_config_path(dst_path, p); save_settings(); }
 -    }
 -
 -    if (scanning) ImGui::EndDisabled();
 -    if (scanning) ImGui::BeginDisabled();
 -    if (ImGui::Button(scanning ? tr("scanning") : tr("scan"), { -1, 32 }))
-+        else if (unavailable) picker_missing();
-+    }
++    const auto pick_folder = [](char* target, const char* title) {
++        const auto apply = [target](const std::string& path, bool unavailable) {
++            if (!path.empty()) { set_config_path(target, path); save_settings(); return; }
++            if (!unavailable) return;
++            std::lock_guard<std::mutex> lock(g_data_mutex);
++            status_msg = "folder_picker_missing";
++            status_detail.clear();
++            app_status_changed();
++        };
++#ifdef __linux__
++        file_tasks_start([apply, title = std::string(title)]() -> FileTaskCompletion {
++            bool unavailable = false;
++            auto path = browse_for_folder(title.c_str(), &unavailable);
++            return [apply, path, unavailable] { apply(path, unavailable); };
++        });
++#else
++        bool unavailable = false;
++        auto path = browse_for_folder(title, &unavailable);
++        apply(path, unavailable);
++#endif
++    };
++    if (open_src) { open_src = false; pick_folder(src_path, tr("source")); }
++    if (open_dst) { open_dst = false; pick_folder(dst_path, tr("destination")); }
 +
 +    if (paths_locked) ImGui::EndDisabled();
 +    const bool scan_active = g_scanning.load() || g_profiles_loading.load();
@@ -1036,7 +1047,7 @@
  
      const float AVATAR_SIZE = 24.f;
      const float ROW_H = AVATAR_SIZE + 6.f;
-@@ -149,34 +163,50 @@
+@@ -149,34 +166,50 @@
          + ImGui::GetStyle().WindowPadding.y;
      const float list_h = ImGui::GetContentRegionAvail().y - bottom_h;
  
@@ -1103,7 +1114,7 @@
              bool sel = (i == selected);
  
              ImGui::PushID(i);
-@@ -203,6 +233,13 @@
+@@ -203,6 +236,13 @@
                  selected_atomic.store(i);
              }
  
@@ -1117,7 +1128,7 @@
              if (use_custom_palette) ImGui::PopStyleColor(3);
  
              ImDrawList* dl = ImGui::GetWindowDrawList();
-@@ -250,6 +287,7 @@
+@@ -250,6 +290,7 @@
          }
  
          ImGui::EndChild();
@@ -1125,7 +1136,7 @@
      };
  
      render_account_list(local_src_list, selected_src, "##src_list");
-@@ -267,12 +305,9 @@
+@@ -267,12 +308,9 @@
          if (s < 0 || d < 0) {
              copy_config();
          } else if (s < (int)local_src_list.size() && d < (int)local_dst_list.size()) {
@@ -1141,7 +1152,7 @@
              g_confirm_copy_open = true;
          }
      }
-@@ -280,7 +315,6 @@
+@@ -280,7 +318,6 @@
      if (scanning) ImGui::EndDisabled();
      const float footer_y = ds.y - ImGui::GetStyle().WindowPadding.y - 32.f;
      ImGui::SetCursorPosY(footer_y - 32.f - ImGui::GetStyle().ItemSpacing.y);
@@ -1149,7 +1160,7 @@
      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10.f, 7.f});
      ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 7.f);
      ImGui::BeginChild("##status", {0, 32.f},
-@@ -299,16 +333,52 @@
+@@ -299,16 +336,52 @@
      if (ImGui::BeginPopupModal("Info###info", &info_open,
          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoResize)) {
          ImGui::TextUnformatted("OutTuna");
@@ -3036,7 +3047,7 @@
      std::cout << "Avatar cache and background decoding work without a renderer\n";
 --- /dev/null
 +++ b/tests/ui_state_checks.cpp
-@@ -0,0 +1,256 @@
+@@ -0,0 +1,283 @@
 +#include "app.h"
 +#include "ui_events.h"
 +#include <cassert>
@@ -3263,6 +3274,33 @@
 +    }
 +    assert(app_ui_snapshot().status == "scan_profile_warnings" && app_ui_snapshot().detail == "1");
 +    assert(steam_api::fetch_count == 2);
++
++    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex);
++      steam_api::release_fetch = false; steam_api::fetch_started = false; }
++    fs::create_directories(root / "loading/703");
++    assert(set_config_path(src_path, (root / "loading").u8string()));
++    assert(set_config_path(dst_path, (root / "loading").u8string()));
++    start_scan();
++    {
++        std::unique_lock<std::mutex> lock(steam_api::fetch_mutex);
++        assert(steam_api::fetch_cv.wait_for(lock, std::chrono::seconds(3), [] { return steam_api::fetch_started; }));
++    }
++    assert(!g_scanning.load() && g_profiles_loading.load());
++    std::atomic<bool> ran{false};
++    assert(file_tasks_start([&ran]() -> FileTaskCompletion { ran = true; return {}; }));
++    const auto task_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
++    while (file_tasks_busy()) {
++        file_tasks_poll();
++        assert(std::chrono::steady_clock::now() < task_deadline);
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(ran.load() && g_profiles_loading.load());
++    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex); steam_api::release_fetch = true; }
++    steam_api::fetch_cv.notify_all();
++    {
++        std::unique_lock<std::mutex> lock(scan_mutex);
++        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load() && !g_profiles_loading.load(); }));
++    }
 +    ui_events::set_wake(nullptr);
 +
 +    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex);
@@ -5338,15 +5376,22 @@
  
        - name: Compiler cache statistics
          run: ccache --show-stats
-@@ -143,7 +170,6 @@
+@@ -142,10 +169,11 @@
+           mkdir -p "$HOME/ld"
            base=https://github.com/linuxdeploy
            wget -q -O "$HOME/ld/linuxdeploy" \
-             "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+-            "$base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
 -          # linuxdeploy finds the plugin by this exact name on PATH
++            "$base/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage"
            wget -q -O "$HOME/ld/linuxdeploy-plugin-appimage" \
-             "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
+-            "$base/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage"
++            "$base/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-appimage-x86_64.AppImage"
++          echo "c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  $HOME/ld/linuxdeploy" | sha256sum -c -
++          echo "992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3  $HOME/ld/linuxdeploy-plugin-appimage" | sha256sum -c -
            chmod +x "$HOME/ld/"*
-@@ -178,7 +204,7 @@
+           echo "$HOME/ld" >> "$GITHUB_PATH"
+ 
+@@ -178,7 +206,7 @@
            ls -la linux-artifact/
  
        - name: Upload Artifact
@@ -5355,7 +5400,7 @@
          with:
            name: DotaManager-Linux
            path: linux-artifact/*.AppImage
-@@ -193,9 +219,11 @@
+@@ -193,9 +221,11 @@
      runs-on: ${{ matrix.os }}
      timeout-minutes: 10
      steps:
@@ -5369,7 +5414,7 @@
          with:
            name: DotaManager-Linux
            path: linux-artifact
-@@ -222,43 +250,63 @@
+@@ -222,43 +252,63 @@
            bash scripts/check-appimage.sh "${images[0]}"
  
    release:
@@ -5950,7 +5995,7 @@
          update_install_confirm_started(arguments);
          write(fs::u8path(arguments[2]).parent_path() / "child-opened", "started");
          std::this_thread::sleep_for(std::chrono::seconds(3));
-@@ -49,11 +56,44 @@
+@@ -49,11 +56,52 @@
      auto root = fs::temp_directory_path() / ("dotamanager-install-" + std::to_string(current_process_id()));
      fs::remove_all(root);
      fs::create_directories(root / fs::u8path("path with spaces and кириллица"));
@@ -5975,6 +6020,14 @@
 +    auto malformed = updates / "installer-malformed"; fs::create_directory(malformed);
 +    write(malformed / "completed", "../preserved"); write(updates / "preserved", "keep");
 +    cleanup_update_installers(); assert(read(updates / "preserved") == "keep" && fs::exists(malformed));
++    auto installed = updates / "v1.33"; auto pending = updates / "v1.40";
++    fs::create_directories(installed / "asset.download"); fs::create_directories(pending);
++    write(installed / "asset.exe", "installed release"); write(pending / "asset.exe", "pending release");
++    cleanup_update_downloads("1.33");
++    assert(!fs::exists(ordinary) && !fs::exists(installed));
++    assert(read(pending / "asset.exe") == "pending release");
++    assert(fs::exists(malformed) && read(interrupted / "helper.exe") == "preserve for recovery");
++    cleanup_update_downloads("0.0"); assert(fs::exists(pending));
      auto target = root / fs::u8path("path with spaces and кириллица") / "application.exe";
      auto staged = target; staged += ".update-new";
      auto backup = target; backup += ".update-old";
@@ -5995,7 +6048,7 @@
      replace_update_executable(staged, target, release, [&] { assert(read(target) == "new"); assert(read(backup) == "old"); return true; });
      assert(read(target) == "new" && !fs::exists(backup) && !fs::exists(staged));
      write(target, "old"); write(staged, "new");
-@@ -89,6 +129,30 @@
+@@ -89,6 +137,30 @@
      }
      assert(file_sha256(target) == file_sha256(executable));
      std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -6175,7 +6228,7 @@
  #include <nlohmann/json.hpp>
  #include <fstream>
  #include <chrono>
-@@ -33,6 +35,44 @@
+@@ -33,6 +35,61 @@
      } while (std::chrono::steady_clock::now() < deadline);
      return false;
  }
@@ -6217,10 +6270,27 @@
 +            if (!error) fs::remove_all(entry.path(), error);
 +        }
 +    } catch (const std::exception&) {}
++}
++
++void cleanup_update_downloads(const std::string& current) {
++    try {
++        auto root = fs::u8path(config_dir()) / "updates";
++        reject_config_link(root);
++        if (!fs::is_directory(fs::symlink_status(root))) return;
++        for (const auto& entry : fs::directory_iterator(root)) {
++            try {
++                if (!fs::is_directory(entry.symlink_status())) continue;
++                reject_config_link(entry.path());
++                if (newer_version(entry.path().filename().u8string(), current)) continue;
++            } catch (const std::exception&) { continue; }
++            std::error_code error;
++            fs::remove_all(entry.path(), error);
++        }
++    } catch (const std::exception&) {}
  }
  
  void replace_update_executable(const fs::path& staged, const fs::path& target,
-@@ -60,6 +100,7 @@
+@@ -60,6 +117,7 @@
  
  void prepare_update_install(const fs::path& downloaded, const ReleaseInfo& release,
      const std::function<bool()>& active) {
@@ -6228,7 +6298,7 @@
      verify(downloaded, release);
      auto target = running_update_target();
      auto staged = target; staged += ".update-new";
-@@ -108,17 +149,15 @@
+@@ -108,17 +166,15 @@
      bool application_closed = false;
      try {
          std::ifstream input(job);
@@ -6253,7 +6323,7 @@
          write_text(job.parent_path() / "ready", "ready");
          if (!update_process_exited(parent, 60000)) throw std::runtime_error("Application did not close; update not installed");
          release_update_process(parent);
-@@ -142,6 +181,13 @@
+@@ -142,6 +198,13 @@
          fs::remove(job, ec);
          fs::remove(job.parent_path() / "ready", ec);
          fs::remove(job.parent_path() / "started", ec);
@@ -6267,9 +6337,20 @@
          return 0;
      } catch (const std::exception& error) {
          std::string detail = error.what();
+@@ -152,8 +215,8 @@
+             if (application_closed && !target.empty() && fs::is_regular_file(target) && !fs::exists(backup_path(target))) {
+                 auto process = launch_update_process(target, {"--update-error", log.u8string()});
+                 release_update_process(process);
+-            } else show_update_install_error(detail);
+-        } catch (...) { show_update_install_error(detail); }
++            } else show_fatal_error(detail);
++        } catch (...) { show_fatal_error(detail); }
+         return 1;
+     }
+ }
 --- a/src/core/update_install.h
 +++ b/src/core/update_install.h
-@@ -3,6 +3,15 @@
+@@ -3,6 +3,16 @@
  #include <filesystem>
  #include <functional>
  #include <vector>
@@ -6282,6 +6363,7 @@
 +};
 +UpdateInstallJob parse_update_install_job(const std::string& body);
 +void cleanup_update_installers();
++void cleanup_update_downloads(const std::string& current);
  
  void replace_update_executable(const std::filesystem::path& staged,
      const std::filesystem::path& target, const ReleaseInfo& release,
@@ -6314,6 +6396,21 @@
  #ifdef _WIN32
      HANDLE handle = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(id));
      if (!handle) throw std::runtime_error("Cannot wait for the running application");
+@@ -166,14 +176,3 @@
+     return {argv, argv + argc};
+ #endif
+ }
+-
+-void show_update_install_error(const std::string& detail) {
+-#ifdef _WIN32
+-    MessageBoxW(nullptr, widen(detail).c_str(), L"Dota 2 CFG Changer update", MB_OK | MB_ICONERROR);
+-#else
+-    try {
+-        auto process = launch_update_process("/usr/bin/zenity", {"--error", "--text=" + detail});
+-        release_update_process(process);
+-    } catch (...) {}
+-#endif
+-}
 --- a/src/platform/update_process.h
 +++ b/src/platform/update_process.h
 @@ -10,6 +10,7 @@
@@ -6324,6 +6421,11 @@
  UpdateProcess watch_update_parent(std::uint64_t id);
  UpdateProcess launch_update_process(const std::filesystem::path& executable,
      const std::vector<std::string>& arguments);
+@@ -17,4 +18,3 @@
+ void stop_update_process(const UpdateProcess& process);
+ void release_update_process(UpdateProcess& process);
+ std::vector<std::string> update_arguments(int argc, char** argv);
+-void show_update_install_error(const std::string& detail);
 --- /dev/null
 +++ b/tests/CMakeLists.txt
 @@ -0,0 +1,126 @@

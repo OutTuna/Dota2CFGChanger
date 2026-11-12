@@ -12,6 +12,7 @@ struct UpdateInstallJob {
 };
 UpdateInstallJob parse_update_install_job(const std::string& body);
 void cleanup_update_installers();
+void cleanup_update_downloads(const std::string& current);
 
 void replace_update_executable(const std::filesystem::path& staged,
     const std::filesystem::path& target, const ReleaseInfo& release,

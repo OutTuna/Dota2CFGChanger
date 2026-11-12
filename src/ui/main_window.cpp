@@ -127,26 +127,29 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
 
     ImGui::Spacing();
 
-    const auto picker_missing = [] {
-        std::lock_guard<std::mutex> lock(g_data_mutex);
-        status_msg = "folder_picker_missing";
-        status_detail.clear();
-        app_status_changed();
+    const auto pick_folder = [](char* target, const char* title) {
+        const auto apply = [target](const std::string& path, bool unavailable) {
+            if (!path.empty()) { set_config_path(target, path); save_settings(); return; }
+            if (!unavailable) return;
+            std::lock_guard<std::mutex> lock(g_data_mutex);
+            status_msg = "folder_picker_missing";
+            status_detail.clear();
+            app_status_changed();
+        };
+#ifdef __linux__
+        file_tasks_start([apply, title = std::string(title)]() -> FileTaskCompletion {
+            bool unavailable = false;
+            auto path = browse_for_folder(title.c_str(), &unavailable);
+            return [apply, path, unavailable] { apply(path, unavailable); };
+        });
+#else
+        bool unavailable = false;
+        auto path = browse_for_folder(title, &unavailable);
+        apply(path, unavailable);
+#endif
     };
-    if (open_src) {
-        open_src = false;
-        bool unavailable = false;
-        auto p = browse_for_folder(tr("source"), &unavailable);
-        if (!p.empty()) { set_config_path(src_path, p); save_settings(); }
-        else if (unavailable) picker_missing();
-    }
-    if (open_dst) {
-        open_dst = false;
-        bool unavailable = false;
-        auto p = browse_for_folder(tr("destination"), &unavailable);
-        if (!p.empty()) { set_config_path(dst_path, p); save_settings(); }
-        else if (unavailable) picker_missing();
-    }
+    if (open_src) { open_src = false; pick_folder(src_path, tr("source")); }
+    if (open_dst) { open_dst = false; pick_folder(dst_path, tr("destination")); }
 
     if (paths_locked) ImGui::EndDisabled();
     const bool scan_active = g_scanning.load() || g_profiles_loading.load();
