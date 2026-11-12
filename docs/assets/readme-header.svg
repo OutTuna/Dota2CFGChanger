@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="132" viewBox="0 0 640 132">
+  <title>Dota 2 Config Manager</title>
+  <defs><linearGradient id="bar"><stop stop-color="#dc2828" stop-opacity=".86"/><stop offset="1" stop-color="#b41414" stop-opacity="0"/></linearGradient></defs>
+  <text x="320" y="74" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, 'DejaVu Sans', sans-serif" font-size="68" font-weight="800" fill="#dc2828" textLength="440" lengthAdjust="spacingAndGlyphs">DOTA 2 CFG</text>
+  <rect x="100.0" y="86.2" width="440" height="4" fill="url(#bar)"/>
+  <text x="320" y="118" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, 'DejaVu Sans', sans-serif" font-size="15" font-weight="600" fill="#8b949e" letter-spacing="7">CONFIG MANAGER</text>
+</svg>
