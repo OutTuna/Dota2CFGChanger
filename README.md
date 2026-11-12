@@ -85,9 +85,9 @@ userdata/
 
 ### Backups and restore
 
-Select a destination account and click **Backups** at the bottom of the window. Choose a saved copy and confirm restoration. Restoring also backs up the current config first.
+Select a destination account and click **Backups** at the bottom of the window. Choose a saved copy, click **Restore selected backup** and confirm. Restoring also backs up the current config first.
 
-Backups include the account ID and UTC date, and are verified with file hashes. The app retains the last **5 backups per account**. A destination with no existing config has nothing to back up on the first copy.
+Backups include the account ID and UTC date, and are verified with file hashes. A backup taken from a different `userdata` folder shows that folder next to its date, so copies stay available after Steam moves. The app retains the last **5 backups per account**. A destination with no existing config has nothing to back up on the first copy.
 
 New files are prepared before replacing the destination. If replacement fails, the app attempts rollback; files needed for recovery are preserved if rollback cannot finish. Resolve an interrupted transaction before retrying, and keep a separate copy of anything you need beyond the five-backup history.
 
@@ -97,20 +97,21 @@ Selective transfer is deferred until configuration dependencies can be verified.
 
 ### Updates
 
-Versioned standalone builds check for updates at startup. You can also use **Check for updates** at the bottom of the window.
+Versioned standalone builds check for updates at startup. You can also use **Check updates** at the bottom of the window.
 
 1. Choose **Download and update** to start downloading.
 2. The app verifies the file size and SHA-256.
 3. A helper waits for the app to close, replaces its executable at the existing path, and restarts it.
 4. The previous executable is kept until the new window confirms startup. Replacement or startup failure triggers recovery.
+5. On the next start, downloaded update files that are not newer than the running version are deleted.
 
 The updater trusts GitHub and HTTPS certificate verification. Hashes from the same release do not protect against compromise of that publishing authority. See [security limits and signing requirements](docs/UPDATE_SECURITY.md).
 
-Use **Open release** if a verified download is unavailable. If the application folder is not writable, replace the file manually using the [release download](https://github.com/OutTuna/Dota2CFGChanger/releases/latest). Older builds without the installer need to be replaced manually once. Package-managed installations update through their package manager.
+Use **Open GitHub release** if a verified download is unavailable. If the application folder is not writable, replace the file manually using the [release download](https://github.com/OutTuna/Dota2CFGChanger/releases/latest). Older builds without the installer need to be replaced manually once. Package-managed installations update through their package manager.
 
 ### Alpha CI builds
 
-Pushes to `alpha` run the Windows/Linux build and AppImage checks, then
+Pushes to an `alpha` branch run the Windows/Linux build and AppImage checks, then
 publish a separate **prerelease** tagged `<channel>-<version>-<run-id>-<attempt>`.
 They explicitly use `--latest=false`, never move/delete `latest` or create stable
 `vX.Y` tags, and are not offered through stable automatic updates. The window and
@@ -126,6 +127,7 @@ Language and theme are selected at the top right and saved automatically. A `the
 | Paths, language and theme | `HKCU\Software\OutTuna\Dota2CFGChanger`, value `Settings` | `$XDG_CONFIG_HOME/DotaManager/settings.json` or `~/.config/DotaManager/settings.json` |
 | Profile caches, avatars and downloads | `%APPDATA%\DotaManager` | `$XDG_CONFIG_HOME/DotaManager` or `~/.config/DotaManager` |
 | Config backups | `%APPDATA%\DotaManager\backups` | `$XDG_CONFIG_HOME/DotaManager/backups` or `~/.config/DotaManager/backups` |
+| Custom themes | `%APPDATA%\DotaManager\themes` | `$XDG_CONFIG_HOME/DotaManager/themes` or `~/.config/DotaManager/themes` |
 
 On Windows, an existing `settings.json` is migrated to the registry and removed only after a successful write. Copying configs and restoring backups use local files; fetching uncached profile names, avatars and releases needs an internet connection.
 
@@ -137,21 +139,45 @@ The window waits when nothing changes. Input, window events and background resul
 
 ```mermaid
 flowchart TB
-    input["Input and window events"] --> redraw["Request redraw"]
-    workers["Scan, file tasks, avatars and updates"] -->|"Publish state"| redraw
-    redraw --> wake["glfwPostEmptyEvent"]
-    wake --> ui["Main / UI thread"]
-    ui --> needed{"Redraw or animation?"}
-    needed -->|"No"| wait["Wait for events"]
-    wait -->|"Next event"| ui
-    needed -->|"Yes"| frame["Read cached UI state → ImGui → OpenGL"]
-    frame --> ui
+    subgraph background["Background workers"]
+        direction LR
+        scan["Scan<br>account lists first"] --> profiles["Profile names<br>copy stays available"]
+        files["File worker<br>preview · copy · backup · restore<br>Linux folder picker"]
+        avatars["Avatar pool<br>up to 8 threads"]
+        updates["Update check<br>and download"]
+    end
+
+    subgraph loop["Main / UI thread"]
+        direction TB
+        input["Input and window events"] --> redraw["Request redraw"]
+        redraw --> wake["glfwPostEmptyEvent"]
+        wake --> needed{"Redraw or animation?"}
+        needed -->|"No"| wait["Wait for events"]
+        wait -->|"Next event"| needed
+        needed -->|"Yes"| frame["Cached UI state → ImGui → OpenGL"]
+        frame -->|"Next frame"| needed
+    end
+
+    subgraph outside["Outside the app"]
+        direction LR
+        disk[("userdata/570<br>verified backups")]
+        steam[("Steam Community")]
+        github[("GitHub Releases")]
+        helper["Updater helper<br>replace · restart · roll back"]
+    end
+
+    background -->|"Publish state"| redraw
+    files -.-> disk
+    profiles -.-> steam
+    avatars -.-> steam
+    updates -.-> github
+    updates -.->|"Verified download"| helper
 
     classDef accent fill:#321f25,stroke:#c95050,color:#ffffff
     class redraw,wake,frame accent
 ```
 
-Account lists and labels are rebuilt when their data changes, rather than copied each frame. Status changes have a separate generation counter. File operations run on one background worker; avatars use a bounded worker pool, and concurrent requests for the same Steam profile share the result. Network requests support cancellation, and workers are joined before GLFW shuts down. OpenGL texture uploads and cleanup stay on the UI thread.
+Account lists and labels are rebuilt when their data changes, rather than copied each frame. Status changes have a separate generation counter. A scan publishes account lists first; profile names keep loading in the background while copying and backups stay available. File operations, and the folder picker on Linux, run on one background worker; avatars use a pool of up to eight threads, and concurrent requests for the same Steam profile share the result. Network requests support cancellation, and workers are joined before GLFW shuts down. OpenGL texture uploads and cleanup stay on the UI thread.
 
 A local Windows Release validation recorded **zero rendered frames in each of two 120-second idle intervals**, one focused and one unfocused. CPU time was 0.031 s and 0.016 s respectively on a Ryzen 7 7700 / RTX 5070 system. These are observations from that test, not fixed resource-use guarantees for every driver or workload.
 
@@ -229,6 +255,7 @@ For the Python checks, from the repository root:
 
 ```sh
 python3 tests/core_checks.py build/_deps/json-src/include
+python3 tests/prerelease_checks.py
 python3 tests/aur_source_checks.py
 ```
 
@@ -256,8 +283,9 @@ python tests/windows_update_crash_checks.py build
 
 | Workflow | Validation |
 | --- | --- |
-| [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, version checks and AppImage validation on Ubuntu 22.04 / 24.04. |
+| [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, release-script and version checks, AppImage packaging with pinned, checksum-verified tools, and launch validation on Ubuntu 22.04 / 24.04. |
 | [Arch package](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/aur.yaml) | Source and patch coverage, build without network, regression tests, package installation and launch. |
+| [Core sanitizers](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/sanitizers.yaml) | Regression and fault-injection tests under ASan/UBSan for pull requests. |
 
 ## Русский
 
@@ -268,15 +296,15 @@ python tests/windows_update_crash_checks.py build
 3. Слева выберите исходный аккаунт, справа — целевой.
 4. Нажмите кнопку копирования, проверьте предпросмотр файлов и подтвердите замену. При изменении файлов обновите предпросмотр.
 
-Копируется **вся папка `<account_id>/570`**. Перед заменой сохраняется проверенный бэкап; хранятся последние **5 копий на аккаунт**. Для восстановления выберите целевой аккаунт и нажмите **«Бэкапы»**. Текущий конфиг перед восстановлением тоже сохраняется. Если создать бэкап не удалось, замена не начнётся.
+Копируется **вся папка `<account_id>/570`**. Перед заменой сохраняется проверенный бэкап; хранятся последние **5 копий на аккаунт**. Для восстановления выберите целевой аккаунт и нажмите **«Бэкапы»**. Копии, сделанные из другой папки `userdata`, подписаны этой папкой. Текущий конфиг перед восстановлением тоже сохраняется. Если создать бэкап не удалось, замена не начнётся.
 
-Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Имена и аватары загружаются из публичных Steam Community-профилей и кэшируются. В покое интерфейс ждёт событий; сканирование, копирование, восстановление и загрузка аватаров выполняются в фоне.
+Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Имена и аватары загружаются из публичных Steam Community-профилей и кэшируются. В покое интерфейс ждёт событий; сканирование, копирование, восстановление и загрузка аватаров выполняются в фоне. Пока догружаются имена, копировать уже можно.
 
 Идентичные конфиги не перезаписываются. В списках доступен поиск; правый клик открывает меню папки аккаунта. Для прерванных операций см. [инструкцию восстановления](docs/RECOVERY.md).
 
-Обновление доверяет GitHub и проверке HTTPS; SHA-256 не является независимой подписью автора ([подробнее](docs/UPDATE_SECURITY.md)). Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Для обновления нужна запись в папку приложения; пакетные установки обновляются через пакетный менеджер.
+Обновление доверяет GitHub и проверке HTTPS; SHA-256 не является независимой подписью автора ([подробнее](docs/UPDATE_SECURITY.md)). Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Старые скачанные обновления удаляются при следующем запуске. Для обновления нужна запись в папку приложения; пакетные установки обновляются через пакетный менеджер.
 
-Бэкапы, аватары и загрузки находятся в `%APPDATA%\DotaManager` на Windows или `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` на Linux. Настройки Windows хранятся в `HKCU\Software\OutTuna\Dota2CFGChanger`, значение `Settings`; на Linux — в `settings.json` внутри каталога DotaManager.
+Бэкапы, аватары, загрузки и свои темы (папка `themes`) находятся в `%APPDATA%\DotaManager` на Windows или `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` на Linux. Настройки Windows хранятся в `HKCU\Software\OutTuna\Dota2CFGChanger`, значение `Settings`; на Linux — в `settings.json` внутри каталога DotaManager.
 
 Для Arch и NixOS используйте инструкции в ветках [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) и [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging).
 
