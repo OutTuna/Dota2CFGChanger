@@ -224,6 +224,33 @@ int main() {
     }
     assert(app_ui_snapshot().status == "scan_profile_warnings" && app_ui_snapshot().detail == "1");
     assert(steam_api::fetch_count == 2);
+
+    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex);
+      steam_api::release_fetch = false; steam_api::fetch_started = false; }
+    fs::create_directories(root / "loading/703");
+    assert(set_config_path(src_path, (root / "loading").u8string()));
+    assert(set_config_path(dst_path, (root / "loading").u8string()));
+    start_scan();
+    {
+        std::unique_lock<std::mutex> lock(steam_api::fetch_mutex);
+        assert(steam_api::fetch_cv.wait_for(lock, std::chrono::seconds(3), [] { return steam_api::fetch_started; }));
+    }
+    assert(!g_scanning.load() && g_profiles_loading.load());
+    std::atomic<bool> ran{false};
+    assert(file_tasks_start([&ran]() -> FileTaskCompletion { ran = true; return {}; }));
+    const auto task_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (file_tasks_busy()) {
+        file_tasks_poll();
+        assert(std::chrono::steady_clock::now() < task_deadline);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    assert(ran.load() && g_profiles_loading.load());
+    { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex); steam_api::release_fetch = true; }
+    steam_api::fetch_cv.notify_all();
+    {
+        std::unique_lock<std::mutex> lock(scan_mutex);
+        assert(scan_finished.wait_for(lock, std::chrono::seconds(3), [] { return !g_scanning.load() && !g_profiles_loading.load(); }));
+    }
     ui_events::set_wake(nullptr);
 
     { std::lock_guard<std::mutex> lock(steam_api::fetch_mutex);

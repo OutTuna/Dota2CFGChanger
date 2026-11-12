@@ -176,14 +176,3 @@ std::vector<std::string> update_arguments(int argc, char** argv) {
     return {argv, argv + argc};
 #endif
 }
-
-void show_update_install_error(const std::string& detail) {
-#ifdef _WIN32
-    MessageBoxW(nullptr, widen(detail).c_str(), L"Dota 2 CFG Changer update", MB_OK | MB_ICONERROR);
-#else
-    try {
-        auto process = launch_update_process("/usr/bin/zenity", {"--error", "--text=" + detail});
-        release_update_process(process);
-    } catch (...) {}
-#endif
-}

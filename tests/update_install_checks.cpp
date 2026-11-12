@@ -77,6 +77,14 @@ int main(int argc, char** argv) {
     auto malformed = updates / "installer-malformed"; fs::create_directory(malformed);
     write(malformed / "completed", "../preserved"); write(updates / "preserved", "keep");
     cleanup_update_installers(); assert(read(updates / "preserved") == "keep" && fs::exists(malformed));
+    auto installed = updates / "v1.33"; auto pending = updates / "v1.40";
+    fs::create_directories(installed / "asset.download"); fs::create_directories(pending);
+    write(installed / "asset.exe", "installed release"); write(pending / "asset.exe", "pending release");
+    cleanup_update_downloads("1.33");
+    assert(!fs::exists(ordinary) && !fs::exists(installed));
+    assert(read(pending / "asset.exe") == "pending release");
+    assert(fs::exists(malformed) && read(interrupted / "helper.exe") == "preserve for recovery");
+    cleanup_update_downloads("0.0"); assert(fs::exists(pending));
     auto target = root / fs::u8path("path with spaces and кириллица") / "application.exe";
     auto staged = target; staged += ".update-new";
     auto backup = target; backup += ".update-old";

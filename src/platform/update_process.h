@@ -18,4 +18,3 @@ bool update_process_exited(const UpdateProcess& process, unsigned milliseconds);
 void stop_update_process(const UpdateProcess& process);
 void release_update_process(UpdateProcess& process);
 std::vector<std::string> update_arguments(int argc, char** argv);
-void show_update_install_error(const std::string& detail);

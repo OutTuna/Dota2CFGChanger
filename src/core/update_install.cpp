@@ -75,6 +75,23 @@ void cleanup_update_installers() {
     } catch (const std::exception&) {}
 }
 
+void cleanup_update_downloads(const std::string& current) {
+    try {
+        auto root = fs::u8path(config_dir()) / "updates";
+        reject_config_link(root);
+        if (!fs::is_directory(fs::symlink_status(root))) return;
+        for (const auto& entry : fs::directory_iterator(root)) {
+            try {
+                if (!fs::is_directory(entry.symlink_status())) continue;
+                reject_config_link(entry.path());
+                if (newer_version(entry.path().filename().u8string(), current)) continue;
+            } catch (const std::exception&) { continue; }
+            std::error_code error;
+            fs::remove_all(entry.path(), error);
+        }
+    } catch (const std::exception&) {}
+}
+
 void replace_update_executable(const fs::path& staged, const fs::path& target,
     const ReleaseInfo& release, const std::function<bool()>& launch) {
     verify(staged, release);
@@ -198,8 +215,8 @@ int update_helper_dispatch(const std::vector<std::string>& arguments) {
             if (application_closed && !target.empty() && fs::is_regular_file(target) && !fs::exists(backup_path(target))) {
                 auto process = launch_update_process(target, {"--update-error", log.u8string()});
                 release_update_process(process);
-            } else show_update_install_error(detail);
-        } catch (...) { show_update_install_error(detail); }
+            } else show_fatal_error(detail);
+        } catch (...) { show_fatal_error(detail); }
         return 1;
     }
 }
