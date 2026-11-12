@@ -47,7 +47,7 @@ class PrereleaseChecks(unittest.TestCase):
             capture = folder / 'commands.jsonl'
             for command in ('git', 'gh'):
                 mock = folder / 'bin' / command
-                mock.write_text('#!/usr/bin/env python3\nimport json, os, sys\nwith open(os.environ["CAPTURE"], "a") as output:\n output.write(json.dumps(["' + command + '"] + sys.argv[1:]) + "\\n")\n')
+                mock.write_text('#!/usr/bin/env python3\nimport json, os, sys\nwith open(os.environ["CAPTURE"], "a") as output:\n output.write(json.dumps(["' + command + '"] + sys.argv[1:]) + "\\n")\nif sys.argv[1:2] == ["ls-remote"]: sys.exit(0 if os.environ.get("TAG_EXISTS") else 2)\n')
                 mock.chmod(0o700)
             for file in ('DotaManager-Windows/DotaManager.exe', 'DotaManager-Linux/test.AppImage'):
                 path = folder / file
@@ -66,6 +66,11 @@ class PrereleaseChecks(unittest.TestCase):
             self.assertEqual(published[published.index('--title') + 1], 'Latest Build (v1.24)')
             self.assertEqual(published[published.index('--target') + 1], 'a' * 40)
             self.assertEqual(published[-2:], ['DotaManager-Windows/DotaManager.exe', 'DotaManager-Linux/test.AppImage'])
+            capture.unlink()
+            subprocess.run(['bash', '-c', script], cwd=folder, env=dict(env, TAG_EXISTS='1'), check=True)
+            retried = [json.loads(line) for line in capture.read_text().splitlines()]
+            self.assertFalse(any(call[:2] in (['git', 'tag'], ['git', 'push']) for call in retried))
+            self.assertTrue(any(call[:4] == ['gh', 'release', 'create', 'latest'] for call in retried))
             for override in ({'GITHUB_REF': 'refs/heads/alpha'}, {'RELEASE_CHANNEL': 'alpha'}, {'VERSION': 'latest'}, {'GITHUB_SHA': '../bad'}):
                 capture.unlink(missing_ok=True)
                 result = subprocess.run(['bash', '-c', script], cwd=folder, env=dict(env, **override), capture_output=True)
