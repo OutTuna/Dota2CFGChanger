@@ -278,8 +278,10 @@ jobs:
           [[ ${#images[@]} -eq 1 ]] || exit 1
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$VERSION"
-          git push origin "$VERSION"
+          if ! git ls-remote --exit-code --tags origin "refs/tags/$VERSION" > /dev/null; then
+            git tag "$VERSION"
+            git push origin "$VERSION"
+          fi
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
           gh release create latest \
             --target "$GITHUB_SHA" \

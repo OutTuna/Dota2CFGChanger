@@ -102,7 +102,8 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
     ImGui::Separator();
 
     bool scanning = g_scanning.load() || file_tasks_busy() || updates_phase() == UpdatePhase::Installing;
-    if (scanning) ImGui::BeginDisabled();
+    const bool paths_locked = scanning || g_profiles_loading.load();
+    if (paths_locked) ImGui::BeginDisabled();
     static bool open_src = false;
     static bool open_dst = false;
 
@@ -147,7 +148,7 @@ void ui_render_main(ImFont* font_big, ImVec2 ds) {
         else if (unavailable) picker_missing();
     }
 
-    if (scanning) ImGui::EndDisabled();
+    if (paths_locked) ImGui::EndDisabled();
     const bool scan_active = g_scanning.load() || g_profiles_loading.load();
     ImGui::BeginDisabled(scanning || scan_active);
     if (ImGui::Button(scan_active ? tr("scanning") : tr("scan"), { -1, 32 }))

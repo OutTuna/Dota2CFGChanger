@@ -118,7 +118,10 @@ void ui_render_backups_popup() {
             if (backups.empty()) ImGui::TextWrapped("%s", tr("backup_empty"));
             for (int i = 0; i < static_cast<int>(backups.size()); ++i) {
                 ImGui::PushID(i);
-                if (ImGui::Selectable(backups[i].date.c_str(), selected == i)) selected = i;
+                auto label = backups[i].date;
+                if (backups[i].destination != destination)
+                    label += "  |  " + backups[i].destination.parent_path().parent_path().u8string();
+                if (ImGui::Selectable(label.c_str(), selected == i)) selected = i;
                 ImGui::PopID();
             }
             ImGui::EndChild();
