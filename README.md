@@ -1,21 +1,12 @@
 <p align="center">
-  <img src="resources/icons/dotamanager.png" width="72" height="72" alt="Dota 2 Config Manager icon">
+  <img src="docs/assets/readme-header.svg" width="560" alt="Dota 2 Config Manager">
 </p>
-
-<h1 align="center">Dota 2 Config Manager</h1>
 
 <p align="center">Your Dota 2 setup, on another Steam account.</p>
 
 <p align="center">
-  <img src="docs/assets/readme-divider.svg" width="640" height="6" alt="">
-</p>
-
-<p align="center">
   <a href="https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml"><img src="https://img.shields.io/github/actions/workflow/status/OutTuna/Dota2CFGChanger/build.yaml?branch=main&amp;style=for-the-badge&amp;label=build" alt="Windows and Linux build status"></a>
   <a href="https://github.com/OutTuna/Dota2CFGChanger/releases/latest"><img src="https://img.shields.io/badge/download-Latest-c95050?style=for-the-badge" alt="Download Latest"></a>
-  <a href="#download"><img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-586575?style=for-the-badge" alt="Windows and Linux"></a>
-  <a href="#features"><img src="https://img.shields.io/badge/languages-EN%20%7C%20RU%20%7C%20UA-586575?style=for-the-badge" alt="English, Russian and Ukrainian"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-586575?style=for-the-badge" alt="MIT license"></a>
 </p>
 
 <p align="center">
@@ -55,12 +46,12 @@ chmod +x Dota2_CFG_Changer-x86_64.AppImage
 ./Dota2_CFG_Changer-x86_64.AppImage
 ```
 
-Both platforms need a working OpenGL driver. On Linux, the folder picker uses `zenity` or `kdialog`. macOS is not supported.
+Both platforms need a working OpenGL driver. On Linux, the folder picker uses `zenity`, `kdialog`, `qarma` or `yad`. macOS is not supported.
 
 <details>
 <summary>Linux fonts and package recipes</summary>
 
-The interface automatically uses installed JetBrains Mono, including NL and Nerd Font variants, and falls back to DejaVu, Liberation or Noto. It searches both user and system font folders. JetBrains Mono is optional; there is no font selector in the app.
+The interface automatically uses installed JetBrains Mono, including NL and Nerd Font variants, and falls back to DejaVu, Liberation, Noto, Adwaita, Open Sans, Roboto, Ubuntu or FreeSans. It searches both user and system font folders. JetBrains Mono is optional; there is no font selector in the app.
 
 Package recipes have their own branches and installation instructions:
 
@@ -296,3 +287,7 @@ python tests/windows_update_crash_checks.py build
 Thanks for testing builds and helping catch UI issues:
 
 [Qoudanna](https://github.com/Qoudanna) · [ciqparis](https://github.com/ciqparis) · [paradisetears](https://github.com/paradisetears)
+
+<p align="center">
+  <a href="https://github.com/OutTuna"><img src="docs/assets/readme-signature.svg" width="360" alt="Made by OutTuna"></a>
+</p>
