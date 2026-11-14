@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[1]
 class PrereleaseChecks(unittest.TestCase):
     def test_workflow_separates_stable_and_alpha_publishers(self):
         workflow = (root / '.github/workflows/build.yaml').read_text()
-        self.assertIn('branches: [ "main", "alpha", "aur-packaging" ]', workflow)
+        self.assertIn('branches: [ "main", "alpha" ]', workflow)
         stable = workflow.split('\n  release:\n', 1)[1].split('\n  prerelease:\n', 1)[0]
         alpha = workflow.split('\n  prerelease:\n', 1)[1]
         self.assertIn("if: github.ref == 'refs/heads/main'", stable)
@@ -27,7 +27,7 @@ class PrereleaseChecks(unittest.TestCase):
         script = '\n'.join(line[10:] for line in selection.split('        run: |\n', 1)[1].splitlines())
         with tempfile.TemporaryDirectory(prefix='dota-channel-') as directory:
             output = Path(directory) / 'output'
-            for branch, channel in [('main', 'stable'), ('alpha', 'alpha'), ('aur-packaging', 'stable'), ('other', None)]:
+            for branch, channel in [('main', 'stable'), ('alpha', 'alpha'), ('other', None)]:
                 output.unlink(missing_ok=True)
                 result = subprocess.run(['bash', '-c', script], env=dict(os.environ, GITHUB_REF='refs/heads/' + branch, GITHUB_OUTPUT=str(output)), capture_output=True)
                 if channel:

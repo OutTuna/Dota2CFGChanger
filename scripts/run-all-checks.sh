@@ -30,7 +30,6 @@ run_step "Workflow lint (actionlint)" bash scripts/check-workflow.sh
 run_step "Version-bump logic" bash scripts/check-version-logic.sh
 run_step "AppImage ABI checks" "$PYTHON" tests/appimage_checks.py
 run_step "Prerelease isolation" "$PYTHON" tests/prerelease_checks.py
-run_step "Arch source coverage" "$PYTHON" tests/aur_source_checks.py
 
 if run_step "Configure regression tests" cmake -S . -B "$BUILD_DIR" -DDOTAMANAGER_BUILD_TESTS=ON &&
    run_step "Build regression tests" cmake --build "$BUILD_DIR" --config Release --target dotamanager_checks --parallel; then
