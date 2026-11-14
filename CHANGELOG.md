@@ -49,5 +49,4 @@ No stable application version was manually changed. Alpha branch CI publishes is
 
 - Add safety, concurrency/crash-lock and large-list/preview layout regressions; extend fault-injection, updater, avatar and localization checks.
 - Add portable/process-integration CTest labels and an ASan/UBSan workflow without changing release publication.
-- Refresh the AUR compatibility patch and checksums; keep existing package/application versions.
 - Document recovery, update trust/signing requirements, measured performance and outstanding release gates.

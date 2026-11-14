@@ -49,18 +49,9 @@ chmod +x Dota2_CFG_Changer-x86_64.AppImage
 Both platforms need a working OpenGL driver. On Linux, the folder picker uses `zenity`, `kdialog`, `qarma` or `yad`. macOS is not supported.
 
 <details>
-<summary>Linux fonts and package recipes</summary>
+<summary>Linux fonts</summary>
 
 The interface automatically uses installed JetBrains Mono, including NL and Nerd Font variants, and falls back to DejaVu, Liberation, Noto, Adwaita, Open Sans, Roboto, Ubuntu or FreeSans. It searches both user and system font folders. JetBrains Mono is optional; there is no font selector in the app.
-
-Package recipes have their own branches and installation instructions:
-
-| System | Recipe | Installation guide |
-| --- | --- | --- |
-| Arch Linux | [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) | [Build and install with makepkg](https://github.com/OutTuna/Dota2CFGChanger/blob/aur-packaging/README.md#arch-linux-installation) |
-| NixOS / Nix | [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging) | [Run or install with Nix](https://github.com/OutTuna/Dota2CFGChanger/blob/nix-packaging/README.md#nixos-installation) |
-
-Package-managed builds use their package manager for application updates. Follow the README on the corresponding branch for the supported installation method.
 
 </details>
 
@@ -190,7 +181,6 @@ A local Windows Release validation recorded **zero rendered frames in each of tw
 | [`src/platform/`](src/platform) | Native paths, settings storage, dialogs, fonts and updater processes. |
 | [`resources/`](resources) · [`cmake/`](cmake) | Icons, embedded themes and translations, build-time resource generation. |
 | [`tests/`](tests) · [`scripts/`](scripts) | Regression tests, build validation and packaging checks. |
-| [`packaging/aur/`](packaging/aur) | Arch recipe and compatibility patch for the pinned source release. |
 
 ## Build from source
 
@@ -256,7 +246,6 @@ For the Python checks, from the repository root:
 ```sh
 python3 tests/core_checks.py build/_deps/json-src/include
 python3 tests/prerelease_checks.py
-python3 tests/aur_source_checks.py
 ```
 
 For portable test work on macOS (the application itself remains unsupported), configure
@@ -284,7 +273,6 @@ python tests/windows_update_crash_checks.py build
 | Workflow | Validation |
 | --- | --- |
 | [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, release-script and version checks, AppImage packaging with pinned, checksum-verified tools, and launch validation on Ubuntu 22.04 / 24.04. |
-| [Arch package](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/aur.yaml) | Source and patch coverage, build without network, regression tests, package installation and launch. |
 | [Core sanitizers](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/sanitizers.yaml) | Regression and fault-injection tests under ASan/UBSan for pull requests. |
 
 ## Русский
@@ -306,7 +294,6 @@ python tests/windows_update_crash_checks.py build
 
 Бэкапы, аватары, загрузки и свои темы (папка `themes`) находятся в `%APPDATA%\DotaManager` на Windows или `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` на Linux. Настройки Windows хранятся в `HKCU\Software\OutTuna\Dota2CFGChanger`, значение `Settings`; на Linux — в `settings.json` внутри каталога DotaManager.
 
-Для Arch и NixOS используйте инструкции в ветках [aur-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/aur-packaging) и [nix-packaging](https://github.com/OutTuna/Dota2CFGChanger/tree/nix-packaging).
 
 ## License and thanks
 

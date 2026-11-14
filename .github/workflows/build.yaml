@@ -2,7 +2,7 @@ name: Build & Release (Windows + Linux)
 
 on:
   push:
-    branches: [ "main", "alpha", "aur-packaging" ]
+    branches: [ "main", "alpha" ]
     paths-ignore:
       - "README.md"
       - "LICENSE"
@@ -39,7 +39,7 @@ jobs:
         run: |
           case "$GITHUB_REF" in
             refs/heads/alpha) channel=alpha ;;
-            refs/heads/main|refs/heads/aur-packaging) channel=stable ;;
+            refs/heads/main) channel=stable ;;
             *) echo "Unsupported distribution branch" >&2; exit 1 ;;
           esac
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
