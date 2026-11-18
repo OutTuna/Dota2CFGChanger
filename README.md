@@ -98,16 +98,7 @@ Versioned standalone builds check for updates at startup. You can also use **Che
 
 The updater trusts GitHub and HTTPS certificate verification. Hashes from the same release do not protect against compromise of that publishing authority. See [security limits and signing requirements](docs/UPDATE_SECURITY.md).
 
-Use **Open GitHub release** if a verified download is unavailable. If the application folder is not writable, replace the file manually using the [release download](https://github.com/OutTuna/Dota2CFGChanger/releases/latest). Older builds without the installer need to be replaced manually once. Package-managed installations update through their package manager.
-
-### Alpha CI builds
-
-Pushes to an `alpha` branch run the Windows/Linux build and AppImage checks, then
-publish a separate **prerelease** tagged `<channel>-<version>-<run-id>-<attempt>`.
-They explicitly use `--latest=false`, never move/delete `latest` or create stable
-`vX.Y` tags, and are not offered through stable automatic updates. The window and
-Info identify the channel; the numeric version remains separate for comparisons.
-For a local channel build, pass `-DAPP_RELEASE_CHANNEL=alpha`.
+Use **Open GitHub release** if a verified download is unavailable. If the application folder is not writable, replace the file manually using the [release download](https://github.com/OutTuna/Dota2CFGChanger/releases/latest). Older builds without the installer need to be replaced manually once.
 
 ### Settings and local data
 
@@ -227,9 +218,7 @@ Pass `-DAPP_VERSION=x.y` to embed a local version. The default `0.0` development
 
 ### Tests and CI
 
-Regression tests stay in `tests/` and have their own CMake configuration. They are disabled by default (`DOTAMANAGER_BUILD_TESTS=OFF`), are not linked into the application, and are not installed or included in the executable/AppImage release assets. Source archives keep the tests so contributors and package maintainers can reproduce the checks.
-
-Run the local checks with `bash scripts/run-all-checks.sh`; add `--full` to compile the GUI application too. The script runs workflow/version checks, Python checks, builds the test targets and executes CTest. `DOTAMANAGER_CHECK_BUILD_DIR` selects an existing build directory; `DOTAMANAGER_JSON_INCLUDE` overrides the JSON header path when dependency sources live elsewhere.
+Regression tests stay in `tests/` and have their own CMake configuration. They are disabled by default (`DOTAMANAGER_BUILD_TESTS=OFF`), are not linked into the application, and are not installed or included in the executable/AppImage release assets. Source archives keep the tests so contributors can reproduce the checks.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON
@@ -237,15 +226,14 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-CTest labels separate `portable` checks from `process-integration` checks (`ctest --test-dir build -L portable` or `-L process-integration`). The additional sanitizer workflow runs regression and fault-injection tests with ASan/UBSan on Linux.
+CTest labels separate `portable` checks from `process-integration` checks (`ctest --test-dir build -L portable` or `-L process-integration`).
 
-The regression suite covers cached UI state and redraw notifications, background file tasks, backups and restore, avatar cache recovery and cancellation, release validation, updater recovery and package-managed behavior.
+The regression suite covers cached UI state and redraw notifications, background file tasks, backups and restore, avatar cache recovery and cancellation, release validation and updater recovery.
 
 For the Python checks, from the repository root:
 
 ```sh
 python3 tests/core_checks.py build/_deps/json-src/include
-python3 tests/prerelease_checks.py
 ```
 
 For portable test work on macOS (the application itself remains unsupported), configure
@@ -261,19 +249,9 @@ This tests core logic and headless ImGui layout, not a macOS release or Windows/
 
 On Windows, use `python` instead if that is the command for your Python 3 installation.
 
-From an x64 MSVC developer shell, also validate the standalone executable and
-interrupted transfers using temporary fixtures:
-
-```powershell
-python tests/windows_release_checks.py build/Release/DotaManager.exe
-python tests/windows_crash_checks.py
-python tests/windows_update_crash_checks.py build
-```
-
 | Workflow | Validation |
 | --- | --- |
-| [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, release-script and version checks, AppImage packaging with pinned, checksum-verified tools, and launch validation on Ubuntu 22.04 / 24.04. |
-| [Core sanitizers](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/sanitizers.yaml) | Regression and fault-injection tests under ASan/UBSan for pull requests. |
+| [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, AppImage packaging with pinned, checksum-verified tools, and launch validation on Ubuntu 22.04 / 24.04. |
 
 ## Русский
 
@@ -290,7 +268,7 @@ python tests/windows_update_crash_checks.py build
 
 Идентичные конфиги не перезаписываются. В списках доступен поиск; правый клик открывает меню папки аккаунта. Для прерванных операций см. [инструкцию восстановления](docs/RECOVERY.md).
 
-Обновление доверяет GitHub и проверке HTTPS; SHA-256 не является независимой подписью автора ([подробнее](docs/UPDATE_SECURITY.md)). Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Старые скачанные обновления удаляются при следующем запуске. Для обновления нужна запись в папку приложения; пакетные установки обновляются через пакетный менеджер.
+Обновление доверяет GitHub и проверке HTTPS; SHA-256 не является независимой подписью автора ([подробнее](docs/UPDATE_SECURITY.md)). Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Старые скачанные обновления удаляются при следующем запуске. Для обновления нужна запись в папку приложения.
 
 Бэкапы, аватары, загрузки и свои темы (папка `themes`) находятся в `%APPDATA%\DotaManager` на Windows или `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` на Linux. Настройки Windows хранятся в `HKCU\Software\OutTuna\Dota2CFGChanger`, значение `Settings`; на Linux — в `settings.json` внутри каталога DotaManager.
 

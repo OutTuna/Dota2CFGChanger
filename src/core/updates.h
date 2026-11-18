@@ -31,4 +31,3 @@ void updates_install();
 bool updates_should_exit();
 void updates_install_error(const std::string& detail);
 
-bool updates_self_install_enabled();
