@@ -31,9 +31,6 @@ else()
 endif()
 
 option(DOTAMANAGER_SYSTEM_LIBS "Use system curl, GLFW and JSON with predownloaded cpr, ImGui and stb sources" OFF)
-option(DOTAMANAGER_PACKAGE_MANAGED "Update this installation through its package manager" OFF)
-configure_file("${CMAKE_SOURCE_DIR}/cmake/PackageMode.h.in"
-    "${CMAKE_BINARY_DIR}/generated/package_mode.h" @ONLY)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 

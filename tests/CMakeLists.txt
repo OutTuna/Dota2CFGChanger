@@ -88,27 +88,9 @@ else()
 endif()
 add_test(NAME preview_ui_checks COMMAND preview_ui_checks)
 set_tests_properties(preview_ui_checks PROPERTIES TIMEOUT 20)
-target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=0)
-add_executable(package_update_checks package_update_checks.cpp ${CMAKE_SOURCE_DIR}/src/core/updates.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/release_info.cpp ${CMAKE_SOURCE_DIR}/src/core/checksum.cpp ${CMAKE_SOURCE_DIR}/src/core/file_ops.cpp)
-target_include_directories(package_update_checks PRIVATE ${EMBEDDED_THEMES_DIR}
-    ${CMAKE_SOURCE_DIR}/src/core ${CMAKE_SOURCE_DIR}/src/platform ${CMAKE_SOURCE_DIR}/src/network)
-target_link_libraries(package_update_checks PRIVATE nlohmann_json::nlohmann_json Threads::Threads)
-target_compile_definitions(package_update_checks PRIVATE DOTA_APP_VERSION="1.9" DOTAMANAGER_PACKAGE_MANAGED=1)
-if(MSVC)
-    target_compile_options(package_update_checks PRIVATE /UNDEBUG /utf-8)
-    target_link_libraries(package_update_checks PRIVATE bcrypt)
-else()
-    target_compile_options(package_update_checks PRIVATE -UNDEBUG)
-    if(WIN32)
-        target_link_libraries(package_update_checks PRIVATE bcrypt)
-    else()
-        target_link_libraries(package_update_checks PRIVATE OpenSSL::Crypto)
-    endif()
-endif()
-add_test(NAME package_update_checks COMMAND package_update_checks)
+target_compile_definitions(update_service_checks PRIVATE DOTA_APP_VERSION="1.9")
 set_tests_properties(ui_state_checks file_tasks_checks backup_checks version_build_checks
-    update_checks update_service_checks avatar_checks update_ui_checks preview_ui_checks package_update_checks
+    update_checks update_service_checks avatar_checks update_ui_checks preview_ui_checks
     PROPERTIES LABELS "portable")
 set_tests_properties(config_safety_checks update_install_checks PROPERTIES LABELS "process-integration")
 add_executable(settings_checks settings_checks.cpp)
@@ -123,4 +105,4 @@ set_tests_properties(settings_checks PROPERTIES LABELS "portable" TIMEOUT 10)
 add_custom_target(dotamanager_checks DEPENDS
     config_safety_checks ui_state_checks file_tasks_checks backup_checks
     update_install_checks version_build_checks update_checks update_service_checks
-    avatar_checks update_ui_checks preview_ui_checks package_update_checks settings_checks)
+    avatar_checks update_ui_checks preview_ui_checks settings_checks)
