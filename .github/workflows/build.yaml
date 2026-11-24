@@ -32,11 +32,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-          fetch-depth: 0
       - name: Compute version
         id: version
         env:
           FORCE_MAJOR: ${{ inputs.force_major || 'false' }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: bash scripts/compute-next-version.sh
 
   build-windows:
@@ -198,8 +199,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: true
-          fetch-depth: 0
+          persist-credentials: false
       - name: Download all artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       - name: Tag and release
@@ -213,12 +213,6 @@ jobs:
           shopt -s nullglob
           images=(DotaManager-Linux/*.AppImage)
           [[ ${#images[@]} -eq 1 ]] || exit 1
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git ls-remote --exit-code --tags origin "refs/tags/$VERSION" > /dev/null; then
-            git tag "$VERSION"
-            git push origin "$VERSION"
-          fi
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
           gh release create latest \
             --target "$GITHUB_SHA" \
