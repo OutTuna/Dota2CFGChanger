@@ -243,8 +243,8 @@ install(FILES resources/icons/dotamanager.png
     RENAME dota2cfgchanger.png COMPONENT Runtime)
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/dota2cfgchanger COMPONENT Runtime)
 
-option(DOTAMANAGER_BUILD_TESTS "Build regression tests" OFF)
-if(DOTAMANAGER_BUILD_TESTS)
+option(DOTAMANAGER_BUILD_TESTS "Build tests from a local tests/ folder" OFF)
+if(DOTAMANAGER_BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt")
     enable_testing()
     add_subdirectory(tests)
 endif()

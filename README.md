@@ -14,7 +14,6 @@
   <a href="#architecture">Architecture</a> ·
   <a href="#build-from-source">Build</a> ·
   <a href="https://github.com/OutTuna/Dota2CFGChanger/issues">Issues</a> ·
-  <a href="docs/TODO.md">Roadmap</a> ·
   <a href="#русский">Русский</a>
 </p>
 
@@ -30,7 +29,7 @@ Copy your Dota 2 configuration between Steam accounts, with verified backups and
 - **Five built-in themes:** Dark by default, with a palette editor for Crimson.
 - **Standalone releases:** one Windows executable or Linux AppImage, with themes and translations embedded.
 - **Account previews:** cached names and avatars from public Steam Community profiles. Failed lookups still leave the account ID visible.
-- **Updates through GitHub HTTPS:** check file size and SHA-256, replace the application through a helper, then confirm the new window has started. SHA-256 is not an independent author signature; see the [update trust model](docs/UPDATE_SECURITY.md).
+- **Updates through GitHub HTTPS:** check file size and SHA-256, replace the application through a helper, then confirm the new window has started.
 - **Transfer preview:** inspect added, replaced, unchanged and removed paths before confirming. Identical configurations are not rewritten.
 - **Large account lists:** filter by name or ID; right-click an account to open its folder.
 
@@ -82,9 +81,7 @@ Backups include the account ID and UTC date, and are verified with file hashes. 
 
 New files are prepared before replacing the destination. If replacement fails, the app attempts rollback; files needed for recovery are preserved if rollback cannot finish. Resolve an interrupted transaction before retrying, and keep a separate copy of anything you need beyond the five-backup history.
 
-For interrupted transfers and stale account locks, follow the [recovery guide](docs/RECOVERY.md). Free-space checks are advisory; filesystem errors still stop the operation and trigger rollback.
-
-Selective transfer is deferred until configuration dependencies can be verified. Full replacement remains the supported operation.
+If a transfer was interrupted, close the app and look next to the account's `570` folder: `570.dotamanager_backup` is the previous config, `570.dotamanager_tmp` is the unfinished copy, and an empty `570.dotamanager_lock` folder can be removed once no other instance is running.
 
 ### Updates
 
@@ -95,8 +92,6 @@ Versioned standalone builds check for updates at startup. You can also use **Che
 3. A helper waits for the app to close, replaces its executable at the existing path, and restarts it.
 4. The previous executable is kept until the new window confirms startup. Replacement or startup failure triggers recovery.
 5. On the next start, downloaded update files that are not newer than the running version are deleted.
-
-The updater trusts GitHub and HTTPS certificate verification. Hashes from the same release do not protect against compromise of that publishing authority. See [security limits and signing requirements](docs/UPDATE_SECURITY.md).
 
 Use **Open GitHub release** if a verified download is unavailable. If the application folder is not writable, replace the file manually using the [release download](https://github.com/OutTuna/Dota2CFGChanger/releases/latest). Older builds without the installer need to be replaced manually once.
 
@@ -161,7 +156,7 @@ flowchart TB
 
 Account lists and labels are rebuilt when their data changes, rather than copied each frame. Status changes have a separate generation counter. A scan publishes account lists first; profile names keep loading in the background while copying and backups stay available. File operations, and the folder picker on Linux, run on one background worker; avatars use a pool of up to eight threads, and concurrent requests for the same Steam profile share the result. Network requests support cancellation, and workers are joined before GLFW shuts down. OpenGL texture uploads and cleanup stay on the UI thread.
 
-A local Windows Release validation recorded **zero rendered frames in each of two 120-second idle intervals**, one focused and one unfocused. CPU time was 0.031 s and 0.016 s respectively on a Ryzen 7 7700 / RTX 5070 system. These are observations from that test, not fixed resource-use guarantees for every driver or workload.
+A local Windows Release validation recorded **zero rendered frames in each of two 120-second idle intervals**, one focused and one unfocused. CPU time was 0.031 s and 0.016 s respectively on a Ryzen 7 7700 / RTX 5070 system.
 
 | Location | Responsibility |
 | --- | --- |
@@ -171,7 +166,7 @@ A local Windows Release validation recorded **zero rendered frames in each of tw
 | [`src/network/`](src/network) | Cancellable Steam profile, avatar and release HTTP requests. |
 | [`src/platform/`](src/platform) | Native paths, settings storage, dialogs, fonts and updater processes. |
 | [`resources/`](resources) · [`cmake/`](cmake) | Icons, embedded themes and translations, build-time resource generation. |
-| [`tests/`](tests) · [`scripts/`](scripts) | Regression tests, build validation and packaging checks. |
+| [`scripts/`](scripts) | Version and toolchain helpers for the release workflow. |
 
 ## Build from source
 
@@ -216,43 +211,6 @@ Pass `-DAPP_VERSION=x.y` to embed a local version. The default `0.0` development
 
 </details>
 
-### Tests and CI
-
-Regression tests stay in `tests/` and have their own CMake configuration. They are disabled by default (`DOTAMANAGER_BUILD_TESTS=OFF`), are not linked into the application, and are not installed or included in the executable/AppImage release assets. Source archives keep the tests so contributors can reproduce the checks.
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
-```
-
-CTest labels separate `portable` checks from `process-integration` checks (`ctest --test-dir build -L portable` or `-L process-integration`).
-
-The regression suite covers cached UI state and redraw notifications, background file tasks, backups and restore, avatar cache recovery and cancellation, release validation and updater recovery.
-
-For the Python checks, from the repository root:
-
-```sh
-python3 tests/core_checks.py build/_deps/json-src/include
-```
-
-For portable test work on macOS (the application itself remains unsupported), configure
-with `-DDOTAMANAGER_BUILD_TESTS=ON`, then build the test targets explicitly:
-
-```sh
-cmake --build build --target dotamanager_checks --parallel
-ctest --test-dir build --output-on-failure
-```
-
-This tests core logic and headless ImGui layout, not a macOS release or Windows/Linux GUI behavior.
-`tests/core_checks.py` accepts compiler instrumentation through `CXXFLAGS` and an OpenSSL prefix through `OPENSSL_ROOT_DIR` (on macOS it otherwise uses Homebrew).
-
-On Windows, use `python` instead if that is the command for your Python 3 installation.
-
-| Workflow | Validation |
-| --- | --- |
-| [Windows + Linux](https://github.com/OutTuna/Dota2CFGChanger/actions/workflows/build.yaml) | Release builds, regression tests, AppImage packaging with pinned, checksum-verified tools, and launch validation on Ubuntu 22.04 / 24.04. |
-
 ## Русский
 
 **Перенос конфигов Dota 2 между Steam-аккаунтами с бэкапами и восстановлением.** Скачайте [Windows EXE](https://github.com/OutTuna/Dota2CFGChanger/releases/latest/download/DotaManager.exe) или [Linux AppImage](https://github.com/OutTuna/Dota2CFGChanger/releases/latest/download/Dota2_CFG_Changer-x86_64.AppImage). Темы и переводы уже внутри; вход в Steam и API-ключ не нужны.
@@ -266,9 +224,9 @@ On Windows, use `python` instead if that is the command for your Python 3 instal
 
 Язык RU / UA / EN и тема выбираются справа сверху и сохраняются автоматически. Имена и аватары загружаются из публичных Steam Community-профилей и кэшируются. В покое интерфейс ждёт событий; сканирование, копирование, восстановление и загрузка аватаров выполняются в фоне. Пока догружаются имена, копировать уже можно.
 
-Идентичные конфиги не перезаписываются. В списках доступен поиск; правый клик открывает меню папки аккаунта. Для прерванных операций см. [инструкцию восстановления](docs/RECOVERY.md).
+Идентичные конфиги не перезаписываются. В списках доступен поиск; правый клик открывает меню папки аккаунта.
 
-Обновление доверяет GitHub и проверке HTTPS; SHA-256 не является независимой подписью автора ([подробнее](docs/UPDATE_SECURITY.md)). Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Старые скачанные обновления удаляются при следующем запуске. Для обновления нужна запись в папку приложения.
+Обновление скачивается по нажатию. После проверки размера и SHA-256 программа закроется, помощник заменит её файл по текущему пути и запустит новую версию. При ошибке замены или запуска он попытается восстановить предыдущую. Старые скачанные обновления удаляются при следующем запуске. Для обновления нужна запись в папку приложения.
 
 Бэкапы, аватары, загрузки и свои темы (папка `themes`) находятся в `%APPDATA%\DotaManager` на Windows или `$XDG_CONFIG_HOME/DotaManager` / `~/.config/DotaManager` на Linux. Настройки Windows хранятся в `HKCU\Software\OutTuna\Dota2CFGChanger`, значение `Settings`; на Linux — в `settings.json` внутри каталога DotaManager.
 

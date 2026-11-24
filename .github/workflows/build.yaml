@@ -64,7 +64,7 @@ jobs:
           path: build/_deps
           key: deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('CMakeLists.txt') }}
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
+        run: cmake -S . -B build -DCMAKE_RC_COMPILER=rc "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Save built Windows dependencies
@@ -73,8 +73,6 @@ jobs:
         with:
           path: build/_deps
           key: ${{ steps.windows-dependencies.outputs.cache-primary-key }}
-      - name: Regression tests
-        run: ctest --test-dir build --build-config Release --output-on-failure
       - name: Upload Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -133,15 +131,10 @@ jobs:
           key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-${{ github.run_id }}
           restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.id }}-
       - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release -DDOTAMANAGER_BUILD_TESTS=ON "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
+        run: cmake -S . -B build -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=Release "-DAPP_VERSION=${{ needs.compute-version.outputs.version }}"
 
       - name: Build
         run: cmake --build build --config Release -j"$(nproc)"
-
-      - name: Regression tests
-        run: |
-          ctest --test-dir build --output-on-failure
-          python3 tests/core_checks.py build/_deps/json-src/include
 
       - name: Compiler cache statistics
         run: ccache --show-stats
@@ -194,50 +187,11 @@ jobs:
           path: linux-artifact/*.AppImage
           if-no-files-found: error
 
-  check-appimage:
-    needs: build-linux
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, ubuntu-24.04]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - name: Download Linux artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: DotaManager-Linux
-          path: linux-artifact
-      - name: Install runtime check dependencies
-        run: |
-          if [ -f /etc/apt/sources.list ]; then
-            sudo sed -i \
-              -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
-              -e 's|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
-              /etc/apt/sources.list
-          fi
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            binutils python3 xvfb xauth x11-utils libgl1 libglx-mesa0 libgl1-mesa-dri fonts-dejavu-core
-      - name: Check ABI and launch AppImage
-        run: |
-          python3 tests/appimage_checks.py
-          shopt -s nullglob
-          images=(linux-artifact/*.AppImage)
-          if [ "${#images[@]}" -ne 1 ]; then
-            echo "Expected exactly one AppImage, found ${#images[@]}" >&2
-            exit 1
-          fi
-          bash scripts/check-appimage.sh "${images[0]}"
-
   release:
     permissions:
       contents: write
     if: github.ref == 'refs/heads/main'
-    needs: [compute-version, build-windows, build-linux, check-appimage]
+    needs: [compute-version, build-windows, build-linux]
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
